@@ -77,6 +77,44 @@ class VelflixController extends Controller
         $thriller = $this->getMoviesByGenre('thriller');
         $animation = $this->getMoviesByGenre('animation');
 
+        // Continue Watching (logged-in users)
+        $continueWatching = collect();
+        if (auth()->check()) {
+            $continueWatching = \App\Models\WatchHistory::where('user_id', auth()->id())
+                ->where('completed', false)
+                ->with('movie.genres')
+                ->orderByDesc('last_watched_at')
+                ->limit(10)
+                ->get()
+                ->map(function ($history) {
+                    $movie = $history->movie;
+                    return [
+                        'id' => $movie->id,
+                        'title' => $movie->title,
+                        'poster_path' => $movie->poster_url,
+                        'vote_average' => (float) $movie->vote_average,
+                        'genre_ids' => $movie->genres->pluck('id')->toArray(),
+                        'progress' => $history->progress_percentage,
+                    ];
+                });
+        }
+
+        // Top Rated movies
+        $topRated = Movie::with('genres')
+            ->where('vote_average', '>=', 7)
+            ->orderByDesc('vote_average')
+            ->limit(20)
+            ->get()
+            ->map(function ($movie) {
+                return [
+                    'id' => $movie->id,
+                    'title' => $movie->title,
+                    'poster_path' => $movie->poster_url,
+                    'vote_average' => (float) $movie->vote_average,
+                    'genre_ids' => $movie->genres->pluck('id')->toArray(),
+                ];
+            });
+
         return view('main', [
             'popular' => $popular,
             'genres' => $genres,
@@ -87,6 +125,8 @@ class VelflixController extends Controller
             'horror' => $horror,
             'thriller' => $thriller,
             'animation' => $animation,
+            'continueWatching' => $continueWatching,
+            'topRated' => $topRated,
         ]);
     }
 

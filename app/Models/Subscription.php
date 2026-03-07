@@ -13,12 +13,14 @@ class Subscription extends Model
         'user_id', 'subscription_plan_id', 'status',
         'starts_at', 'ends_at', 'cancelled_at',
         'payment_method', 'transaction_id',
+        'order_id', 'amount', 'paid_at',
     ];
 
     protected $casts = [
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'paid_at' => 'datetime',
     ];
 
     public function user()

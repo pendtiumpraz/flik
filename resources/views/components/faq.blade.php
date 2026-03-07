@@ -1,37 +1,37 @@
-<div class="container mx-auto mt-12 px-4 text-center xl:px-64">
-    <h2 class="text-5xl font-bold">Frequently Asked Questions</h2>
-    <div x-data="{ active: 1, items: [
-        { id: 1, title: 'What is FLiK?', answer: 'FLiK is a streaming service that offers a wide variety of award-winning TV shows, movies, anime, documentaries, and more on thousands of internet-connected devices. You can watch as much as you want, whenever you want without a single commercial – all for one low monthly price' },
-        { id: 2, title: 'How much does FLiK cost?', answer: 'Watch FLiK on your smartphone, tablet, Smart TV, laptop, or streaming device, all for one fixed monthly fee. Plans range from IDR54,000 to IDR186,000 a month. No extra costs, no contracts.'},
-        { id: 3, title: 'Where can I watch?', answer: 'Watch anywhere, anytime, on an unlimited number of devices. Sign in with your FLiK account to watch instantly on the web from your personal computer or on any internet-connected device that offers the FLiK app, including smart TVs, smartphones, tablets, streaming media players and game consoles.'},
-        { id: 4, title: 'How do I cancel?', answer: 'FLiK is flexible. There are no pesky contracts and no commitments. You can easily cancel your account online in two clicks. There are no cancellation fees – start or stop your account anytime.'},
-        { id: 5, title: 'What can I watch on FLiK?', answer: 'FLiK has an extensive library of feature films, documentaries, TV shows, anime, award-winning FLiK originals, and more. Watch as much as you want, anytime you want.'},
-        { id: 6, title: 'Is FLiK good for kids?', answer: 'The FLiK Kids experience is included in your membership to give parents control while kids enjoy family-friendly TV shows and movies in their own space. Kids profiles come with PIN-protected parental controls that let you restrict the maturity rating of content kids can watch and block specific titles you don\u0027t want kids to see.'},
-        ]}"class="space-y-4"
-        >
-        <template x-for="{ id, title, answer } in items " :key="id" >
+<div class="w-full max-w-3xl mx-auto">
+    <div x-data="{ active: null, items: [
+        { id: 1, title: 'Apa itu FLiK?', answer: 'FLiK adalah platform streaming film premium Indonesia. Dengan koleksi terlengkap mulai dari film klasik legendaris Indonesia hingga karya terbaru, FLiK menjadi rumah sinema Indonesia untuk semua pecinta film.' },
+        { id: 2, title: 'Berapa biaya langganan FLiK?', answer: 'FLiK menawarkan paket mulai dari GRATIS hingga Rp 99.000/bulan. Paket Free memberikan akses terbatas, sementara paket Premium dan Ultra memberikan akses penuh ke semua konten dengan kualitas hingga 4K HDR.' },
+        { id: 3, title: 'Di mana saya bisa menonton?', answer: 'Tonton di mana saja — smartphone, tablet, laptop, atau Smart TV. Progress menonton otomatis tersinkron di semua perangkat. FLiK juga tersedia sebagai PWA, bisa di-install langsung dari browser.' },
+        { id: 4, title: 'Bagaimana cara membatalkan langganan?', answer: 'FLiK fleksibel. Tidak ada kontrak dan komitmen. Kamu bisa membatalkan langganan kapan saja melalui halaman akun. Tidak ada biaya pembatalan.' },
+        { id: 5, title: 'Apa yang bisa ditonton di FLiK?', answer: 'FLiK memiliki koleksi film Indonesia terlengkap — dari film horor klasik, drama keluarga, action, hingga dokumenter. Ditambah fitur gamifikasi: kumpulkan coins, raih achievement, dan naik level sambil menonton.' },
+        { id: 6, title: 'Apakah FLiK aman untuk anak-anak?', answer: 'Kami menyediakan kontrol orangtua untuk membatasi konten berdasarkan rating usia. Kamu bisa mengatur PIN untuk mengunci profil anak agar hanya bisa menonton konten yang sesuai.' },
+        ]}" class="space-y-3">
+
+        <template x-for="{ id, title, answer } in items" :key="id">
             <div x-data="{
-                get expanded() {
-                    return this.active === this.id
-                },
-                set expanded(value) {
-                    this.active = value ? this.id : null
-                },
-            }" role="region" class="border border-black text-gray-100" style="background-color: #303030">
-                <h2>
+                get expanded() { return this.active === this.id },
+                set expanded(value) { this.active = value ? this.id : null },
+            }" role="region" class="rounded-xl overflow-hidden transition-all"
+                 :style="expanded ? 'background:rgba(197,165,90,0.08);border:1px solid rgba(197,165,90,0.2)' : 'background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)'">
+                <h3>
                     <button
                         @click="expanded = !expanded"
                         :aria-expanded="expanded"
-                        class="flex w-full items-center justify-between px-6 py-3 text-xl font-bold tracking-wider"
+                        class="flex w-full items-center justify-between px-6 py-5 text-left font-semibold transition-colors hover:text-white"
+                        :class="expanded ? 'text-white' : 'text-gray-300'"
                         >
-                        <span x-text="title"></span>
-                        <span x-show="expanded" aria-hidden="true" class="ml-4">&minus;</span>
-                        <span x-show="!expanded" aria-hidden="true" class="ml-4">&plus;</span>
+                        <span x-text="title" class="text-base md:text-lg"></span>
+                        <span class="ml-4 flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full transition-all"
+                              :style="expanded ? 'background:rgba(197,165,90,0.2);color:#C5A55A' : 'background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.4)'"
+                              :class="expanded ? 'rotate-45' : ''">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        </span>
                     </button>
-                </h2>
+                </h3>
 
-                <div x-show="expanded" x-collapse.duration.500ms>
-                    <div x-text="answer" class="px-6 pb-4"></div>
+                <div x-show="expanded" x-collapse.duration.300ms>
+                    <div x-text="answer" class="px-6 pb-5 text-sm md:text-base text-gray-400 leading-relaxed"></div>
                 </div>
             </div>
         </template>

@@ -61,10 +61,20 @@
                         </div>
                         @endif
 
-                        <button class="w-full mt-6 py-3 rounded-lg font-semibold text-sm transition-colors {{ $plan->slug === 'premium' ? 'text-black' : 'text-white' }}"
-                                style="{{ $plan->slug === 'premium' ? 'background:linear-gradient(90deg,#C5A55A,#E8D5A3)' : 'background:#333' }}">
-                            {{ $plan->price == 0 ? 'Mulai Gratis' : 'Pilih ' . $plan->name }}
-                        </button>
+                        @if($plan->price == 0)
+                            <a href="{{ route('payment.checkout', $plan) }}" class="block w-full mt-6 py-3 rounded-lg font-semibold text-sm text-center transition-colors text-white" style="background:#333">
+                                Mulai Gratis
+                            </a>
+                        @elseif(\App\Http\Controllers\PaymentController::isEnabled())
+                            <a href="{{ route('payment.checkout', $plan) }}" class="block w-full mt-6 py-3 rounded-lg font-semibold text-sm text-center transition-all hover:scale-[1.02] {{ $plan->slug === 'premium' ? 'text-black' : 'text-white' }}"
+                               style="{{ $plan->slug === 'premium' ? 'background:linear-gradient(90deg,#C5A55A,#E8D5A3)' : 'background:#333' }}">
+                                Pilih {{ $plan->name }}
+                            </a>
+                        @else
+                            <button disabled class="w-full mt-6 py-3 rounded-lg font-semibold text-sm text-gray-600 cursor-not-allowed" style="background:#252525" title="Payment gateway belum dikonfigurasi">
+                                🔒 Coming Soon
+                            </button>
+                        @endif
                     </div>
                 </div>
                 @endforeach

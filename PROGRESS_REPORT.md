@@ -14,11 +14,12 @@ Phase 2: Admin Panel CRUD          ██████████░░  88%
 Phase 3: Video Player & Storage    ████████░░░░  65%
 Phase 4: Content Protection        ██████░░░░░░  50%
 Phase 5: User Features             ██████████░░  85%
-Phase 6: Subscription & Payment    ████░░░░░░░░  33%
+Phase 6: Subscription & Payment    ████████░░░░  60%
 Phase 7: Gamification              ██████████░░  80%
-Phase 8: Polish & Optimization     ████████░░░░  60%
+Phase 8: Polish & Optimization     █████████░░░  70%
+Phase 9: UI Revamp OTT Premium     ██████░░░░░░  50%
 ─────────────────────────────────────────────────
-TOTAL                              ████████░░░░  70%
+TOTAL                              ████████░░░░  72%
 ```
 
 ---
@@ -99,15 +100,15 @@ TOTAL                              ████████░░░░  70%
 
 ---
 
-## Phase 6: Subscription & Payment 💳 — 33%
+## Phase 6: Subscription & Payment 💳 — 60%
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | 6.1 | Subscription plans | ✅ Done | 4 plans seeded (Free Rp0, Basic Rp29K, Premium Rp59K, Ultra Rp99K) |
-| 6.2 | Plan comparison page | ✅ Done | /plans — 4-column pricing cards, Premium highlighted |
-| 6.3 | Payment gateway (Midtrans/Xendit) | ❌ Not Started | |
-| 6.4 | Subscription middleware | ❌ Not Started | |
-| 6.5 | Subscription lifecycle | ❌ Not Started | |
+| 6.2 | Plan comparison page | ✅ Done | /plans — 4-column pricing cards, Premium highlighted, auto-disabled if no ENV |
+| 6.3 | Payment gateway (Midtrans) | ✅ Done | PaymentController, Snap token, checkout page, ENV-gated (Coming Soon jika belum diset) |
+| 6.4 | Webhook handler | ✅ Done | POST /payment/webhook — handles capture/settlement/cancel/pending |
+| 6.5 | Subscription middleware | ❌ Not Started | |
 | 6.6 | Invoice & receipt | ❌ Not Started | |
 
 ---
@@ -227,25 +228,43 @@ Syarat & Ketentuan | Cookie | Karir | Tentang FLiK | Investor | Info Perusahaan
 
 ---
 
+## Phase 9: UI Revamp OTT Premium 🎨 — 50%
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 9.1 | Landing page revamp | ✅ Done | Full-screen hero with AI-generated Indonesian cinema images, stats bar, features, pricing preview, CTA |
+| 9.2 | Login page revamp | ✅ Done | Cinematic background, glassmorphism card, gold gradient button, Google OAuth |
+| 9.3 | Register page revamp | ✅ Done | Matching login design, Indonesian text |
+| 9.4 | FAQ component revamp | ✅ Done | Desktop-responsive accordion, gold-accented, Indonesian content |
+| 9.5 | flik-logo.png integration | ✅ Done | Logo image in header (landing + main), favicon |
+| 9.6 | AI-generated hero images | ✅ Done | hero-bg.png, login-bg.png, hero-film.png |
+| 9.7 | Dashboard/main page revamp | ❌ Not Started | Continue Watching data ready, needs frontend polish |
+| 9.8 | Movie detail page revamp | ❌ Not Started | |
+| 9.9 | Profile page revamp | ❌ Not Started | |
+| 9.10 | Admin panel revamp | ❌ Not Started | |
+
+---
+
 ## 🔧 Known Issues
 
 | Issue | Severity | Detail |
 |-------|----------|--------|
 | YouTube embed "unavailable" on some movies | 🟡 Low | Some youtube_key values expired/invalid |
 | Series & Episode CRUD not started | 🟡 Med | Phase 2.4 — model not yet created |
-| No payment gateway | 🔴 High | Phase 6 — needs Midtrans/Xendit API key |
 | No FFmpeg transcoding | 🟡 Med | Phase 3.7 — needs FFmpeg binary installed |
+| Payment gateway needs ENV | 🟢 Info | Midtrans Snap integrated, just set ENV to activate |
 
 ---
 
 ## 🎯 Remaining Work
 
 ### Priority 1 (Core functionality):
-- [ ] Phase 6: Payment gateway + subscription middleware
+- [ ] Phase 6: Subscription middleware (restrict premium content)
 - [ ] Phase 3: FFmpeg HLS + quality selector
 - [ ] Phase 2: Series & Episode CRUD
 
 ### Priority 2 (Enhancement):
+- [ ] Phase 9: Revamp remaining pages (dashboard, detail, profile, admin)
 - [ ] Phase 5: Search enhancement (Meilisearch/Algolia)
 - [ ] Phase 7: Coin purchase flow
 - [ ] Phase 8: Image lazy loading, CDN, structured data
@@ -253,3 +272,4 @@ Syarat & Ketentuan | Cookie | Karir | Tentang FLiK | Investor | Info Perusahaan
 ### Priority 3 (Nice to have):
 - [ ] Phase 4: Signed URLs, session concurrency, HLS encryption
 - [ ] Phase 8: Accessibility audit, comprehensive testing
+- [ ] NativePHP Mobile: Wrap FLiK sebagai native iOS/Android app

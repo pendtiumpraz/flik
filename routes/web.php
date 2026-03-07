@@ -57,7 +57,14 @@ Route::middleware('auth')->group(function () {
     // Watch History / Progress Tracking
     Route::post('/watch/progress', [\App\Http\Controllers\WatchHistoryController::class, 'updateProgress'])->name('watch.progress');
     Route::get('/watch/resume', [\App\Http\Controllers\WatchHistoryController::class, 'getProgress'])->name('watch.resume');
+
+    // Payment
+    Route::get('/checkout/{plan}', [\App\Http\Controllers\PaymentController::class, 'checkout'])->name('payment.checkout');
+    Route::get('/payment/success', [\App\Http\Controllers\PaymentController::class, 'success'])->name('payment.success');
 });
+
+// Midtrans Webhook (no auth required)
+Route::post('/payment/webhook', [\App\Http\Controllers\PaymentController::class, 'webhook'])->name('payment.webhook');
 
 Route::controller(LoginController::class)->group(function () {
     Route::get('login/google', 'redirectToProvider');

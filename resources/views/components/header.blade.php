@@ -2,8 +2,8 @@
      x-data="{ mobileOpen: false }">
     <div class="flex items-center justify-between px-4 py-3 lg:px-16 lg:py-4">
         <!-- Logo -->
-        <a href="/" class="title-font flex items-center text-2xl font-bold uppercase tracking-wider" style="color: #C5A55A">
-            FLiK
+        <a href="/" class="flex items-center">
+            <img src="{{ asset('img/flik-logo.png') }}" alt="FLiK" class="h-7 lg:h-9">
         </a>
 
         @auth

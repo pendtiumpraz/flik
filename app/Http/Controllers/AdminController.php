@@ -19,6 +19,12 @@ class AdminController extends Controller
             'total_users' => User::count(),
             'popular_movies' => Movie::popular()->count(),
             'trending_movies' => Movie::trending()->count(),
+            'total_ratings' => \App\Models\Rating::count(),
+            'total_comments' => \App\Models\Comment::count(),
+            'total_watchlists' => \App\Models\Watchlist::count(),
+            'active_banners' => \App\Models\Banner::where('is_active', true)->count(),
+            'payment_enabled' => !empty(config('services.midtrans.server_key')),
+            'storage_disk' => config('filesystems.default'),
         ];
 
         $recentMovies = Movie::with('genres')
@@ -26,7 +32,9 @@ class AdminController extends Controller
             ->take(5)
             ->get();
 
-        return view('admin.dashboard', compact('stats', 'recentMovies'));
+        $recentUsers = User::latest()->take(5)->get();
+
+        return view('admin.dashboard', compact('stats', 'recentMovies', 'recentUsers'));
     }
 
     // ── MOVIES CRUD ────────────────────────────────────────────

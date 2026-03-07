@@ -1,59 +1,126 @@
-<x-layout>
-    <section class="px-6 py-8">
-        <main class="mx-auto mt-10 max-w-lg rounded-xl border border-gray-200 bg-gray-100 p-6">
-            <h1 class="text-center text-xl font-bold">Log In</h1>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Masuk — FLiK</title>
+    <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    @vite('resources/css/app.css')
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        h1,h2,h3,.font-heading { font-family: 'Outfit', sans-serif; }
+    </style>
+</head>
+<body class="bg-[#0a0a0a] text-white min-h-screen relative overflow-hidden">
 
-            <form method="post" action="/login" class="mt-10">
-                @csrf
+    <!-- Background Image -->
+    <div class="fixed inset-0 z-0">
+        <img src="{{ asset('img/login-bg.png') }}" alt="" class="w-full h-full object-cover" style="filter:brightness(0.3) saturate(0.7)">
+        <div class="absolute inset-0" style="background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,rgba(0,0,0,0.8) 100%)"></div>
+    </div>
 
-                <!-- Email -->
-                <div class="mb-6">
-                    <label for="email" class="mb-2 block text-xs font-bold uppercase text-gray-700">
-                        Email
-                    </label>
+    <!-- Gold ambient glow -->
+    <div class="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] opacity-10 z-0"
+         style="background:radial-gradient(ellipse,rgba(197,165,90,0.5),transparent 70%)"></div>
 
-                    <input class="w-full border border-gray-400 p-2"
-                        type="email"
-                        name="email"
-                        id="email"
-                        value="{{ old('email') }}"
-                        required
-                        >
+    <!-- Header -->
+    <header class="relative z-10 px-8 py-6">
+        <a href="/">
+            <img src="{{ asset('img/flik-logo.png') }}" alt="FLiK" class="h-10 md:h-12">
+        </a>
+    </header>
 
-                    @error('email')
-                        <p class="mt-2 text-xs text-red-500">{{ $message }}</p>
-                    @enderror
-                </div>
+    <!-- Login Form -->
+    <main class="relative z-10 flex items-center justify-center px-4" style="min-height:calc(100vh - 100px)">
+        <div class="w-full max-w-md">
+            <!-- Card -->
+            <div class="rounded-2xl p-8 md:p-10" style="background:rgba(0,0,0,0.75);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.08)">
 
-                <!-- Password -->
-                <div class="mb-6">
-                    <label for="password" class="mb-2 block text-xs font-bold uppercase text-gray-700">
-                        Password
-                    </label>
+                <h1 class="font-heading text-3xl font-bold text-white">Masuk</h1>
+                <p class="text-gray-500 text-sm mt-2">Selamat datang kembali di FLiK</p>
 
-                    <input class="w-full border border-gray-400 p-2"
-                        type="password"
-                        name="password"
-                        id="password"
-                        required
-                        >
+                @if(session('error'))
+                    <div class="mt-4 p-3 rounded-lg text-sm" style="background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.3);color:#f87171">
+                        {{ session('error') }}
+                    </div>
+                @endif
 
-                    @error('password')
-                        <p class="mt-2 text-xs text-red-500">{{ $message }}</p>
-                    @enderror
-                </div>
+                <form method="post" action="/login" class="mt-8 space-y-5">
+                    @csrf
 
-                <!-- Submit Button -->
-                <div class="mb-6 flex items-center justify-center">
+                    <!-- Email -->
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-400 mb-1.5">Email</label>
+                        <input class="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 transition-all focus:outline-none focus:ring-2"
+                            style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);focus:ring-color:rgba(197,165,90,0.5)"
+                            type="email"
+                            name="email"
+                            id="email"
+                            value="{{ old('email') }}"
+                            placeholder="nama@email.com"
+                            required>
+                        @error('email')
+                            <p class="mt-1.5 text-xs" style="color:#f87171">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <!-- Password -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label for="password" class="text-sm font-medium text-gray-400">Password</label>
+                            <a href="#" class="text-xs hover:underline" style="color:#C5A55A">Lupa password?</a>
+                        </div>
+                        <input class="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 transition-all focus:outline-none focus:ring-2"
+                            style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1)"
+                            type="password"
+                            name="password"
+                            id="password"
+                            placeholder="••••••••"
+                            required>
+                        @error('password')
+                            <p class="mt-1.5 text-xs" style="color:#f87171">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <!-- Remember me -->
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" name="remember" id="remember" class="rounded" style="accent-color:#C5A55A">
+                        <label for="remember" class="text-sm text-gray-400">Ingat saya</label>
+                    </div>
+
+                    <!-- Submit -->
                     <button type="submit"
-                        class="mr-4 rounded bg-gray-700 px-4 py-2 text-white hover:bg-gray-800">
-                        Log In
+                        class="w-full py-3.5 rounded-xl text-sm font-bold text-black transition-all hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]"
+                        style="background:linear-gradient(135deg,#C5A55A,#E8D5A3)">
+                        Masuk
                     </button>
-                    <a href="/login/google" class="rounded bg-green-700 px-4 py-2 text-white hover:bg-green-800">Login Google</a>
+                </form>
+
+                <!-- Divider -->
+                <div class="flex items-center gap-4 my-6">
+                    <div class="flex-1 h-px" style="background:rgba(255,255,255,0.1)"></div>
+                    <span class="text-xs text-gray-600">atau</span>
+                    <div class="flex-1 h-px" style="background:rgba(255,255,255,0.1)"></div>
                 </div>
 
-            </form>
+                <!-- Google Login -->
+                <a href="/login/google"
+                   class="flex items-center justify-center gap-3 w-full py-3 rounded-xl text-sm font-medium text-white transition-all hover:scale-[1.02]"
+                   style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1)">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                    Masuk dengan Google
+                </a>
 
-        </main>
-    </section>
-</x-layout>
+                <!-- Register link -->
+                <p class="text-center text-sm text-gray-500 mt-6">
+                    Belum punya akun?
+                    <a href="{{ route('register') }}" class="font-semibold hover:underline" style="color:#C5A55A">Daftar gratis</a>
+                </p>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
