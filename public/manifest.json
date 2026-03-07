@@ -1,0 +1,29 @@
+{
+    "name": "FLiK — Rumah Sinema Indonesia",
+    "short_name": "FLiK",
+    "description": "Platform streaming film premium dengan koleksi terlengkap film Indonesia dan internasional.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0A0A0A",
+    "theme_color": "#C5A55A",
+    "orientation": "any",
+    "icons": [
+        {
+            "src": "/img/flik-logo.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/img/flik-logo.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ],
+    "categories": [
+        "entertainment",
+        "video"
+    ],
+    "lang": "id",
+    "dir": "ltr"
+}

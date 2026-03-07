@@ -1,0 +1,287 @@
+/**
+ * FLiK Micro-Animations & Enhancement System
+ */
+
+/* ════════════════════════════════════════════════
+   Entrance Animations
+   ════════════════════════════════════════════════ */
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes pulseGlow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(197, 165, 90, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 20px 5px rgba(197, 165, 90, 0.1);
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* ════════════════════════════════════════════════
+   Animation Utility Classes
+   ════════════════════════════════════════════════ */
+
+.animate-fadeInUp {
+    animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.animate-fadeIn {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-slideInRight {
+    animation: slideInRight 0.5s ease-out forwards;
+}
+
+.animate-slideInLeft {
+    animation: slideInLeft 0.5s ease-out forwards;
+}
+
+.animate-scaleIn {
+    animation: scaleIn 0.4s ease-out forwards;
+}
+
+/* Stagger delays */
+.delay-1 {
+    animation-delay: 0.1s;
+    opacity: 0;
+}
+
+.delay-2 {
+    animation-delay: 0.2s;
+    opacity: 0;
+}
+
+.delay-3 {
+    animation-delay: 0.3s;
+    opacity: 0;
+}
+
+.delay-4 {
+    animation-delay: 0.4s;
+    opacity: 0;
+}
+
+.delay-5 {
+    animation-delay: 0.5s;
+    opacity: 0;
+}
+
+/* ════════════════════════════════════════════════
+   Hover Effects
+   ════════════════════════════════════════════════ */
+
+/* Card hover with lift effect */
+.card-hover {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Gold glow on hover */
+.gold-hover {
+    transition: all 0.3s ease;
+}
+
+.gold-hover:hover {
+    box-shadow: 0 0 20px rgba(197, 165, 90, 0.15);
+    border-color: rgba(197, 165, 90, 0.4) !important;
+}
+
+/* Button press effect */
+.btn-press {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-press:active {
+    transform: scale(0.96);
+}
+
+/* ════════════════════════════════════════════════
+   Skeleton Loading Screens
+   ════════════════════════════════════════════════ */
+
+.skeleton {
+    background: linear-gradient(90deg, #1a1a1a 25%, #252525 50%, #1a1a1a 75%);
+    background-size: 400% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: 8px;
+}
+
+.skeleton-text {
+    height: 14px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+}
+
+.skeleton-text.w-75 {
+    width: 75%;
+}
+
+.skeleton-text.w-50 {
+    width: 50%;
+}
+
+.skeleton-text.w-25 {
+    width: 25%;
+}
+
+.skeleton-poster {
+    aspect-ratio: 2/3;
+    border-radius: 8px;
+}
+
+.skeleton-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.skeleton-card {
+    padding: 20px;
+    border-radius: 12px;
+}
+
+/* ════════════════════════════════════════════════
+   Smooth Transitions
+   ════════════════════════════════════════════════ */
+
+/* Page transition */
+.page-enter {
+    animation: fadeInUp 0.4s ease-out forwards;
+}
+
+/* Toast notification */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 9999;
+    animation: fadeInUp 0.3s ease-out forwards;
+}
+
+.toast-success {
+    background: rgba(197, 165, 90, 0.95);
+    color: #000;
+}
+
+.toast-error {
+    background: rgba(220, 38, 38, 0.95);
+    color: #fff;
+}
+
+/* ════════════════════════════════════════════════
+   Scrollbar Styling
+   ════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #C5A55A;
+}
+
+/* ════════════════════════════════════════════════
+   Focus & Accessibility
+   ════════════════════════════════════════════════ */
+
+:focus-visible {
+    outline: 2px solid #C5A55A;
+    outline-offset: 2px;
+}
+
+/* ════════════════════════════════════════════════
+   Selection Color
+   ════════════════════════════════════════════════ */
+
+::selection {
+    background: rgba(197, 165, 90, 0.3);
+    color: #fff;
+}
