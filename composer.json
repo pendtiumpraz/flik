@@ -16,7 +16,8 @@
         "laravel/socialite": "^5.12",
         "laravel/tinker": "^2.9",
         "livewire/livewire": "^3.5",
-        "mailchimp/marketing": "^3.0"
+        "mailchimp/marketing": "^3.0",
+        "nativephp/mobile": "^3.0"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^3.13",
