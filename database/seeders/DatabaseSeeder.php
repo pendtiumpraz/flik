@@ -17,7 +17,9 @@ class DatabaseSeeder extends Seeder
     public function run()
     {
         // to remove all the data from users table
+        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
         User::truncate();
+        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
 
         // create a user
         DB::table('users')->insert([
