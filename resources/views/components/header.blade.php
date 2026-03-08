@@ -19,9 +19,9 @@
         <!-- Desktop Right Section -->
         <nav class="hidden items-center gap-4 lg:flex">
             @auth
-                <livewire:search-velflix />
+                <livewire:search-flik />
                 <a href="{{ route('notifications.index') }}" class="relative">
-                    <x-bi-bell-fill class="h-5 w-5 text-gray-300 hover:text-yellow-400 transition-colors cursor-pointer" />
+                    <svg class="h-5 w-5 text-gray-300 hover:text-yellow-400 transition-colors cursor-pointer" fill="currentColor" viewBox="0 0 16 16"><path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zm.995-14.901a1 1 0 1 0-1.99 0A5.002 5.002 0 0 0 3 6c0 1.098-.5 6-2 7h14c-1.5-1-2-5.902-2-7 0-2.42-1.72-4.44-4.005-4.901z"/></svg>
                 </a>
 
                 <!-- User Profile -->
@@ -31,7 +31,7 @@
                             {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
                         </div>
                         <span :class="open ? '-rotate-180' : ''" class="transform transition-transform duration-300">
-                            <x-bi-chevron-down class="h-3 w-3 text-gray-400" />
+                            <svg class="h-3 w-3 text-gray-400" fill="currentColor" viewBox="0 0 16 16"><path d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>
                         </span>
                     </button>
 
