@@ -136,7 +136,7 @@ class VelflixController extends Controller
      */
     public function show($id): View|Factory
     {
-        $movie = Movie::with(['genres', 'casts'])->findOrFail($id);
+        $movie = Movie::with(['genres', 'castMembers'])->findOrFail($id);
 
         $playMovie = [
             'id' => $movie->id,

@@ -62,9 +62,9 @@ class Movie extends Model
     }
 
     /**
-     * Get the casts for the movie.
+     * Get the cast members for the movie.
      */
-    public function casts()
+    public function castMembers()
     {
         return $this->belongsToMany(Cast::class, 'cast_movie')
             ->withPivot('character', 'order')

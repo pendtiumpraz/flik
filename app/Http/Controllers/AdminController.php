@@ -158,7 +158,7 @@ class AdminController extends Controller
     {
         $title = $movie->title;
         $movie->genres()->detach();
-        $movie->casts()->detach();
+        $movie->castMembers()->detach();
         $movie->delete();
 
         return redirect()->route('admin.movies.index')

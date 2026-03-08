@@ -740,7 +740,7 @@ class MovieSeeder extends Seeder
                     ];
                 }
             }
-            $movie->casts()->sync($castSync);
+            $movie->castMembers()->sync($castSync);
         }
     }
 }
