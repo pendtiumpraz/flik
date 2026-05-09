@@ -435,4 +435,15 @@ class AdminController extends Controller
 
         return view('admin.pitch-deck', compact('assumptions'));
     }
+
+    public function pitchDeckMarkdown()
+    {
+        $path = base_path('PITCH_DECK.md');
+        abort_unless(file_exists($path), 404);
+
+        return response(file_get_contents($path), 200, [
+            'Content-Type' => 'text/plain; charset=utf-8',
+            'Content-Disposition' => 'inline; filename="PITCH_DECK.md"',
+        ]);
+    }
 }

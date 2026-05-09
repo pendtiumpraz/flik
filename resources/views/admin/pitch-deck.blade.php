@@ -170,7 +170,7 @@
                 </button>
             </div>
             <div style="display:flex;gap:6px">
-                <a href="/PITCH_DECK.md" target="_blank" class="btn btn-ghost btn-sm" style="padding:6px 12px;font-size:12px">View .md</a>
+                <a href="{{ route('admin.pitch-deck.md') }}" target="_blank" class="btn btn-ghost btn-sm" style="padding:6px 12px;font-size:12px">View .md</a>
                 <button onclick="window.print()" class="btn btn-gold btn-sm" style="padding:6px 12px;font-size:12px">Print</button>
             </div>
         </div>

@@ -112,4 +112,5 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
 
     // Pitch Deck
     Route::get('/pitch-deck', [\App\Http\Controllers\AdminController::class, 'pitchDeck'])->name('pitch-deck');
+    Route::get('/pitch-deck.md', [\App\Http\Controllers\AdminController::class, 'pitchDeckMarkdown'])->name('pitch-deck.md');
 });
