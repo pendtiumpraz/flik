@@ -330,4 +330,109 @@ class AdminController extends Controller
         return redirect()->route('admin.banners.index')
             ->with('success', "Banner \"{$title}\" berhasil dihapus!");
     }
+
+    // ── AI PROVIDERS ───────────────────────────────────────────
+
+    public function aiSettings()
+    {
+        $providers = \App\Models\AiProvider::orderBy('priority')->orderByDesc('is_active')->get();
+        $catalog = \App\Models\AiProvider::PROVIDERS;
+
+        return view('admin.ai-settings', compact('providers', 'catalog'));
+    }
+
+    public function storeAiProvider(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:120',
+            'provider' => 'required|string|max:60',
+            'model' => 'required|string|max:120',
+            'api_key' => 'required|string|min:10|max:255',
+            'base_url' => 'nullable|url|max:255',
+            'priority' => 'nullable|integer|min:1|max:999',
+            'is_active' => 'sometimes|boolean',
+            'is_default' => 'sometimes|boolean',
+        ]);
+
+        $data['is_active'] = (bool) ($data['is_active'] ?? false);
+        $data['is_default'] = (bool) ($data['is_default'] ?? false);
+        $data['priority'] = $data['priority'] ?? 100;
+
+        if (empty($data['base_url']) && isset(\App\Models\AiProvider::PROVIDERS[$data['provider']])) {
+            $data['base_url'] = \App\Models\AiProvider::PROVIDERS[$data['provider']]['base_url'] ?: null;
+        }
+
+        if ($data['is_default']) {
+            \App\Models\AiProvider::where('is_default', true)->update(['is_default' => false]);
+        }
+
+        \App\Models\AiProvider::create($data);
+
+        return redirect()->route('admin.ai.index')
+            ->with('success', "AI provider \"{$data['name']}\" berhasil ditambahkan.");
+    }
+
+    public function updateAiProvider(Request $request, \App\Models\AiProvider $aiProvider)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:120',
+            'provider' => 'required|string|max:60',
+            'model' => 'required|string|max:120',
+            'api_key' => 'nullable|string|min:10|max:255',
+            'base_url' => 'nullable|url|max:255',
+            'priority' => 'nullable|integer|min:1|max:999',
+            'is_active' => 'sometimes|boolean',
+            'is_default' => 'sometimes|boolean',
+        ]);
+
+        $data['is_active'] = (bool) ($data['is_active'] ?? false);
+        $data['is_default'] = (bool) ($data['is_default'] ?? false);
+        $data['priority'] = $data['priority'] ?? $aiProvider->priority;
+
+        if (empty($data['api_key'])) {
+            unset($data['api_key']);
+        }
+
+        if ($data['is_default']) {
+            \App\Models\AiProvider::where('id', '!=', $aiProvider->id)
+                ->where('is_default', true)
+                ->update(['is_default' => false]);
+        }
+
+        $aiProvider->update($data);
+
+        return redirect()->route('admin.ai.index')
+            ->with('success', "AI provider \"{$aiProvider->name}\" berhasil diupdate.");
+    }
+
+    public function destroyAiProvider(\App\Models\AiProvider $aiProvider)
+    {
+        $name = $aiProvider->name;
+        $aiProvider->delete();
+
+        return redirect()->route('admin.ai.index')
+            ->with('success', "AI provider \"{$name}\" berhasil dihapus.");
+    }
+
+    public function toggleAiProvider(\App\Models\AiProvider $aiProvider)
+    {
+        $aiProvider->update(['is_active' => !$aiProvider->is_active]);
+        $status = $aiProvider->is_active ? 'diaktifkan' : 'dinonaktifkan';
+
+        return redirect()->route('admin.ai.index')
+            ->with('success', "Provider \"{$aiProvider->name}\" {$status}.");
+    }
+
+    public function pitchDeck()
+    {
+        $assumptions = [
+            'film_count' => 350,
+            'avg_size_gb' => 2,
+            'avg_hours_per_user' => 10,
+            'avg_bitrate_mbps' => 5,
+            'cdn_cache_hit_ratio' => 0.30,
+        ];
+
+        return view('admin.pitch-deck', compact('assumptions'));
+    }
 }

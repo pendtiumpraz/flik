@@ -102,4 +102,14 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::post('/banners', [\App\Http\Controllers\AdminController::class, 'storeBanner'])->name('banners.store');
     Route::put('/banners/{banner}/toggle', [\App\Http\Controllers\AdminController::class, 'toggleBanner'])->name('banners.toggle');
     Route::delete('/banners/{banner}', [\App\Http\Controllers\AdminController::class, 'destroyBanner'])->name('banners.destroy');
+
+    // AI Providers
+    Route::get('/ai-settings', [\App\Http\Controllers\AdminController::class, 'aiSettings'])->name('ai.index');
+    Route::post('/ai-settings', [\App\Http\Controllers\AdminController::class, 'storeAiProvider'])->name('ai.store');
+    Route::put('/ai-settings/{aiProvider}', [\App\Http\Controllers\AdminController::class, 'updateAiProvider'])->name('ai.update');
+    Route::put('/ai-settings/{aiProvider}/toggle', [\App\Http\Controllers\AdminController::class, 'toggleAiProvider'])->name('ai.toggle');
+    Route::delete('/ai-settings/{aiProvider}', [\App\Http\Controllers\AdminController::class, 'destroyAiProvider'])->name('ai.destroy');
+
+    // Pitch Deck
+    Route::get('/pitch-deck', [\App\Http\Controllers\AdminController::class, 'pitchDeck'])->name('pitch-deck');
 });
