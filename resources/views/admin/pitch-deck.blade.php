@@ -623,7 +623,7 @@
         <div class="slide" data-idx="15">
             <div class="slide-inner">
                 <div class="slide-num">14 — Tech Cost Detail per Kategori</div>
-                <h2>Granular untuk Pak Lavesh</h2>
+                <h2>Breakdown Granular per Komponen</h2>
                 <p class="slide-sub">Breakdown tech infra per kategori — terlihat CDN dominan, DIY DRM bikin DRM kategori = Rp 0.</p>
                 <div class="pd-tbl-wrap">
                 <table class="pd-table">
@@ -658,7 +658,7 @@
             <div class="slide-inner">
                 <div class="slide-num">15 — CAC / LTV / Payback Analysis</div>
                 <h2>Acquisition Economics</h2>
-                <p class="slide-sub">Pak Lavesh minta hitung CAC. Berikut LTV/CAC ratio + payback period per skala. Industry benchmark: ratio > 3:1 sehat, payback < 12 bulan healthy.</p>
+                <p class="slide-sub">Hitungan CAC, LTV/CAC ratio, & payback period per skala. Industry benchmark: ratio > 3:1 sehat, payback < 12 bulan healthy.</p>
 
                 <div class="pd-grid-2">
                     <div class="pd-card gold">

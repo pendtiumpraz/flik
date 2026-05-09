@@ -438,7 +438,7 @@ Route::get('/drm/key/{movie}/{token}', function ($movie, $token) {
 
 ## 6.6 Full P&L Analysis per Skala — Profit atau Boncos?
 
-Pertanyaan kunci dari Pak Lavesh: **dengan tech cost segini besar, masih untung gak?** Berikut breakdown lengkap revenue vs SEMUA pengeluaran (bukan cuma tech).
+Pertanyaan kunci dari client: **dengan tech cost segini besar, masih untung gak?** Berikut breakdown lengkap revenue vs SEMUA pengeluaran (bukan cuma tech).
 
 **Asumsi**:
 - Pricing: Rp 49rb/bln (bisa tier Basic — paling konservatif)
