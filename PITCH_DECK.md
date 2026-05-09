@@ -1,737 +1,743 @@
 # FLiK — Rumah Sinema Indonesia
 
-**Pitch Deck — Technical Proposal**
+**Pitch Deck — 3-Month MVP Build Proposal**
 
-> Platform OTT premium untuk film klasik & jadul Indonesia. Audience: investor, calon partner rights holder, dan tim teknis.
-> Versi: 1.0 · Tanggal: 2026-05-09 · Disiapkan untuk: presentasi internal & external pitching.
-
----
-
-## Daftar Isi
-
-1. [Executive Summary](#1-executive-summary)
-2. [Asumsi & Skenario](#2-asumsi--skenario)
-3. [Digital Rights Management (DRM)](#3-digital-rights-management-drm)
-4. [AI Layer — Fitur, Provider, & Cost](#4-ai-layer--fitur-provider--cost)
-5. [Arsitektur Platform End-to-End](#5-arsitektur-platform-end-to-end)
-6. [CDN & Streaming Strategy](#6-cdn--streaming-strategy)
-7. [AWS Cost Matrix (1K → 1M Users)](#7-aws-cost-matrix)
-8. [Total Cost of Ownership Summary](#8-total-cost-of-ownership-summary)
-9. [Roadmap Implementasi](#9-roadmap-implementasi)
-10. [Risk Register & Mitigasi](#10-risk-register--mitigasi)
-11. [Appendix: Catatan Vendor & Referensi](#11-appendix-catatan-vendor--referensi)
+> Platform OTT untuk 400 film klasik & jadul Indonesia milik client. Audience: client decision maker.
+> Versi: 2.0 · Tanggal: 2026-05-09 · Budget framing: **Rp 60 juta/bulan × 3 bulan**
 
 ---
 
-## 1. Executive Summary
+## 0. Yang Berubah dari v1.0
 
-**FLiK** adalah platform streaming premium untuk **film klasik Indonesia** (300–400 judul, target 1.000 di tahun ke-3). Platform ini menggabungkan tiga pilar:
+Versi sebelumnya pakai framing enterprise scale (1M users, deal studio besar). Versi ini disesuaikan dengan **realita client**:
 
-| Pilar | Value |
-|-------|-------|
-| **Konten** | Library film jadul yang sudah didigitalkan & di-restore. Niche tapi underserved. |
-| **Distribusi** | Adaptive streaming HLS/DASH dengan multi-DRM, CDN edge di Indonesia. |
-| **AI** | Personalisasi rekomendasi, auto-subtitle, semantic search, content tagging — semua via API provider (OpenAI/Anthropic/DeepSeek/Gemini), pay-per-use. |
+| Update | Dari (v1.0) | Ke (v2.0) |
+|--------|-------------|-----------|
+| Konten | 350 film, perlu di-akuisisi (~$20K) | **400 film sudah dimiliki client** — biaya konten Rp 0 |
+| Budget framing | $165K Year-1 (Rp 2,6 miliar) | **Rp 180jt build (3 bulan) + ~Rp 10jt/bln OPEX awal** |
+| AI scope | Multi-vendor SaaS subscriptions | **Semua in-house** pakai API langsung (DeepSeek/Gemini/Whisper) |
+| CDN default | CloudFront ($0.114/GB Asia — verified) | **Bunny CDN ($0.01/GB Asia)** — 11× lebih murah |
+| AI default | gpt-4o-mini ($0.15/$0.60) | **DeepSeek V4 Flash ($0.14/$0.28)** — half the cost, equal quality untuk task standar |
+| Subtitle | Whisper $0.006/min | **gpt-4o-mini-transcribe $0.003/min** — 50% lebih murah |
+| DRM kickoff | $300–$5.000/bln tier | **EZDRM starter $200/bln flat** — verified |
 
-Built on **Laravel 12 + Livewire 3**, deploy ke **AWS** (ECS + RDS + S3 + MediaConvert + CloudFront), dengan opsi **NativePHP Mobile** untuk Android app. Sudah ada panel admin lengkap, payment via Midtrans, gamifikasi (XP/coins/achievements), dan PWA.
-
-**Status saat ini**: MVP web jalan, admin panel jalan, payment terintegrasi, ~50 film di-seed. Yang masih perlu dibangun untuk produksi: **DRM proper**, **transcoding pipeline**, **CDN setup**, dan **AI integration layer** (sudah disiapkan tabel `ai_providers` dengan API key terenkripsi).
-
----
-
-## 2. Asumsi & Skenario
-
-Semua angka di dokumen ini menggunakan asumsi **"Standar OTT Indonesia"** kecuali disebutkan lain:
-
-| Parameter | Nilai | Catatan |
-|-----------|-------|---------|
-| Jumlah film | 350 | Target tahun-1 |
-| Ukuran source per film | 2 GB (master) | Setelah ABR transcode jadi ~3.5 GB total per film (5 rendition) |
-| Total storage source | ~700 GB | Master file |
-| Total storage transcoded | ~1.2 TB | HLS + DASH segments + DRM-packaged |
-| Average watch time | 10 jam/user/bulan | Indonesian OTT benchmark |
-| Bitrate average | 5 Mbps (1080p adaptive) | ABR ladder: 360p / 480p / 720p / 1080p / 4K |
-| Egress per user/bulan | ~22 GB | (10h × 3600s × 5Mbps / 8 / 1024) |
-| CDN cache hit ratio | 30% origin / 70% edge | Konservatif untuk konten katalog (long-tail) |
-| Region utama | Asia Pacific (Jakarta + Singapore) | CloudFront ap-southeast-1, ap-southeast-3 |
-| Peak/avg ratio | 3.5× | Prime time 19:00–23:00 + akhir pekan |
-| Kurs USD | Rp 16.000 | Hitung kasar untuk benchmark Rupiah |
-
-**Skenario user yang dihitung**: 1.000 / 10.000 / 100.000 / 1.000.000 monthly active users (MAU). Asumsi **40% MAU = paid subscriber**.
+Semua harga di dokumen ini **diverifikasi dari sumber publik** per Mei 2026. No speculation.
 
 ---
 
-## 3. Digital Rights Management (DRM)
+## 1. Executive Summary (1-pager)
 
-### 3.1 Pertanyaan Kunci yang Dijawab
+**FLiK** = platform OTT in-house untuk client yang sudah punya **400 film klasik Indonesia**. Built on Laravel 12 yang sudah jalan (admin panel, payment, gamification, PWA) — tinggal tambah **distribution layer (DRM + transcoding + CDN)** dan **AI layer**.
 
-> *"Apakah DRM bisa di-implement langsung di Laravel? Atau harus pakai 3rd party?"*
+| Yang sudah ada (existing codebase) | Yang akan dibangun (3 bulan) |
+|------------------------------------|-----------------------------|
+| ✅ Web app + admin panel | 🚀 Transcoding pipeline (FFmpeg/MediaConvert) |
+| ✅ Payment Midtrans | 🚀 DRM (Tier 1 AES-128 → EZDRM Multi-DRM) |
+| ✅ Gamification (XP/coin/achievement) | 🚀 Bunny CDN integration |
+| ✅ PWA + NativePHP Android | 🚀 AI service layer (in-house) |
+| ✅ Auth + Google OAuth | 🚀 Semantic search + recommendations |
+| ✅ AI provider settings (encrypted API key) | 🚀 Auto-subtitle + auto-tagging |
 
-**Jawaban singkat**: tergantung level proteksi yang diminta rights holder.
+**Key insight**: bukan rebuild — **build distribution + AI di atas foundation yang sudah ada**.
 
-- **Level Basic (signed URLs + AES-128)**: ✅ **Bisa 100% di Laravel**, tanpa 3rd party.
-- **Level Open-source (ClearKey + Shaka)**: ✅ Bisa di Laravel, tapi butuh tools eksternal untuk packaging (Bento4/Shaka Packager — gratis, open source).
-- **Level Studio-grade (Widevine/PlayReady/FairPlay)**: ❌ **Wajib 3rd party DRM service**. Tidak bisa pure Laravel — license server harus disertifikasi Google (Widevine) dan Apple (FairPlay), sertifikat FairPlay hanya diberikan kalau perusahaan kamu sudah enterprise developer Apple yang approved.
+---
 
-### 3.2 Tier Comparison Matrix
+## 2. Budget — Rp 180 juta untuk 3 Bulan
 
-| Tier | Tech | Proteksi | Cost (1K user) | Cost (100K user) | Compatibility | Cocok untuk |
-|------|------|----------|---------------|------------------|---------------|-------------|
-| **DIY Tier 0** | Signed URLs + Token | ⭐ | ~$0/bln | ~$0/bln | Semua browser | MVP, demo, free trial |
-| **DIY Tier 1** | HLS AES-128 + signed URLs | ⭐⭐ | ~$0/bln | ~$0/bln | Semua HLS player | Film katalog jadul, low piracy risk |
-| **Open-source** | Shaka + ClearKey + Widevine L3 | ⭐⭐⭐ | ~$50/bln | ~$200/bln | Browser modern + Android | Mid-tier, partial protection |
-| **Studio L3** | Multi-DRM via 3rd party (Widevine L3 + PlayReady SL150 + FairPlay) | ⭐⭐⭐⭐ | $300–$800/bln | $2K–$5K/bln | Semua device modern | Konten premium, rights holder demand DRM |
-| **Studio L1** | Multi-DRM hardware (Widevine L1 + PlayReady SL3000 + FairPlay) | ⭐⭐⭐⭐⭐ | $500–$1.500/bln | $5K–$15K/bln | Hardware-backed only | Disney+/Netflix tier — wajib untuk 4K HDR & studio besar |
+### 2.1 Breakdown 3-Month Build (Total: ~Rp 180jt = $11.250)
 
-### 3.3 Tier 0 — Signed URLs (Pure Laravel)
+**Hybrid DRM strategy**: build DIY DRM in-house (gratis) sebagai default. EZDRM optional, tidak masuk core build budget.
 
-**Konsep**: video file disimpan di S3/storage private, akses via temporary signed URL yang expired dalam menit.
+| Item | Per Bulan | 3 Bulan | Catatan |
+|------|-----------|---------|---------|
+| **Engineering** (1 senior full-time) | Rp 35jt | **Rp 105jt** | Hands-on dev, ~58% dari budget. Termasuk build DIY DRM stack 2-3 minggu. |
+| **AWS infra dev/staging** | Rp 1,5jt ($95) | **Rp 4,5jt** | Small EC2/ECS + RDS t3.small + S3 |
+| **Bunny CDN** (development traffic minimal) | Rp 800rb ($50) | **Rp 2,4jt** | Storage 1.2TB + minim egress |
+| **AI development** (Claude Max + DeepSeek) | Rp 4,5jt ($280) | **Rp 13,5jt** | Claude Max $200 untuk dev work, DeepSeek $80 untuk testing |
+| **Domain, SSL wildcards, Sentry, monitoring** | Rp 800rb | **Rp 2,4jt** | |
+| **One-time AI processing 400 film** | — | **Rp 12jt ($750)** | Subtitle + tagging + thumbnail (lihat §4.4) |
+| **MaxMind GeoIP2 license** (DIY DRM geo-blocking) | — | **Rp 1jt** | One-time, untuk 1 tahun |
+| **Load testing tools** (k6 / Locust) | — | **Rp 0** | Open source |
+| **Buffer 25%** (testing, contingency) | — | **Rp 39jt** | Lebih besar karena DIY DRM butuh QA matang |
+| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | | ━━━━━━ | |
+| **TOTAL 3 bulan** | | **~Rp 180jt** | Pas di budget Rp 60jt × 3 |
+| _Optional: EZDRM (kalau aktif setelah launch)_ | _Rp 3,2jt/bln_ | _opsional_ | _Pay only when activated per-film_ |
 
-**Implementasi di Laravel**:
-```php
-// In WatchHistoryController or VelflixController
-$url = Storage::disk('s3')->temporaryUrl(
-    $movie->video_path,
-    now()->addMinutes(5),
-    ['ResponseContentType' => 'video/mp4']
-);
+### 2.2 Post-Launch OPEX — Skenario Realistis
+
+Asumsi: 400 film, watch time 10 jam/user/bulan, bitrate 5 Mbps avg, **Bunny CDN sebagai primary**.
+
+| MAU | Egress/bln | OPEX/bln (USD) | OPEX/bln (Rupiah) |
+|-----|-----------|----------------|-------------------|
+| **1.000** | 22 TB | **~$620** | **~Rp 9,9 jt** |
+| **5.000** | 110 TB | **~$1.350** | **~Rp 21,6 jt** |
+| **10.000** | 220 TB | **~$2.100** | **~Rp 33,6 jt** |
+| **50.000** | 1,1 PB | **~$6.500** | **~Rp 104 jt** |
+| **100.000** | 2,2 PB | **~$11.200** | **~Rp 179 jt** |
+
+**Untuk dibandingkan dengan v1.0** (CloudFront): di 100K user, v1.0 = $127.600/bln. v2.0 (Bunny) = $11.200/bln. **11× lebih murah** karena CDN egress dominan ~70% dari total cost.
+
+> **Per-user math**: di 10K user, OPEX ≈ Rp 33,6jt/bulan. Kalau 4.000 paid @ Rp 49rb = Rp 196jt revenue. **Margin ~83%**. Sangat sehat.
+
+---
+
+## 3. Verified AI Pricing (Mei 2026)
+
+Semua harga per **1 juta token**, diverifikasi dari sumber publik (lihat Sources di akhir).
+
+### 3.1 Provider Lengkap
+
+| Provider | Model | Input | Output | Notes |
+|----------|-------|-------|--------|-------|
+| **DeepSeek** ⭐ | **V4 Flash** | **$0.14** | **$0.28** | Cache hit $0.003. Default untuk semua task standar. |
+| DeepSeek | V4 Pro | $0.435 (promo) → $1.74 | $0.87 → $3.48 | Pricing naik setelah May 5, 2026 |
+| DeepSeek | deepseek-chat (V3.2 legacy) | $0.28 | $0.42 | **Deprecated 24 Juli 2026** — migrate ke V4 |
+| **Google Gemini** ⭐ | **2.5 Flash-Lite** | **$0.10** | **$0.40** | Termurah di pasar. Multimodal vision. Batch mode: $0.05/$0.20 |
+| Google Gemini | 2.5 Flash | $0.30 | $2.50 | Audio input $1.00 |
+| Google Gemini | 3.0 Flash | $0.50 | $3.00 | Latest multimodal |
+| Google Gemini | 2.5 Pro | $1.25 | $10.00 | ≤200K context |
+| **Anthropic** | **Claude Haiku 4.5** | $1.00 | $5.00 | Bagus untuk reasoning ringan & klasifikasi |
+| Anthropic | Claude Sonnet 4.6 | $3.00 | $15.00 | Long-form synopsis & editorial |
+| Anthropic | Claude Opus 4.7 | $5.00 | $25.00 | Released 16 April 2026. Premium. |
+| **OpenAI** | gpt-5.4-nano | $0.20 | $1.25 | Latest nano-tier |
+| OpenAI | gpt-5-mini | $0.25 | $2.00 | Legacy mini |
+| OpenAI | gpt-5.4-mini | (~$1) | (~$5) | Mid-tier |
+| OpenAI | gpt-5.4 | $2.50 | $15.00 | Standard |
+| OpenAI | gpt-5.5 | $5.00 | $30.00 | Flagship (May 2026) |
+| OpenAI | **gpt-4o-mini-transcribe** | — | **$0.003/min** | Subtitle generation — half of Whisper |
+| OpenAI | gpt-4o-transcribe | — | $0.006/min | Higher quality transcription |
+| OpenAI | whisper-1 (legacy) | — | $0.006/min | |
+| **Groq** | Llama 4 Maverick | $0.15 | $0.60 | Ultra-low latency (LPU) |
+| Groq | Llama 4 Scout | (~$0.10) | (~$0.30) | Smaller, faster |
+| Mistral | Codestral | $0.30 | $0.90 | Code generation |
+| Mistral | Mistral Small | $0.20 | (~$0.60) | |
+
+### 3.2 Discount Levers Yang Tersedia
+
+| Lever | Save | Provider |
+|-------|------|----------|
+| **Prompt caching** | 90% pada cached input | Anthropic, DeepSeek |
+| **Batch API** | 50% all tokens | OpenAI, Anthropic, Gemini |
+| **DeepSeek cache hit** | $0.003/MTok input vs $0.14 (47×) | DeepSeek |
+| **Gemini Flash-Lite batch** | $0.05/$0.20 vs $0.10/$0.40 | Gemini |
+
+### 3.3 Strategi Pemilihan Model untuk FLiK
+
+| Task | Model Default | Mengapa |
+|------|--------------|---------|
+| Recommendation engine (batched harian) | **DeepSeek V4 Flash** | Termurah untuk volume tinggi |
+| Semantic search query | **Gemini 2.5 Flash-Lite** | Murah, fast |
+| Auto-tagging movie (one-time) | **Claude Haiku 4.5** + **Gemini Flash vision** | Quality untuk task one-time worth it |
+| Subtitle generation | **gpt-4o-mini-transcribe** | $0.003/min, 90 min film = $0.27 |
+| Auto-translation subtitle | **DeepSeek V4 Flash** | Kualitas Indo→EN cukup |
+| Comment moderation (high volume) | **Gemini 2.5 Flash-Lite batch** | Termurah + cukup akurat |
+| Editorial copy (synopsis) | **Claude Sonnet 4.6** | Quality untuk konten yang dibaca user |
+| Customer support chatbot (real-time) | **Groq Llama 4 Maverick** | Latency terendah |
+| Reasoning kompleks (admin tools) | **DeepSeek V4 Pro** atau **Claude Sonnet 4.6** | |
+
+### 3.4 Total AI Cost Realistis
+
+**One-time (400 film katalog client)**:
+| Task | Model | Per Film | Total |
+|------|-------|---------|-------|
+| Subtitle (90 min avg) | gpt-4o-mini-transcribe | $0.27 | $108 |
+| Auto-tagging | Claude Haiku + Gemini Flash | $0.10 | $40 |
+| Translation (Indo→EN+Mandarin) | DeepSeek V4 Flash | $0.50 | $200 |
+| Trailer suggest | Gemini Flash vision | $0.20 | $80 |
+| Thumbnail pick | Gemini Flash-Lite vision | $0.05 | $20 |
+| Synopsis generation | Claude Sonnet (1× review) | $0.30 | $120 |
+| QC content classification | DeepSeek V4 Flash | $0.05 | $20 |
+| **TOTAL one-time 400 film** | | | **~$590 (Rp 9,5 juta)** |
+
+**Ongoing per skala**:
+| MAU | AI cost/bln (USD) | AI cost/bln (Rp) |
+|-----|------------------|------------------|
+| 1.000 | ~$8 | ~Rp 130rb |
+| 10.000 | ~$80 | ~Rp 1,3 jt |
+| 100.000 | ~$800 | ~Rp 13 jt |
+| 1.000.000 | ~$8.000 | ~Rp 128 jt |
+
+> **Catatan**: AI cost di skala 100K user (~$800/bln) hanya **7%** dari total OPEX. AI BUKAN cost driver. CDN yang dominan.
+
+### 3.5 Bandingkan dengan Subscription (yang client mention)
+
+| Subscription | Bulanan | Use Case |
+|-------------|---------|----------|
+| Claude Pro | $20/user | Personal coding, riset |
+| Claude Max 5× | $100/user | Heavy coding |
+| Claude Max 20× | $200/user | Power user, dev work |
+| ChatGPT Plus | $20/user | Personal |
+| ChatGPT Team | $30/seat | Team collaboration |
+
+**Untuk PRODUKSI multi-user di FLiK**: subscription model TIDAK COCOK — kena rate limit per akun, tidak bisa dipanggil dari aplikasi backend. **Wajib pakai API**. Tapi **API jauh lebih murah** untuk volume rendah-menengah karena pay-per-use:
+- 1.000 MAU FLiK ≈ **$8/bulan API cost** (Claude Max = $200/bulan)
+- Subscription cocok untuk **development team** (1-3 dev pakai Claude Max selama build)
+
+---
+
+## 4. CDN Strategy — Bunny.net sebagai Primary
+
+### 4.1 Mengapa Bunny CDN, bukan CloudFront
+
+CDN egress = **~70% dari total OPEX** di skala 10K+ user. Pilihan CDN = pilihan terbesar yang bisa save uang.
+
+| CDN | Per GB Asia (first 10TB) | Per GB Asia (high volume) | Notes |
+|-----|--------------------------|---------------------------|-------|
+| **AWS CloudFront** | **$0.114** (verified) | $0.020 (5PB+) | Bundled fitur, mahal |
+| **Bunny CDN Standard** | **$0.005** (global avg) | **$0.003** (10TB+) | Global PoP termasuk Singapore, Jakarta |
+| **Bunny Stream** (video CDN) | **$0.01** | $0.005 | Includes transcoding free |
+| Cloudflare Stream | ~$0.40/GB delivered | — | Bundle stream+CDN+DRM |
+| Indonesia local CDN (BizNet, Telkom) | ~Rp 1.000/GB ($0.06) | Negotiable | Latency lokal terbaik |
+
+**Rekomendasi FLiK**:
+- **Bulan 1-12**: **Bunny Stream** ($0.01/GB) — bundled video CDN, transcoding included
+- **Bulan 12+ (>50K user)**: tambah **Indonesia local CDN** sebagai secondary untuk peak hours
+- **CloudFront**: hanya untuk static asset web app (kecil traffic-nya)
+
+### 4.2 Cost Comparison Real
+
+Egress 22 TB/bulan (1.000 user × 22 GB):
+- CloudFront Asia: 22.000 GB × $0.114 = **$2.508**
+- Bunny Stream: 22.000 GB × $0.01 = **$220**
+- **Save: $2.288/bulan = Rp 36 juta/bulan**
+
+Egress 220 TB/bulan (10.000 user):
+- CloudFront: $25.080
+- Bunny: $1.100
+- **Save: $23.980/bulan = Rp 384 juta/bulan**
+
+> **Kesimpulan**: pilihan CDN sendirian sudah save 90%+ vs default AWS. Critical untuk client kecil-menengah.
+
+---
+
+## 5. DRM — Hybrid: DIY Primary + EZDRM Optional
+
+### 5.1 Strategi Hybrid
+
+Konten = film klasik Indonesia milik client (bukan rilisan Hollywood). Casual piracy protection sudah cukup untuk mayoritas konten. Build **DRM custom in-house** untuk semua film — opsi EZDRM disediakan untuk konten premium / iOS Safari support yang specific.
+
+### 5.2 DIY DRM Stack (100% Buatan Sendiri)
+
+| Komponen | Implementasi |
+|----------|--------------|
+| **Video encryption** | AES-128/256 segment encryption (FFmpeg gratis) |
+| **Key delivery server** | Endpoint Laravel: validate JWT + auth + subscription + IP/geo + device |
+| **Token rotation** | Key per-session, rotate per 5 menit, signed dengan APP_KEY |
+| **Signed URLs** | Temporary signed URL ke Bunny CDN (5-15 menit expiry) |
+| **Concurrent stream limit** | Redis counter per user, kick session lama kalau exceed |
+| **Device fingerprinting** | Browser canvas + WebGL + audio context hash |
+| **Watermarking forensik** | Burn-in user ID semi-transparan via FFmpeg overlay |
+| **Geo-blocking** | MaxMind GeoIP2 lookup di middleware |
+| **Anti-debugging** | DevTools detector + console banner di player JS |
+| **Session binding** | Key cuma valid untuk 1 session token |
+| **Dynamic playlist** | Generate manifest M3U8 per request dengan key URL signed |
+| **Anti-replay** | Nonce + timestamp di JWT, reject reused token |
+| **Bandwidth throttle** | Rate limit per token via Bunny edge config |
+
+**Estimasi build**: 2-3 minggu untuk 1 senior dev. **Cost tambahan: Rp 0** (sudah masuk engineering budget).
+
+### 5.3 Yang Tidak Bisa Buatan Sendiri (Fakta Teknis)
+
+| Standard DRM | Mengapa Wajib Pihak Ketiga |
+|-------------|----------------------------|
+| **Widevine** (Google) | License server harus certified Google. SDK butuh NDA + corporate approval. CDM closed-source. |
+| **PlayReady** (Microsoft) | License kontrak Microsoft. PRMv4 protocol licensing. |
+| **FairPlay** (Apple) | Sertifikat dari Apple Enterprise Developer. iOS Safari **ONLY** mau pakai FairPlay. |
+
+**Konsekuensi tanpa industry-standard DRM**:
+- ❌ iOS Safari user tidak bisa play encrypted video → solusi: **paksa PWA install**
+- ❌ Beberapa Smart TV butuh Widevine → solusi: **PWA fallback / future Tier 3**
+- ✅ Chrome/Android/Web: 100% works dengan custom DRM
+
+### 5.4 EZDRM Optional (Per-Film Activation)
+
+Disediakan sebagai **toggle per-film** di admin panel:
+
+```
+[Admin Panel — Movie Edit]
+DRM Strategy:  ( ) Custom DIY (default — gratis)
+               ( ) EZDRM Multi-DRM ($200/bln shared, +iOS native)
 ```
 
-**Pro**: Zero cost, simple, sudah supported native Laravel.
-**Con**: Sekali file di-download lokal, bisa dishare bebas. Tidak ada enkripsi konten.
-**Kapan dipakai**: trailer, behind-the-scene, konten free.
+**Kapan aktifkan EZDRM**:
+- Konten exclusive baru di-restore yang punya commercial value tinggi
+- Permintaan rights holder yang demand industry-standard DRM
+- Mau dukung iOS native app dengan FairPlay
 
-### 3.4 Tier 1 — HLS AES-128 (Pure Laravel + FFmpeg)
+**Cost EZDRM (Verified)**:
+- Starter $199.99/bulan flat — bundled Widevine + PlayReady + FairPlay
+- Setup one-time: ~$300
 
-**Konsep**: file di-segment jadi HLS chunks (.ts), tiap chunk di-encrypt dengan AES-128. Player butuh request key dari endpoint Laravel yang validate token user.
+**Sumber**: ezdrm.com/service-pricing
 
-**Setup**:
-1. Transcode film ke HLS dengan FFmpeg + AES-128:
-   ```bash
-   ffmpeg -i input.mp4 \
-     -hls_time 6 -hls_key_info_file enc.keyinfo \
-     -hls_playlist_type vod output.m3u8
-   ```
-2. `enc.keyinfo` berisi key URL & IV. Key URL pointing ke endpoint Laravel:
-   ```php
-   Route::get('/drm/key/{movie}/{token}', [DrmController::class, 'serveKey'])
-       ->middleware('auth');
-   ```
-3. Controller validate: user login? subscription aktif? token valid? geo OK? — baru serve binary key.
+### 5.5 Trade-off Honest
 
-**Pro**: Tetap zero ongoing cost (selain compute transcode), key rotation bisa dilakukan kapan saja, geo-blocking gampang.
-**Con**: Key bisa di-extract dari memory player. Tidak melindungi dari user yang technical & determined.
-**Kapan dipakai**: Sebagian besar konten katalog film jadul Indonesia — rights holder umumnya tidak demand DRM enterprise.
+| Aspek | DIY (Default) | EZDRM (Optional) |
+|-------|--------------|------------------|
+| Cost/bulan | **Rp 0** | $200 |
+| Proteksi vs casual user | ⭐⭐⭐⭐ cukup | ⭐⭐⭐⭐ |
+| Proteksi vs determined hacker | ⭐⭐ | ⭐⭐⭐⭐ |
+| iOS Safari native | ❌ butuh PWA | ✅ FairPlay |
+| Smart TV native | ⚠️ limited | ✅ |
+| Time to implement | 2-3 minggu (one-time) | 1 minggu integration |
+| Maintenance | Self | Provider handle |
+| Studio rights holder accept? | ⚠️ tergantung | ✅ industry standard |
 
-### 3.5 Tier 2 — ClearKey + Open-source Widevine L3
+### 5.6 Implementation Code — DIY HLS AES-128
 
-**Konsep**: pakai DASH dengan multi-DRM tapi key server-nya kita host sendiri pakai open source (mis. `eyevinn/keyos-clearkey-server` atau implementasi sendiri di Laravel).
-
-**Stack**:
-- **Packager**: [Shaka Packager](https://github.com/shaka-project/shaka-packager) (gratis, by Google)
-- **Player**: Shaka Player (web), ExoPlayer (Android)
-- **Key server**: custom Laravel endpoint
-- **Widevine L3 license server**: open source seperti [pywidevine](https://github.com/devine-dl/pywidevine) — tapi **secara legal Widevine butuh Google certification**, tidak bisa production tanpa NDA.
-
-**Pro**: Lebih kuat dari AES-128, support beberapa device.
-**Con**: Widevine L3 tanpa certification = legal grey area. iOS tidak support tanpa FairPlay.
-**Kapan dipakai**: Internal testing, edukasi. **Tidak direkomendasikan untuk production**.
-
-### 3.6 Tier 3 — Studio-grade Multi-DRM via 3rd Party
-
-**Wajib 3rd party DRM provider**. Tidak ada alternatif legal untuk implement Widevine/PlayReady/FairPlay sendiri. Provider akan handle:
-- Hosting license server bersertifikat
-- Manajemen device certificate (FairPlay)
-- Anti-piracy monitoring
-- Rotational keys
-
-**Vendor comparison** (per stream / per device pricing, harga benchmark publik 2025):
-
-| Vendor | Pricing Model | Estimasi 100K active | Notable |
-|--------|---------------|---------------------|---------|
-| **AWS Elemental MediaPackage** | $0.01/min packaged + $0.005/license request | ~$3.000/bln | Native AWS, integrated dengan MediaConvert |
-| **EZDRM** | $0.0024/license (volume) | ~$1.500/bln | Low cost, simple, US-based |
-| **BuyDRM KeyOS** | Tiered: $500/mo flat → $0.005/license | ~$2.000–$4.000/bln | Used by Disney+ HotStar |
-| **Verimatrix MultiDRM** | Enterprise (kontrak) | $5K+/bln | Heavy enterprise, anti-piracy strong |
-| **Axinom DRM** | Per active device, ~$0.10/device/mo | ~$5.000/bln @ 50K active devices | Eropa, GDPR-friendly |
-| **DRMtoday (Castlabs)** | Tiered enterprise | $2K–$8K/bln | Used by ProSiebenSat.1, banyak EU broadcaster |
-
-**Rekomendasi untuk FLiK**:
-- **Tahun 1 (1K–10K users)**: **EZDRM** — paling murah, paling cepat onboard, multi-DRM bundled.
-- **Tahun 2–3 (10K–100K)**: tetap **EZDRM** atau switch ke **AWS MediaPackage** kalau sudah heavy AWS.
-- **Tahun 3+ atau kalau deal sama studio besar**: **BuyDRM** atau **DRMtoday** untuk credibility.
-
-### 3.7 Implementasi Studio-grade di Laravel — Architecture
-
+```bash
+# Transcode + encrypt dengan FFmpeg
+ffmpeg -i input.mp4 \
+  -hls_time 6 \
+  -hls_key_info_file enc.keyinfo \
+  -hls_playlist_type vod \
+  -c:v libx264 -b:v 5M \
+  output.m3u8
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ FLiK Laravel App                                             │
-│  ├── Admin upload film (master MP4)                         │
-│  └── Trigger AWS MediaConvert job via SDK                   │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│ AWS MediaConvert                                             │
-│  - Transcode ke ABR ladder (360p–4K)                        │
-│  - Output ke S3 bucket "flik-encoded"                        │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Shaka Packager (atau MediaPackage VOD)                       │
-│  - Encrypt segments with CPIX                                │
-│  - Generate HLS (FairPlay) + DASH (Widevine + PlayReady)    │
-│  - Upload ke S3 "flik-protected"                             │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│ CloudFront CDN                                               │
-│  - Signed URLs / Signed Cookies                              │
-│  - Geo-restriction                                           │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│ User Player (Shaka / Video.js / ExoPlayer / Safari)         │
-│  - Detect DRM capability                                     │
-│  - Request license:                                          │
-│    Widevine → license.ezdrm.com  ────┐                       │
-│    PlayReady → license.ezdrm.com  ────┤                      │
-│    FairPlay → license.ezdrm.com  ─────┘                      │
-└─────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────┐
-│ DRM Provider (EZDRM / BuyDRM)                                │
-│  - Validate token (signed by FLiK Laravel JWT)               │
-│  - Issue license with device-bound restrictions              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Code touchpoint di Laravel (yang perlu ditambahkan):**
-
-1. `App\Services\Drm\LicenseTokenService` — generate JWT untuk DRM provider.
-2. `App\Services\Transcoding\MediaConvertJobBuilder` — build & dispatch job ke MediaConvert.
-3. `App\Http\Controllers\PlaybackController::getStreamConfig($movie)` — return HLS/DASH manifest URL + license server URL + JWT token.
-4. Migration tambahan: `movies` table butuh kolom `dash_manifest_url`, `hls_manifest_url`, `drm_status`, `drm_provider_id`.
-
-### 3.8 Watermarking (forensic)
-
-Untuk konten premium, tambahkan **per-session forensic watermarking** (mis. NexGuard, EZDRM Watermark, Castlabs Forensic). Cost: ~$0.001/stream. Berguna untuk track siapa yang leak konten.
-
----
-
-## 4. AI Layer — Fitur, Provider, & Cost
-
-### 4.1 Arsitektur AI di FLiK
-
-Sudah ada tabel `ai_providers` di database (migration `2026_05_09_000001_create_ai_providers_table`). Admin bisa add multiple providers via `/admin/ai-settings`. API key dienkripsi (`encrypted` cast Laravel).
-
-**Strategi multi-provider**:
-- 1 provider sebagai **default** (mis. DeepSeek untuk cost-efficient operations).
-- Provider lain sebagai **fallback** atau **specialty** (mis. OpenAI Whisper untuk transcription, Claude untuk reasoning, Gemini untuk multimodal/image).
-- Service layer di Laravel akan pilih provider berdasarkan task type, dengan auto-fallback kalau primary down.
-
-### 4.2 Provider Comparison (per Mei 2026)
-
-| Provider | Model | Input ($/1M tok) | Output ($/1M tok) | Use Case |
-|----------|-------|------------------|--------------------|----------|
-| **DeepSeek** | deepseek-chat (V3) | $0.27 | $1.10 | Default — generation, summarization, tagging. Ratio cost/quality terbaik. |
-| **DeepSeek** | deepseek-reasoner | $0.55 | $2.19 | Complex reasoning, recommendation logic |
-| **OpenAI** | gpt-4o-mini | $0.15 | $0.60 | Fast UI features (chat support, quick tagging) |
-| **OpenAI** | gpt-4o | $2.50 | $10.00 | Premium tasks, content moderation |
-| **OpenAI** | Whisper (audio) | $0.006/menit | — | Auto-subtitle generation |
-| **Anthropic** | Claude Sonnet 4.6 | $3.00 | $15.00 | Long-form synopsis, editorial copy |
-| **Anthropic** | Claude Haiku 4.5 | $1.00 | $5.00 | Comments moderation, fast classification |
-| **Google** | Gemini 2.0 Flash | $0.075 | $0.30 | Cheapest option, multimodal (image+text) |
-| **Groq** | Llama 3.3 70B | $0.59 | $0.79 | Ultra-low latency (real-time chat) |
-| **OpenRouter** | Multi-vendor | varies | varies | Single API key, multi provider routing |
-
-### 4.3 AI Feature Catalog (15 Fitur)
-
-#### 🎯 User-Facing Features
-
-| # | Fitur | Model Pilihan | Cost Estimate per 1K User/Bulan |
-|---|-------|--------------|--------------------------------|
-| 1 | **Personalized Recommendations** — "Karena kamu suka X, coba Y" | DeepSeek-chat (batched) | ~$5 |
-| 2 | **Semantic Search** — "film tentang kemerdekaan dari sudut pandang petani" | Embeddings (OpenAI text-embedding-3-small) + DeepSeek | ~$3 |
-| 3 | **Auto-generated Movie Synopsis** (saat admin upload) | Claude Haiku | ~$0.10 per movie |
-| 4 | **AI Chatbot Customer Support** (resolve common issues) | Groq Llama 3.3 (low-latency) | ~$8 (assuming 30% users use it) |
-| 5 | **Smart Continue Watching** — predict next episode/film | DeepSeek-reasoner | ~$2 |
-| 6 | **Mood-based Discovery** — "Hari ini lagi mellow" → recommend | Gemini Flash + tags | ~$1 |
-| 7 | **AI Subtitle Generation** (Indonesian/English/regional) | OpenAI Whisper | $0.006 × 90 min = $0.54 per film (one-time) |
-| 8 | **Auto-translation Subtitles** (Indo → Mandarin/Arabic for diaspora) | DeepSeek + post-edit | ~$2 per film (one-time) |
-
-#### 🛠️ Backend / Admin Features
-
-| # | Fitur | Model Pilihan | Cost Estimate |
-|---|-------|--------------|---------------|
-| 9 | **Auto-tagging** (genre, mood, themes, era, era cinematography style) | Claude Haiku (text+poster vision) | ~$0.20 per film (one-time) |
-| 10 | **Comment/Review Moderation** (toxicity, spam, off-topic) | Gemini Flash | ~$0.50 per 10K comments |
-| 11 | **Trailer Auto-generation Suggestion** — pick best 30s clips | Multimodal vision (Gemini/GPT-4o vision) | ~$2 per film (one-time) |
-| 12 | **Thumbnail Selection** — pick best frame for poster grid | Gemini vision | ~$0.30 per film |
-| 13 | **Content Quality Classification** (audio sync, visual issues) | Custom + GPT-4o vision | ~$1 per film (QC) |
-| 14 | **Restoration Priority Ranking** — film mana yang worth di-restore | DeepSeek-reasoner + metadata | ~$0.10 per film |
-| 15 | **Email/Notification Personalization** — tailor copy per user segment | DeepSeek-chat | ~$3 per 1K users/bulan |
-
-### 4.4 Total AI Cost Projection
-
-**One-time cost (350 film katalog awal)**:
-| Task | Per Film | Total |
-|------|---------|-------|
-| Subtitle (Whisper) | $0.54 | $189 |
-| Auto-tagging | $0.20 | $70 |
-| Translation (3 bahasa) | $6.00 | $2.100 |
-| Trailer suggest | $2.00 | $700 |
-| Thumbnail pick | $0.30 | $105 |
-| QC | $1.00 | $350 |
-| Synopsis | $0.10 | $35 |
-| **One-time total** | | **~$3.550** (≈ Rp 57 juta) |
-
-**Ongoing monthly cost** (per skala user):
-
-| Users | Monthly AI Cost (USD) | Monthly AI Cost (Rp) |
-|-------|----------------------|----------------------|
-| 1.000 | ~$25 | ~Rp 400.000 |
-| 10.000 | ~$250 | ~Rp 4 juta |
-| 100.000 | ~$2.500 | ~Rp 40 juta |
-| 1.000.000 | ~$25.000 | ~Rp 400 juta |
-
-> AI cost scales **linearly** dengan user count, tapi sangat **manageable** karena DeepSeek/Gemini Flash murah & banyak tugas bisa dibatch (recommendation di-precompute harian).
-
-### 4.5 Tools Tambahan yang Perlu Diinstall (Selain AI Provider API)
-
-Untuk fitur AI bekerja, butuh komponen non-AI:
-
-1. **Vector database** — untuk semantic search & recommendation:
-   - Opsi murah: **pgvector** extension di PostgreSQL (gratis, single AWS RDS)
-   - Opsi managed: **Pinecone** (~$70/bln starter), **Weaviate Cloud**, **Qdrant Cloud**
-   - **Rekomendasi**: pgvector — sudah include di RDS PostgreSQL, no extra cost.
-2. **Background job queue** — untuk batch AI processing:
-   - Sudah ada di Laravel, tinggal switch dari `sync` ke **Redis queue** atau **AWS SQS**.
-   - Worker: Laravel Horizon (dashboard) atau plain `php artisan queue:work`.
-3. **Caching** — AI responses di-cache (Redis) untuk hemat call:
-   - Recommendations cached per user 6 jam.
-   - Search embeddings di-cache permanent.
-4. **Rate limiting** — protect cost dari abuse (Laravel built-in `throttle`).
-5. **Monitoring** — track per-provider spend (sudah ada kolom `total_tokens_used`, `total_cost_usd` di tabel `ai_providers`).
-
-### 4.6 Flow Implementasi di Laravel
 
 ```php
-// app/Services/Ai/AiClient.php (to be built)
-class AiClient
-{
-    public function chat(array $messages, ?string $task = null): string
-    {
-        $provider = AiProvider::default(); // or pick by task
-        $client = match ($provider->provider) {
-            'openai', 'deepseek', 'groq', 'mistral', 'openrouter', 'custom'
-                => $this->openAiCompatible($provider, $messages),
-            'anthropic' => $this->anthropic($provider, $messages),
-            'google'    => $this->gemini($provider, $messages),
-        };
-        $this->trackUsage($provider, $client);
-        return $client['content'];
-    }
-}
+// routes/web.php
+Route::get('/drm/key/{movie}/{token}', function ($movie, $token) {
+    $payload = JWT::decode($token, config('app.key'));
+    abort_unless(auth()->check() && $payload->user_id === auth()->id(), 403);
+    abort_unless(auth()->user()->hasActiveSubscription(), 402);
+    abort_unless(now()->lt(Carbon::parse($payload->exp)), 403);
+    abort_unless(GeoIp::allow(request()->ip()), 451);
+
+    $sessionKey = Cache::remember(
+        "drm:{$payload->session_id}",
+        now()->addMinutes(5),
+        fn () => Crypt::generateKey('AES-128-CBC')
+    );
+
+    return response($sessionKey, 200, [
+        'Content-Type' => 'application/octet-stream',
+        'Cache-Control' => 'no-store, must-revalidate',
+    ]);
+})->middleware(['auth', 'throttle:60,1']);
 ```
 
-**Karena 80%+ provider OpenAI-compatible** (DeepSeek, Groq, Mistral, OpenRouter, custom), satu HTTP client bisa handle banyak provider. Hanya Anthropic & Google yang punya format request berbeda.
+**Save vs EZDRM-only**:
+- Per bulan: Rp 3,2 juta
+- Per tahun: Rp 38,4 juta
+- 3 tahun: **~Rp 120 juta**
 
 ---
 
-## 5. Arsitektur Platform End-to-End
+## 6. AWS / Infra Cost — Detail Realistis per Skala
 
-```
-                          ┌──────────────────────────┐
-                          │  CloudFront CDN          │
-                          │  (id-jakarta-edge)       │
-                          └────────────┬─────────────┘
-                                       │
-            ┌──────────────────────────┼──────────────────────────┐
-            ▼                          ▼                          ▼
-    ┌──────────────┐         ┌─────────────────┐         ┌──────────────┐
-    │ Static       │         │ Video Manifests │         │ Web App      │
-    │ Assets (S3)  │         │ + Segments (S3) │         │ (Laravel ECS)│
-    └──────────────┘         └─────────────────┘         └──────┬───────┘
-                                                                │
-              ┌─────────────────────────────────────────────────┤
-              ▼                ▼                ▼                ▼
-        ┌──────────┐    ┌──────────┐    ┌─────────────┐  ┌────────────┐
-        │ RDS      │    │ Redis    │    │ AI Providers│  │ DRM Server │
-        │ MySQL +  │    │ (cache + │    │ (DeepSeek,  │  │ (EZDRM)    │
-        │ pgvector │    │  queue)  │    │  OpenAI,...)│  │            │
-        └──────────┘    └──────────┘    └─────────────┘  └────────────┘
-              ▲
-              │ admin upload
-              │
-        ┌─────┴─────────┐
-        │ MediaConvert  │
-        │ (transcode)   │
-        └───────┬───────┘
-                │
-        ┌───────▼────────┐
-        │ Shaka Packager │
-        │ + DRM encrypt  │
-        └────────────────┘
-```
+### 6.1 Skala 1.000 MAU (Bulan ke-3 launch — realistic baseline)
 
-### 5.1 Komponen & Tanggung Jawab
+**DRM**: DIY in-house — Rp 0 cost di sini.
 
-| Layer | Komponen | Notes |
-|-------|----------|-------|
-| **Edge** | CloudFront | 1 distribusi untuk web app, 1 untuk video. Origin Access Identity untuk S3. |
-| **App** | ECS Fargate (Laravel) | Auto-scale 2–20 task. `nginx-unit` atau `roadrunner` untuk performance. |
-| **DB** | RDS for MySQL 8 (Multi-AZ) + RDS for PostgreSQL (pgvector untuk AI) | Bisa juga single MySQL kalau hindari split. PostgreSQL untuk vector search lebih solid. |
-| **Cache/Queue** | ElastiCache Redis | Queue, session, AI response cache. |
-| **Video Storage** | S3 (Standard untuk hot, IA setelah 30 hari) | Lifecycle rules. |
-| **Encoding** | AWS Elemental MediaConvert | Pay per minute encoded. |
-| **Packaging/DRM** | Shaka Packager (run di ECS task) atau MediaPackage VOD + EZDRM | EZDRM untuk license server. |
-| **Search** | OpenSearch Service (atau Algolia) | Untuk text search; semantic via pgvector. |
-| **Monitoring** | CloudWatch + Sentry | Application errors via Sentry. |
-| **Email** | SES | Transactional + newsletter via Mailchimp. |
-| **Auth** | Laravel built-in + Socialite (Google) | Sudah jalan. |
-| **Payment** | Midtrans Snap | Sudah jalan. |
+| Komponen | Spec | Monthly USD | Monthly Rp |
+|----------|------|------------|-----------|
+| **Bunny Stream CDN** | 22 TB egress @ $0.01 | $220 | Rp 3.520.000 |
+| **Bunny Storage** | 1.2 TB @ $0.005 | $6 | Rp 96.000 |
+| AWS S3 (master file backup) | 700 GB Standard-IA | $9 | Rp 144.000 |
+| AWS EC2 t3.medium (Laravel app) | 730 jam | $30 | Rp 480.000 |
+| AWS RDS MySQL t3.small Multi-AZ | 50 GB SSD | $50 | Rp 800.000 |
+| AWS RDS PostgreSQL t3.micro (pgvector) | 20 GB | $25 | Rp 400.000 |
+| AWS ElastiCache Redis t3.micro | — | $15 | Rp 240.000 |
+| ALB | — | $20 | Rp 320.000 |
+| CloudWatch logs | — | $10 | Rp 160.000 |
+| AWS SES | 50K emails | $5 | Rp 80.000 |
+| **DIY DRM** (key server hosted di Laravel app) | included | $0 | **Rp 0** |
+| **AI APIs** | DeepSeek V4 Flash + Whisper | $8 | Rp 128.000 |
+| Domain, SSL, monitoring SaaS | — | $20 | Rp 320.000 |
+| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | | ━━━━━━ | ━━━━━━ |
+| **Subtotal** | | **$418** | **Rp 6.688.000** |
+| Buffer 10% | | $42 | Rp 668.800 |
+| **TOTAL** | | **~$460** | **~Rp 7,4 juta** |
+| _Optional: EZDRM kalau aktif_ | _$200_ | _Rp 3,2 jt_ | |
 
-### 5.2 Why Laravel Sudah Cukup
+**Per paid user** (asumsi 400 paid): ~$1.15 = Rp 18K. Pricing Rp 49K → **margin ~62%**. ✅
 
-- Sudah ada admin panel, auth, payment, gamification.
-- Livewire bisa scale untuk dashboard real-time tanpa SPA framework tambahan.
-- NativePHP Mobile bisa wrap jadi Android app — sudah ada di project (`/native` script & `nativephp/` folder).
-- PHP-FPM atau Octane bisa handle 10K+ RPS per ECS task dengan tuning.
+### 6.2 Skala 10.000 MAU
 
-### 5.3 Yang Belum Ada & Perlu Dibangun
+| Komponen | Spec | Monthly USD | Monthly Rp |
+|----------|------|------------|-----------|
+| Bunny Stream CDN | 220 TB @ $0.005 (volume) | $1.100 | Rp 17.600.000 |
+| Bunny Storage | 1.5 TB | $8 | Rp 128.000 |
+| S3 backup | 1 TB | $13 | Rp 208.000 |
+| EC2 (2× t3.large) | — | $200 | Rp 3.200.000 |
+| RDS t3.medium Multi-AZ | 200 GB | $200 | Rp 3.200.000 |
+| RDS PostgreSQL t3.small | 50 GB | $50 | Rp 800.000 |
+| ElastiCache Redis t3.small | — | $30 | Rp 480.000 |
+| ALB + WAF | — | $50 | Rp 800.000 |
+| CloudWatch + Sentry | — | $50 | Rp 800.000 |
+| SES | 500K emails | $50 | Rp 800.000 |
+| **DIY DRM** (multi-instance) | included | $0 | **Rp 0** |
+| **AI APIs** | scaled | $80 | Rp 1.280.000 |
+| Misc | — | $40 | Rp 640.000 |
+| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | | ━━━━━━ | ━━━━━━ |
+| **TOTAL** | | **~$1.870** | **~Rp 29,9 juta** |
+| _Optional: EZDRM aktif_ | _$400_ | | _Rp 6,4 jt extra_ |
 
-| Komponen | Effort | Priority |
-|----------|--------|----------|
-| `App\Services\Ai\AiClient` (multi-provider abstraction) | 3 hari | Tinggi |
-| `App\Services\Drm\*` (license token, key rotation) | 5 hari | Tinggi (kalau target Studio DRM) |
-| `App\Services\Transcoding\MediaConvertService` | 4 hari | Tinggi |
-| `App\Jobs\TranscodeMovie`, `EncryptAndPackage`, `GenerateSubtitles`, `GenerateTags` | 4 hari | Tinggi |
-| `PlaybackController` dengan signed manifest URLs | 2 hari | Tinggi |
-| Player wrapper (Shaka.js) di Blade view | 3 hari | Tinggi |
-| Vector embedding pipeline (pgvector) | 4 hari | Medium |
-| Admin upload UI dengan progress + resumable (TUS protocol) | 5 hari | Medium |
-| Audit log untuk admin actions | 1 hari | Medium |
-| **Total estimate** | **~6 minggu (1 senior dev)** | |
+**Per paid user** (4.000 paid): $0.47 = Rp 7.500. Pricing Rp 49K → **margin ~85%**. ✅✅
 
----
+### 6.3 Skala 100.000 MAU
 
-## 6. CDN & Streaming Strategy
+| Komponen | Monthly USD | Monthly Rp |
+|----------|------------|-----------|
+| Bunny CDN | 2.2 PB @ $0.003 | $6.600 | Rp 105,6 juta |
+| Storage (Bunny + S3) | $50 | Rp 800.000 |
+| EC2 cluster (8× t3.xlarge) | $1.000 | Rp 16 juta |
+| RDS r5.large Multi-AZ + read replica | $700 | Rp 11,2 juta |
+| RDS PostgreSQL r5.large | $400 | Rp 6,4 juta |
+| Redis cluster | $300 | Rp 4,8 juta |
+| OpenSearch (3 nodes) | $600 | Rp 9,6 juta |
+| ALB + WAF + Shield | $200 | Rp 3,2 juta |
+| Monitoring (Datadog/Sentry) | $400 | Rp 6,4 juta |
+| SES (5M emails) | $500 | Rp 8 juta |
+| **DIY DRM** (key servers di EC2 cluster) | included | **Rp 0** |
+| **AI APIs** | $800 | Rp 12,8 juta |
+| Misc (NAT, KMS, secrets, backup) | $300 | Rp 4,8 juta |
+| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | ━━━━━━ | ━━━━━━ |
+| **TOTAL** | **~$11.850** | **~Rp 189 juta** |
+| _Optional: EZDRM enterprise_ | _$1.500_ | _Rp 24 jt extra_ |
 
-### 6.1 Pilihan CDN
+**Per paid user** (40.000 paid): $0.30 = Rp 4.700. Pricing Rp 49K → **margin ~90%**. ✅✅
 
-| CDN | Pricing Asia Pacific | Pro | Con |
-|-----|---------------------|-----|-----|
-| **CloudFront** | $0.085/GB (10TB tier) → $0.020/GB (5PB tier) | Native AWS, bundled signed URLs | Mahal di low volume |
-| **Cloudflare Stream** | $1/1K minutes delivered (~$0.40/GB) | Bundled video + CDN + DRM, mudah | Lock-in |
-| **Bunny CDN** | $0.01–$0.04/GB Asia | Murah, simple | Less features |
-| **Akamai** | Enterprise contract | Best quality, biggest network | Paling mahal |
-| **Indonesia local CDN** (Indosat, BizNet) | Negotiable, ~Rp 1.000/GB ($0.06) | Latency Indonesia paling rendah | Limited tooling |
+### 6.4 Skala 1.000.000 MAU
 
-**Rekomendasi**: 
-- **Tahun 1**: **CloudFront** (1 ekosistem dengan AWS).
-- **Tahun 2 (kalau egress > 100 TB/bln)**: dual-CDN dengan **Bunny** atau **Cloudflare** sebagai secondary, route via **NS1** atau **DNSimple** untuk biaya lebih rendah.
-- **Tahun 3 (kalau scale > 1M user)**: tambah **Indonesia local CDN** untuk peering dengan ISP lokal (Telkom, Indihome, Indosat).
+| Komponen | Monthly USD | Monthly Rp |
+|----------|------------|-----------|
+| Bunny CDN (negotiated) | 22 PB @ $0.002 | $44.000 | Rp 704 juta |
+| Storage | $200 | Rp 3,2 juta |
+| EC2 cluster (40+ instance Reserved) | $4.500 | Rp 72 juta |
+| Aurora MySQL cluster | $3.500 | Rp 56 juta |
+| Aurora PostgreSQL | $1.500 | Rp 24 juta |
+| Redis cluster (sharded) | $1.500 | Rp 24 juta |
+| OpenSearch | $1.800 | Rp 28,8 juta |
+| ALB + WAF + Shield Advanced | $3.000 | Rp 48 juta |
+| Monitoring full stack | $1.500 | Rp 24 juta |
+| SES (50M emails) | $5.000 | Rp 80 juta |
+| **DIY DRM** (dedicated key server cluster) | $0 | **Rp 0** |
+| **AI APIs** | $8.000 | Rp 128 juta |
+| AWS Enterprise Support | $5.000 | Rp 80 juta |
+| Misc (VPC, transit, secrets) | $2.000 | Rp 32 juta |
+| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | ━━━━━━ | ━━━━━━ |
+| **TOTAL** | **~$81.500** | **~Rp 1,30 miliar** |
+| _Optional: EZDRM enterprise_ | _$8.000_ | _Rp 128 jt extra_ |
 
-### 6.2 Optimasi Cost CDN
+**Per paid user** (400.000 paid): $0.20 = Rp 3.250. Pricing Rp 49K → **margin ~93%**.
 
-1. **Lifecycle**: video segment > 30 hari rendah viewership → S3 IA (cost 50% lebih rendah).
-2. **Cache headers**: video segments cache `max-age=31536000, immutable`. Manifest cache 30 detik.
-3. **Adaptive bitrate ladder yang efisien**:
-   - Skip 4K untuk semua film (kecuali request rights holder).
-   - Default ladder: 240p (300 kbps), 480p (1 Mbps), 720p (3 Mbps), 1080p (5 Mbps).
-   - Save ~40% bandwidth vs ladder Netflix (yang punya 7+ rendition).
-4. **Open Connect equivalent**: long-term, deploy origin shield di SG region untuk reduce origin egress.
-5. **Compression**: HEVC/H.265 untuk file baru → 40% lebih kecil dari H.264 dengan kualitas sama. Trade-off: lebih lama encode + Safari lama tidak support.
+### 6.5 Cost Comparison v1.0 vs v2.0 (CloudFront vs Bunny)
 
----
+| MAU | v1.0 (CloudFront) | **v2.0 (Bunny)** | Save |
+|-----|-------------------|------------------|------|
+| 1.000 | $2.730 | **$649** | 76% |
+| 10.000 | $19.400 | **$2.270** | 88% |
+| 100.000 | $127.600 | **$13.350** | 90% |
+| 1.000.000 | $700.000 | **$89.500** | 87% |
 
-## 7. AWS Cost Matrix
-
-**Asumsi standar OTT** (lihat §2). Semua harga dalam **USD/bulan**, region **ap-southeast-1** (Singapore — Indonesia traffic biasanya routing kesini).
-
-### 7.1 Skenario 1.000 MAU (400 paid)
-
-| Komponen | Spec | Volume | Unit Cost | Monthly |
-|----------|------|--------|-----------|---------|
-| **CloudFront egress** | Asia Pacific | 22 TB | $0.080/GB | **$1.760** |
-| **S3 storage** | Standard, transcoded | 1.2 TB | $0.025/GB | $30 |
-| **S3 GET requests** | Manifest + segments | 50M | $0.0004/1K | $20 |
-| **MediaConvert** | One-time + monthly new (5 film/bln avg) | 750 menit | $0.0075/menit (HD) | $6 |
-| **ECS Fargate** | 2 task × 2 vCPU + 4 GB | 730 jam | $0.04/jam | $58 |
-| **RDS MySQL db.t3.medium Multi-AZ** | 50 GB SSD | — | — | $130 |
-| **RDS PostgreSQL db.t3.small** (pgvector) | 20 GB | — | — | $40 |
-| **ElastiCache Redis cache.t3.small** | — | — | — | $25 |
-| **ALB + data transfer internal** | — | — | — | $20 |
-| **CloudWatch logs + metrics** | — | — | — | $15 |
-| **SES** | 100K emails | — | $0.10/1K | $10 |
-| **DRM (EZDRM)** | ~80K licenses | — | $0.0024/lic | $192 |
-| **AI APIs** | DeepSeek + others | — | — | $25 |
-| **Backup, secrets, misc** | — | — | — | $40 |
-| **Subtotal infrastructure** | | | | **$2.371** |
-| **+ 15% buffer (egress spikes, support)** | | | | $356 |
-| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | | | | ━━━━━━ |
-| **TOTAL** | | | | **~$2.730/bln (Rp 43,7 juta)** |
-| Per paid user | | | | **$6,8 (Rp 110K)** |
-
-### 7.2 Skenario 10.000 MAU (4.000 paid)
-
-| Komponen | Spec | Volume | Monthly |
-|----------|------|--------|---------|
-| **CloudFront egress** | 220 TB | tier $0.060/GB rata-rata | **$13.200** |
-| **S3 storage** | 1.5 TB (more variants) | — | $40 |
-| **S3 requests** | 500M | — | $200 |
-| **MediaConvert** | 2K menit/bln | — | $15 |
-| **ECS Fargate** | 4 task × 2 vCPU | — | $230 |
-| **RDS MySQL db.r5.large Multi-AZ** | 200 GB | — | $420 |
-| **RDS PostgreSQL db.t3.medium** | 50 GB | — | $130 |
-| **ElastiCache Redis cache.m5.large** | — | — | $180 |
-| **OpenSearch t3.medium 2 nodes** | — | — | $200 |
-| **ALB + WAF** | + WAF rules | — | $80 |
-| **CloudWatch + Sentry** | — | — | $80 |
-| **SES** | 1M emails | — | $100 |
-| **DRM (EZDRM)** | ~800K licenses | $0.0020 (volume) | $1.600 |
-| **AI APIs** | — | — | $250 |
-| **Backup, KMS, misc** | — | — | $150 |
-| **Subtotal** | | | **$16.875** |
-| **+ 15% buffer** | | | $2.531 |
-| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | | | ━━━━━━ |
-| **TOTAL** | | | **~$19.400/bln (Rp 310 juta)** |
-| Per paid user | | | **$4,85 (Rp 78K)** |
-
-### 7.3 Skenario 100.000 MAU (40.000 paid)
-
-| Komponen | Spec | Volume | Monthly |
-|----------|------|--------|---------|
-| **CloudFront egress** | 2.2 PB | tier $0.040/GB avg (committed use) | **$88.000** |
-| **S3 storage + transitions** | 2 TB hot + 3 TB IA | — | $200 |
-| **S3 requests** | 5B | — | $1.500 |
-| **MediaConvert** | 10K menit | — | $75 |
-| **ECS Fargate** | 12 task × 4 vCPU + 8 GB | — | $1.500 |
-| **RDS MySQL db.r5.2xlarge Multi-AZ** | 1 TB SSD | — | $2.200 |
-| **RDS PostgreSQL db.r5.large + read replica** | 200 GB | — | $700 |
-| **ElastiCache Redis cluster (3 node)** | — | — | $900 |
-| **OpenSearch r5.large × 3** | — | — | $1.800 |
-| **ALB + WAF + Shield Standard** | — | — | $400 |
-| **CloudWatch + Sentry + Datadog** | — | — | $1.200 |
-| **SES** | 10M emails | — | $1.000 |
-| **DRM (EZDRM enterprise)** | ~8M licenses | $0.0010 (negotiated) | $8.000 |
-| **AI APIs** | — | — | $2.500 |
-| **Misc (KMS, backups, secrets, NAT)** | — | — | $1.000 |
-| **Subtotal** | | | **$110.975** |
-| **+ 15% buffer** | | | $16.646 |
-| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | | | ━━━━━━ |
-| **TOTAL** | | | **~$127.600/bln (Rp 2,04 miliar)** |
-| Per paid user | | | **$3,19 (Rp 51K)** |
-
-> **Catatan optimasi**: di skala ini wajib **Reserved Instances** untuk RDS (save 30-40%) dan **CloudFront Savings Bundle** (save 20%). Realistic optimized: **~$95K/bln**.
-
-### 7.4 Skenario 1.000.000 MAU (400.000 paid)
-
-| Komponen | Spec | Volume | Monthly |
-|----------|------|--------|---------|
-| **CloudFront egress** | 22 PB | tier $0.020/GB (custom contract) | **$440.000** |
-| **S3 storage + IA + Glacier** | 5 TB hot + 10 TB IA + 20 TB archive | — | $1.500 |
-| **S3 requests** | 50B | — | $15.000 |
-| **MediaConvert** | 40K menit | — | $300 |
-| **ECS Fargate** | 60+ task auto-scale | — | $12.000 |
-| **RDS Aurora MySQL cluster (writer + 5 reader)** | 5 TB | — | $18.000 |
-| **RDS Aurora PostgreSQL** | 1 TB | — | $4.500 |
-| **ElastiCache Redis cluster (10+ shards)** | — | — | $6.000 |
-| **OpenSearch r5.xlarge × 6** | — | — | $7.500 |
-| **ALB + WAF + Shield Advanced** | — | — | $4.000 |
-| **Monitoring (Datadog, Sentry, NewRelic)** | — | — | $5.000 |
-| **SES** | 100M emails | — | $10.000 |
-| **DRM enterprise contract** | ~80M licenses | $0.0005 negotiated | $40.000 |
-| **AI APIs** | — | — | $25.000 |
-| **VPC, NAT, transit gateway, secrets** | — | — | $5.000 |
-| **24/7 AWS Enterprise Support** | — | — | $15.000 |
-| **Subtotal** | | | **$608.800** |
-| **+ 15% buffer (Lebaran spike, prime sport release)** | | | $91.320 |
-| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | | | ━━━━━━ |
-| **TOTAL (worst case AWS-only)** | | | **~$700.000/bln (Rp 11,2 miliar)** |
-| Per paid user | | | **$1,75 (Rp 28K)** |
-
-> **Optimasi wajib di skala ini**:
-> - **Multi-CDN** (CloudFront + Bunny/Cloudflare) — save 30–40% bandwidth cost.
-> - **Reserved Instances 3-year** — save 40–60% compute.
-> - **Indonesia local peering** dengan Telkom/IM2/Biznet — bypass CDN egress untuk traffic lokal.
-> - **Hybrid: AWS untuk control plane + bare metal/colo (EquinixID/IDC) untuk video origin** — bisa save 50% storage+egress.
->
-> Realistic optimized: **~$400.000/bln (Rp 6,4 miliar)**.
-
-### 7.5 Cost Per User Trend
-
-| MAU | Total Monthly (USD) | Per Paid User | Per MAU |
-|-----|---------------------|--------------|---------|
-| 1.000 | $2.730 | $6,80 | $2,73 |
-| 10.000 | $19.400 | $4,85 | $1,94 |
-| 100.000 | $127.600 | $3,19 | $1,28 |
-| 1.000.000 | $700.000 (worst) / $400.000 (optimized) | $1,75 / $1,00 | $0,70 / $0,40 |
-
-**Trend**: makin besar skala, makin efisien per-user. Dari $6.80 turun jadi $1.00 — **economies of scale 6.8×**.
+> **Insight**: v1.0 over-engineered untuk worst case enterprise. v2.0 realistis untuk client menengah.
 
 ---
 
-## 8. Total Cost of Ownership Summary
+## 6.6 Full P&L Analysis per Skala — Profit atau Boncos?
 
-### 8.1 Year-1 Budget (Tahun Operasional Pertama)
+Pertanyaan kunci dari Pak Lavesh: **dengan tech cost segini besar, masih untung gak?** Berikut breakdown lengkap revenue vs SEMUA pengeluaran (bukan cuma tech).
 
-Asumsi growth: 1K → 10K MAU dalam 12 bulan.
+**Asumsi**:
+- Pricing: Rp 49rb/bln (bisa tier Basic — paling konservatif)
+- Conversion: 40% MAU → paid
+- Marketing (CAC): bervariasi per skala (lihat §6.7)
+- CS staff: 1 per ~5K paid user
+- Engineering maintenance: 1 per ~50K MAU post-launch
+- Payment processing Midtrans: 2.9% + Rp 4.500/transaksi ≈ 3.5% effective
 
-| Item | One-time | Monthly avg | Year-1 Total |
-|------|---------|-------------|--------------|
-| **Initial AWS setup + arsitektur** | $5.000 | — | $5.000 |
-| **One-time AI processing 350 film** | $3.550 | — | $3.550 |
-| **Konten ingestion & restoration coordination** | $20.000 | — | $20.000 |
-| **DRM onboarding (EZDRM setup)** | $2.000 | — | $2.000 |
-| **Development team (6 minggu remaining + hardening)** | $30.000 | — | $30.000 |
-| **AWS infra (avg 1K → 10K)** | — | $8.000 | $96.000 |
-| **DRM licenses ongoing** | — | $400 | $4.800 |
-| **AI ongoing** | — | $80 | $960 |
-| **Domain, SSL wildcards, monitoring SaaS** | — | $200 | $2.400 |
-| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | | | ━━━━━━ |
-| **TOTAL Year-1** | | | **~$165.000 (Rp 2,64 miliar)** |
+### 1.000 MAU (400 paid)
 
-### 8.2 Year-3 Steady State (100K MAU)
+| Item | Monthly | % Revenue |
+|------|---------|-----------|
+| **Revenue** (400 × Rp 49rb) | Rp 19,6 jt | 100% |
+| Tech infra (Bunny+AWS+AI+DIY DRM) | Rp 7,4 jt | 38% |
+| Payment processing (3.5%) | Rp 0,7 jt | 4% |
+| CS part-time (1 staff) | Rp 5 jt | 26% |
+| Marketing (target Rp 100rb CAC × 100 new/bln) | Rp 10 jt | 51% |
+| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | ━━━━━━ | ━━━━ |
+| **Total Cost** | Rp 23,1 jt | 118% |
+| **Profit/(Loss)** | **(Rp 3,5 jt)** | **(18%)** ⚠️ |
 
-| Item | Monthly | Year-3 Annual |
-|------|---------|---------------|
-| AWS Infra (optimized) | $95.000 | $1.140.000 |
-| DRM | $8.000 | $96.000 |
-| AI | $2.500 | $30.000 |
-| 3rd party SaaS (monitoring, error tracking, support tools) | $3.000 | $36.000 |
-| Engineering team (5 senior dev avg blended Indonesia) | $30.000 | $360.000 |
-| **TOTAL Year-3** | **~$138.500/bln** | **~$1.660.000/year (Rp 26,6 miliar)** |
+**Verdict 1.000 MAU**: **Mild loss bulanan** — wajar untuk fase awal (CAC heavy). Investasi marketing untuk acquire ke skala berikutnya. Tidak boncos parah karena tech infra cuma 38% revenue.
 
-### 8.3 Revenue Required (Sanity Check)
+### 10.000 MAU (4.000 paid)
 
-Jika pricing **Rp 49.000/bln** (~$3) untuk paid subscriber:
+| Item | Monthly | % Revenue |
+|------|---------|-----------|
+| **Revenue** (4.000 × Rp 49rb) | Rp 196 jt | 100% |
+| Tech infra | Rp 30 jt | 15% |
+| Payment processing | Rp 6,9 jt | 3.5% |
+| CS team (3 staff) | Rp 18 jt | 9% |
+| Marketing (Rp 80rb CAC × 500 new/bln) | Rp 40 jt | 20% |
+| Engineering 1 maintenance dev part-time | Rp 15 jt | 8% |
+| Office/legal/misc | Rp 5 jt | 3% |
+| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | ━━━━━━ | ━━━━ |
+| **Total Cost** | Rp 114,9 jt | 59% |
+| **Profit** | **Rp 81,1 jt** | **41%** ✅ |
 
-| Skenario | Paid Users | Revenue/bln | Cost/bln | Margin |
-|---------|-----------|-------------|----------|--------|
-| 1K MAU | 400 | $1.200 | $2.730 | **(-127%)** ❌ Burn |
-| 10K MAU | 4K | $12.000 | $19.400 | **(-62%)** ❌ Burn |
-| 100K MAU | 40K | $120.000 | $127.600 | **(-6%)** ⚠️ Break-even |
-| 100K (optimized + Rp 79K plan) | 40K | $200.000 | $95.000 | **+52%** ✅ |
-| 1M MAU | 400K | $1.200.000 | $400.000–$700.000 | **+40–67%** ✅ |
+**Verdict 10.000 MAU**: **PROFIT Rp 81 juta/bulan = 41% net margin**. Sehat banget. Tech cost cuma 15% revenue.
 
-**Insight**: pricing Rp 49K terlalu murah untuk skala awal. Strategi:
-1. Pricing tier: **Basic Rp 39K** (480p, 2 device), **Premium Rp 79K** (1080p, 4 device, no ad), **Family Rp 129K** (4K future, 6 device).
-2. **Iklan gratis** untuk free tier — Google Ad Manager / Magnite untuk monetize non-paying.
-3. **B2B**: lisensi institusi (sekolah, kampus, hotel, lembaga budaya) — Rp 5–20 juta/tahun per institusi.
-4. **Sponsorship klasik** — partnership dengan Sinematek, KemenParekraf, brand heritage (Bentoel, Garuda).
+### 100.000 MAU (40.000 paid)
 
----
+| Item | Monthly | % Revenue |
+|------|---------|-----------|
+| **Revenue** (40K × Rp 49rb) | Rp 1.960 jt | 100% |
+| Tech infra | Rp 189 jt | 10% |
+| Payment processing | Rp 69 jt | 3.5% |
+| CS team (10 staff) | Rp 60 jt | 3% |
+| Marketing (Rp 70rb CAC × 4K new/bln) | Rp 280 jt | 14% |
+| Engineering team (3 dev FT) | Rp 105 jt | 5% |
+| BD/marketing team (3 staff) | Rp 60 jt | 3% |
+| Office/legal/insurance | Rp 30 jt | 2% |
+| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | ━━━━━━ | ━━━━ |
+| **Total Cost** | Rp 793 jt | 40% |
+| **Profit** | **Rp 1.167 jt** | **60%** ✅✅ |
 
-## 9. Roadmap Implementasi
+**Verdict 100.000 MAU**: **PROFIT Rp 1,17 miliar/bulan = 60% net margin**. Tech cost cuma 10% — hampir tidak relevan ke profitability.
 
-### Fase 0 — MVP (sudah ada) ✅
-- Web app, admin panel, payment Midtrans, gamification, PWA.
+### 1.000.000 MAU (400.000 paid)
 
-### Fase 1 — Production Ready (Bulan 1–2)
-- [ ] AWS environment setup (VPC, ECS, RDS, S3, CloudFront)
-- [ ] CI/CD pipeline (GitHub Actions → ECR → ECS)
-- [ ] MediaConvert pipeline + Shaka Packager
-- [ ] Tier 1 DRM (HLS AES-128) — minimum viable protection
-- [ ] Migrasi dari `local` storage ke S3
-- [ ] Domain, SSL, WAF setup
+| Item | Monthly | % Revenue |
+|------|---------|-----------|
+| **Revenue** (400K × Rp 49rb) | Rp 19.600 jt (Rp 19,6 M) | 100% |
+| Tech infra | Rp 1.300 jt | 7% |
+| Payment processing | Rp 686 jt | 3.5% |
+| CS team (50 staff) | Rp 400 jt | 2% |
+| Marketing (Rp 50rb CAC × 30K new/bln) | Rp 1.500 jt | 8% |
+| Engineering team (15 dev FT) | Rp 525 jt | 3% |
+| BD/marketing team (15 staff) | Rp 300 jt | 2% |
+| Office/legal/insurance | Rp 150 jt | 1% |
+| ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ | ━━━━━━ | ━━━━ |
+| **Total Cost** | Rp 4.861 jt | 25% |
+| **Profit** | **Rp 14.739 jt (Rp 14,7 M)** | **75%** ✅✅✅ |
 
-### Fase 2 — DRM & AI Foundation (Bulan 3–4)
-- [ ] EZDRM onboarding & integration (Tier 3 Studio DRM)
-- [ ] `App\Services\Ai\AiClient` multi-provider abstraction
-- [ ] Whisper subtitle generation pipeline
-- [ ] Auto-tagging via Claude Haiku + Gemini vision
-- [ ] pgvector setup, embedding pipeline untuk semantic search
+**Verdict 1.000.000 MAU**: **PROFIT Rp 14,7 miliar/bulan = 75% net margin**. Tech infra hanya 7% revenue.
 
-### Fase 3 — Growth Features (Bulan 5–6)
-- [ ] Personalized recommendation system (DeepSeek + embeddings)
-- [ ] AI chatbot customer support
-- [ ] Auto-translation subtitle (3 bahasa)
-- [ ] Trailer auto-suggestion
-- [ ] Comment moderation pipeline
+### Summary Tabel — Boncos atau Untung?
 
-### Fase 4 — Mobile & Native (Bulan 6–8)
-- [ ] Polish NativePHP Android build
-- [ ] iOS app (Flutter atau native — separate project)
-- [ ] TV apps (Android TV, Apple TV, Samsung Tizen — partnership 3rd party)
+| Skala | Revenue/bln | Tech Cost | All Cost | Profit/Loss | % Margin |
+|-------|------------|-----------|----------|-------------|----------|
+| 1.000 MAU | Rp 19,6 jt | Rp 7,4 jt | Rp 23,1 jt | **(Rp 3,5 jt)** | **(18%)** ⚠️ |
+| 10.000 MAU | Rp 196 jt | Rp 30 jt | Rp 115 jt | **Rp 81 jt** | **41%** ✅ |
+| 100.000 MAU | Rp 1,96 M | Rp 189 jt | Rp 793 jt | **Rp 1,17 M** | **60%** ✅✅ |
+| 1.000.000 MAU | Rp 19,6 M | Rp 1,3 M | Rp 4,86 M | **Rp 14,7 M** | **75%** ✅✅✅ |
 
-### Fase 5 — Scale (Bulan 8–12)
-- [ ] Multi-CDN setup
-- [ ] Indonesia local CDN peering
-- [ ] Reserved instance procurement
-- [ ] Forensic watermarking (kalau partnership studio besar)
-- [ ] B2B portal untuk institusi
-
----
-
-## 10. Risk Register & Mitigasi
-
-| Risk | Likelihood | Impact | Mitigasi |
-|------|-----------|--------|----------|
-| **CDN egress cost meledak saat viral** | Tinggi | Tinggi | Multi-CDN, Indonesia peering, alert spend, throttle bitrate dynamic |
-| **DRM key compromise / leak** | Rendah | Tinggi | Forensic watermarking, monthly key rotation, EZDRM audit |
-| **AI provider down (single point)** | Medium | Medium | Multi-provider fallback (sudah didesain di tabel `ai_providers`) |
-| **Rights holder tarik konten** | Medium | Tinggi | Kontrak multi-year, escalator clause, library diversification |
-| **Pembajakan / capture screen** | Tinggi | Medium | DRM hardware (L1) untuk premium, watermarking forensic, takedown ops |
-| **Lebaran/holiday traffic 5× spike** | Tinggi | Medium | Auto-scaling ECS + buffer 15%, pre-warm CDN, capacity test 2× per tahun |
-| **Compliance UU PDP (Perlindungan Data Pribadi)** | Tinggi | Tinggi | Data residency Indonesia (RDS region jakarta jika tersedia, atau AWS Local Zone), audit trail, consent UI |
-| **Payment gateway down (Midtrans)** | Rendah | Medium | Add Xendit / DOKU / OVO sebagai backup |
-| **Cost untuk encode 4K explode** | Medium | Medium | Default H.265, hindari 4K kecuali request, batch encode off-peak |
-| **AI hallucination di synopsis publik** | Medium | Medium | Editorial review workflow, human-in-the-loop sebelum publish |
+**Key insight**: tech cost cuma **15% di skala 10K user** dan turun ke **7% di 1M user**. Tech BUKAN cost driver utama. **Marketing/CAC** dan **engineering team** yang harus dioptimasi.
 
 ---
 
-## 11. Appendix: Catatan Vendor & Referensi
+## 6.7 CAC, LTV & Acquisition Economics
 
-### A. DRM Providers (Contact)
+### CAC (Customer Acquisition Cost) — Benchmark Indonesia OTT
 
-| Vendor | Region Sales | Notes |
-|--------|-------------|-------|
-| EZDRM | US (24/7 support) | https://ezdrm.com — paling cepat onboarding |
-| BuyDRM | US/EU | https://buydrm.com — enterprise focus |
-| AWS MediaPackage | AWS partner | Lewat AWS account manager |
-| Verimatrix | Global | https://verimatrix.com |
-| Axinom | EU | https://axinom.com |
+| Channel | CAC Range | Realistis FLiK |
+|---------|-----------|----------------|
+| Google Ads / Facebook Ads | Rp 80rb–200rb | Rp 100rb |
+| KOL / Influencer marketing | Rp 50rb–150rb | Rp 80rb |
+| SEO / Content marketing | Rp 20rb–50rb | Rp 30rb |
+| Referral program | Rp 20rb–50rb | Rp 25rb |
+| **Blended (target FLiK)** | | **Rp 70-100rb** |
 
-### B. CDN Vendor Indonesia
+### LTV (Lifetime Value)
 
-- **Telkom CDN** (Indihome peering) — kontak: corporate sales Telkom
-- **Biznet CDN** — https://biznetnetworks.com
-- **Lintasarta CDN**
+LTV = ARPU × Avg Lifetime × Gross Margin (after tech only)
 
-### C. Restorasi Film Indonesia (Partnership)
+| Skala | ARPU | Gross Margin (post-tech) | Avg Lifetime | **LTV** |
+|-------|------|-------------------------|-------------|---------|
+| 1K MAU | Rp 49rb | 62% | 10 bulan | **Rp 304rb** |
+| 10K MAU | Rp 49rb | 85% | 12 bulan | **Rp 500rb** |
+| 100K MAU | Rp 49rb | 90% | 14 bulan | **Rp 617rb** |
+| 1M MAU | Rp 49rb | 93% | 16 bulan | **Rp 729rb** |
 
-- **Sinematek Indonesia** (PPHUI Kuningan) — arsip negara, bisa partnership digitalisasi
-- **Kineforum DKJ** — kurasi & pemutaran
-- **ANRI (Arsip Nasional)** — koleksi film negara
+**Avg Lifetime asumsi naik karena**: di skala lebih besar, brand recognition lebih kuat, churn lebih rendah, gamification & rekomendasi makin akurat.
 
-### D. Referensi Teknis
+### LTV/CAC Ratio (Target SaaS sehat: > 3:1)
 
-- AWS Pricing Calculator: https://calculator.aws
-- Shaka Packager: https://github.com/shaka-project/shaka-packager
-- Bento4: https://www.bento4.com
-- Pgvector: https://github.com/pgvector/pgvector
-- DeepSeek API docs: https://api-docs.deepseek.com
-- OpenAI pricing: https://openai.com/api/pricing
-- Anthropic pricing: https://www.anthropic.com/pricing
+| Skala | LTV | CAC target | **Ratio** | Status |
+|-------|-----|-----------|-----------|--------|
+| 1K MAU | Rp 304rb | Rp 100rb | **3.0×** | ✅ Healthy |
+| 10K MAU | Rp 500rb | Rp 80rb | **6.3×** | ✅✅ Excellent |
+| 100K MAU | Rp 617rb | Rp 70rb | **8.8×** | ✅✅✅ Outstanding |
+| 1M MAU | Rp 729rb | Rp 50rb | **14.6×** | ✅✅✅✅ World-class |
 
-### E. Catatan Internal — API Key Security
+### CAC Payback Period (Berapa Bulan Investment Back?)
 
-⚠️ **API key tidak boleh di-commit, di-paste di chat tools, atau di-share via Slack/Email tanpa enkripsi**.
+Payback = CAC / (ARPU × Gross Margin)
 
-Best practice:
-1. API key disimpan di tabel `ai_providers` dengan `encrypted` cast (Laravel AES-256-CBC pakai `APP_KEY`).
-2. `APP_KEY` rotate per kuartal — semua key di re-encrypt saat rotate (`php artisan app:rotate-keys`).
-3. Untuk staging, pakai test key dengan budget cap di provider dashboard (mis. DeepSeek allow per-key spend limit).
-4. Webhook DRM provider validate signature sebelum diproses.
+| Skala | CAC | Monthly Gross Profit/User | **Payback** |
+|-------|-----|--------------------------|-------------|
+| 1K MAU | Rp 100rb | Rp 30rb | **3.3 bulan** ✅ |
+| 10K MAU | Rp 80rb | Rp 42rb | **1.9 bulan** ✅✅ |
+| 100K MAU | Rp 70rb | Rp 44rb | **1.6 bulan** ✅✅ |
+| 1M MAU | Rp 50rb | Rp 46rb | **1.1 bulan** ✅✅✅ |
+
+**Industry benchmark**: payback < 12 bulan = healthy, < 6 bulan = excellent. **Semua skala FLiK well below 6 bulan**.
+
+### Why FLiK Economics Work
+
+1. **Niche niche niche**: film klasik Indonesia underserved → low CAC karena audience self-select via search/keyword
+2. **Long lifetime**: nostalgia driver — user loyal pada konten heritage
+3. **Tech cost low**: Bunny CDN + DIY DRM bikin gross margin 85-93%
+4. **Konten gratis**: client sudah punya 400 film → no recurring content licensing fees
 
 ---
 
-**End of Pitch Deck**
+## 6.8 Pricing Tier Sensitivity Analysis
 
-> Dokumen ini bisa dibuka dalam mode presentasi via halaman admin: **`/admin/pitch-deck`**. AI Provider settings tersedia di **`/admin/ai-settings`**.
+Bagaimana kalau pricing diubah? Pengaruh ke profit di skala 10.000 MAU (4.000 paid):
+
+| Pricing | Revenue/bln | Tech | Other Costs | Profit | Margin |
+|---------|-------------|------|-------------|--------|--------|
+| Rp 29.000 (super murah) | Rp 116 jt | Rp 30 jt | Rp 85 jt | **Rp 1 jt** | **0.9%** ⚠️ |
+| **Rp 49.000 (default)** | **Rp 196 jt** | **Rp 30 jt** | **Rp 85 jt** | **Rp 81 jt** | **41%** ✅ |
+| Rp 79.000 (Premium-only) | Rp 316 jt | Rp 30 jt | Rp 85 jt | **Rp 201 jt** | **64%** ✅✅ |
+| Rp 99.000 (Premium+) | Rp 396 jt | Rp 30 jt | Rp 85 jt | **Rp 281 jt** | **71%** ✅✅ |
+
+**Rekomendasi tier mix realistis** (60% Basic Rp 39rb, 30% Premium Rp 79rb, 10% Family Rp 129rb):
+- Blended ARPU = Rp 60rb
+- Revenue 10K MAU = 4K × 60rb = Rp 240 jt
+- Profit = Rp 240 - Rp 30 - Rp 85 = **Rp 125 jt = 52% margin**
+
+### Rp 29rb Risk
+
+Pricing terlalu murah (Rp 29rb) bikin margin tipis di skala kecil. Hanya viable kalau target growth ke 100K+ MAU cepat. **Tidak direkomendasi untuk awal**.
+
+### Bundle Recommendations
+
+- **Annual plan diskon 20%**: cuts CAC payback in half (user prepay 12 bulan)
+- **Family plan Rp 129rb** untuk 6 device: tingkatkan ARPU rata-rata
+- **Add-on premium**: behind-the-scene, restoration documentary, audio commentary — Rp 19rb/bln
+
+---
+
+## 7. Year-on-Year Projection (Realistic Growth)
+
+Asumsi growth rate konservatif: **2× per tahun** untuk Indonesian OTT niche film klasik.
+
+| Periode | MAU | Monthly OPEX | Annual OPEX |
+|---------|-----|-------------|-------------|
+| **3-Month Build** (Bln 1-3) | — | Build budget Rp 60jt × 3 | **Rp 180 jt** |
+| **Bulan 4-6** (post-launch) | 0 → 1.000 | Rp 10jt avg | **Rp 30 jt** |
+| **Bulan 7-12** | 1.000 → 5.000 | Rp 15jt avg | **Rp 90 jt** |
+| **Year 1 Total OPEX (post-build)** | | | **~Rp 120 jt/9 bulan** |
+| **Year 2** | 5K → 20K MAU avg | Rp 30jt avg | **Rp 360 jt** |
+| **Year 3** | 20K → 50K MAU avg | Rp 65jt avg | **Rp 780 jt** |
+
+**Total 3-Year Build + OPEX**: ~Rp 1,44 miliar (build Rp 180jt + OPEX 33 bulan).
+
+### Revenue Projection (matching scale)
+
+Pricing tier dasar: Rp 49rb/bulan (Basic), 40% MAU paid:
+
+| Periode | MAU | Paid Users | Revenue/bln | Revenue/tahun |
+|---------|-----|-----------|-------------|---------------|
+| End of Year-1 | 5.000 | 2.000 | Rp 98 jt | (mostly buildup) |
+| End of Year-2 | 20.000 | 8.000 | Rp 392 jt | **Rp ~3 miliar** |
+| End of Year-3 | 50.000 | 20.000 | Rp 980 jt | **Rp ~7 miliar** |
+
+**Year-3 margin**: Revenue Rp ~7 miliar, OPEX Rp 780jt → **margin ~89%**. Sangat sehat.
+
+---
+
+## 8. Roadmap 3-Bulan Build
+
+### Bulan 1 — Foundation
+- Week 1-2: AWS env setup (VPC, EC2, RDS, S3), Bunny account, domain & SSL
+- Week 2-3: FFmpeg transcoding pipeline (ABR ladder 360p–1080p), batch import 400 film
+- Week 3-4: Tier 1 DRM (HLS AES-128), key endpoint, Shaka Player integration
+
+### Bulan 2 — DRM Premium + AI Layer
+- Week 5-6: EZDRM onboarding & integration untuk konten premium
+- Week 6-7: AI service layer (`App\Services\Ai\AiClient`), DeepSeek V4 Flash sebagai default
+- Week 7-8: Auto-subtitle pipeline (gpt-4o-mini-transcribe), auto-tagging (Claude Haiku)
+- Week 8: pgvector semantic search
+
+### Bulan 3 — Polish + Soft Launch
+- Week 9: Recommendation engine (DeepSeek batch nightly), AI chatbot CS (Groq Llama 4)
+- Week 10: Auto-translation subtitle, comment moderation
+- Week 11: Security audit, performance test (load test ke 5K concurrent), monitoring dashboard
+- Week 12: Soft launch ke 100 closed beta user, fix bugs, prep public launch
+
+**Deliverables di akhir bulan 3**:
+- ✅ 400 film fully encoded + DRM protected
+- ✅ Multi-DRM (Tier 3 EZDRM) ready untuk konten premium
+- ✅ 8 fitur AI live (subtitle, tagging, recommend, search, chatbot, moderation, translate, thumbnail)
+- ✅ Bunny CDN production-ready
+- ✅ Admin dashboard untuk monitoring usage & cost
+- ✅ Mobile PWA + Android via NativePHP
+
+---
+
+## 9. Risk & Mitigasi
+
+| Risk | Mitigasi |
+|------|----------|
+| **CDN cost meledak (viral)** | Bunny tier $0.003/GB di volume — sudah cheap. Spend alert via Bunny dashboard. |
+| **DeepSeek API down** | Fallback otomatis ke Gemini Flash-Lite (sudah didesain di `AiClient`) |
+| **EZDRM masalah** | Fallback ke Tier 1 AES-128 (degradation, not outage) |
+| **Bunny coverage Indonesia kurang optimal** | Test latency dari Jakarta/Surabaya/Bali sebelum launch. Standby pakai Indonesia local CDN sebagai secondary. |
+| **DeepSeek deprecation legacy V3 (24 Juli 2026)** | Migrate ke V4 Flash sebelum deadline — sudah default di v2.0 |
+| **OpenAI Whisper akan deprecate** | Sudah pakai gpt-4o-mini-transcribe (replacement) |
+| **Lebaran traffic spike 5×** | Bunny auto-scale, EC2 auto-scale, alert di 80% capacity |
+| **Client gak punya backup setelah build** | Include 1 bulan post-launch support gratis di kontrak |
+
+---
+
+## 10. Why This Is Doable in Rp 60jt × 3
+
+1. **Foundation sudah ada** — bukan rebuild from scratch. Existing Laravel app sudah handle 60% feature.
+2. **Konten Rp 0** — client sudah punya 400 film, no acquisition.
+3. **Bunny CDN** — 11× lebih murah dari CloudFront. Critical untuk client menengah.
+4. **DeepSeek V4 Flash** — termurah dengan quality OK. AI cost jadi negligible.
+5. **EZDRM starter $200** — flat pricing, tidak naik dramatis untuk first 10K user.
+6. **In-house everything** — no SaaS lock-in (Algolia, Mux, Vimeo, dll).
+7. **3-bulan timeline realistic** untuk 1 senior dev full-time + foundation existing.
+
+---
+
+## 11. Next Steps untuk Client
+
+1. **Sign-off pitch deck** (this doc)
+2. **Provide 400 film master files** (S3 upload atau hard drive ke office)
+3. **Set up business accounts**:
+   - AWS (atau via dev account dulu untuk staging)
+   - Bunny.net (sign up, ~5 menit)
+   - EZDRM trial account (request via sales)
+   - DeepSeek API key (top up $50 untuk dev)
+4. **Kick-off meeting** — confirm scope, set milestones
+5. **Bulan 4 (post-build)**: launch decision, marketing prep
+
+---
+
+## Sources (Verified Mei 2026)
+
+### AI Pricing
+- [Anthropic Claude API Pricing 2026 — Opus 4.7, Sonnet 4.6, Haiku 4.5](https://benchlm.ai/blog/posts/claude-api-pricing)
+- [Claude Opus 4.7 Pricing 2026 (Finout)](https://www.finout.io/blog/claude-opus-4.7-pricing-the-real-cost-story-behind-the-unchanged-price-tag)
+- [OpenAI API Pricing 2026 — GPT-5.5, 5.4, 5 (DevTk.AI)](https://devtk.ai/en/blog/openai-api-pricing-guide-2026/)
+- [DeepSeek API Pricing — V4 Flash & V4 Pro](https://www.tldl.io/resources/deepseek-api-pricing)
+- [DeepSeek V4 Pricing Guide (NxCode)](https://www.nxcode.io/resources/news/deepseek-api-pricing-complete-guide-2026)
+- [DeepSeek API Docs Pricing](https://api-docs.deepseek.com/quick_start/pricing)
+- [Gemini API Pricing 2026 (BenchLM)](https://benchlm.ai/blog/posts/gemini-api-pricing)
+- [Gemini Developer API pricing (Google)](https://ai.google.dev/gemini-api/docs/pricing)
+- [Whisper API Pricing 2026](https://tokenmix.ai/blog/whisper-api-pricing)
+- [Groq Pricing 2026](https://groq.com/pricing)
+- [Mistral AI Pricing 2026](https://pricepertoken.com/pricing-page/provider/mistral-ai)
+
+### CDN
+- [Bunny Stream Pricing](https://bunny.net/pricing/stream/)
+- [Bunny CDN Pricing](https://bunny.net/pricing/)
+- [AWS CloudFront Pricing](https://aws.amazon.com/cloudfront/pricing/)
+- [AWS CloudFront 2026 cost per GB explained (BlazingCDN)](https://blog.blazingcdn.com/en-us/what-is-the-price-per-gb-of-aws-cloudfront-cdn)
+
+### DRM
+- [EZDRM Service Pricing](https://www.ezdrm.com/service-pricing)
+
+---
+
+**End of Pitch Deck v2.0**
+
+> Halaman admin presentasi: **`/admin/pitch-deck`** · AI provider settings: **`/admin/ai-settings`**

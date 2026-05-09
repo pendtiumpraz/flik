@@ -39,27 +39,27 @@ class AiProvider extends Model
         'openai' => [
             'label' => 'OpenAI',
             'base_url' => 'https://api.openai.com/v1',
-            'models' => ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo', 'o1-preview', 'o1-mini'],
+            'models' => ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5', 'gpt-5-mini', 'gpt-4o', 'gpt-4o-mini-transcribe', 'gpt-4o-transcribe', 'whisper-1'],
         ],
         'anthropic' => [
             'label' => 'Anthropic Claude',
             'base_url' => 'https://api.anthropic.com/v1',
-            'models' => ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+            'models' => ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
         ],
         'deepseek' => [
             'label' => 'DeepSeek',
             'base_url' => 'https://api.deepseek.com/v1',
-            'models' => ['deepseek-chat', 'deepseek-reasoner'],
+            'models' => ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-chat', 'deepseek-reasoner'],
         ],
         'google' => [
             'label' => 'Google Gemini',
             'base_url' => 'https://generativelanguage.googleapis.com/v1beta',
-            'models' => ['gemini-2.0-flash-exp', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+            'models' => ['gemini-3.0-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'],
         ],
         'groq' => [
             'label' => 'Groq',
             'base_url' => 'https://api.groq.com/openai/v1',
-            'models' => ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768', 'llama-3.1-8b-instant'],
+            'models' => ['llama-4-maverick', 'llama-4-scout', 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'],
         ],
         'mistral' => [
             'label' => 'Mistral AI',
