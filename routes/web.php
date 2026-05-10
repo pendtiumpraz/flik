@@ -66,6 +66,9 @@ Route::middleware('auth')->group(function () {
 // Midtrans Webhook (no auth required)
 Route::post('/payment/webhook', [\App\Http\Controllers\PaymentController::class, 'webhook'])->name('payment.webhook');
 
+// AI Chatbot (auth required)
+Route::middleware('auth')->post('/chat', [\App\Http\Controllers\ChatController::class, 'respond'])->name('chat.respond');
+
 Route::controller(LoginController::class)->group(function () {
     Route::get('login/google', 'redirectToProvider');
     Route::get('login/google/callback', 'handleProviderCallback');
