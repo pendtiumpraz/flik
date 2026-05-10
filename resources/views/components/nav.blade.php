@@ -33,7 +33,7 @@
         <img class="h-full w-full object-cover md:object-contain"
         src="{{ $popular[0]['poster_path'] }}"
         alt="{{ $popular[0]['title'] }}"
-        onerror="this.onerror=null;this.style.background='#141414';this.src='https://via.placeholder.com/1280x720/141414/C5A55A?text={{ urlencode($popular[0]['title'] ?? 'Featured') }}'">
+        onerror="this.onerror=null">
     </div>
 </section>
 @else

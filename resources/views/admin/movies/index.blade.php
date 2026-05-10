@@ -35,7 +35,7 @@
                     <td>
                         <div style="display:flex;align-items:center;gap:12px">
                             <img src="{{ $movie->poster_url }}" alt="{{ $movie->title }}" style="width:40px;height:56px;object-fit:cover;border-radius:4px;background:#333"
-                                onerror="this.style.background='#333';this.src='https://via.placeholder.com/40x56/333/666?text='">
+                                onerror="this.onerror=null">
                             <div>
                                 <div style="font-weight:500;color:#fff">{{ \Str::limit($movie->title, 30) }}</div>
                                 @if($movie->original_title && $movie->original_title !== $movie->title)

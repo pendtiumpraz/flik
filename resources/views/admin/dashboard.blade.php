@@ -81,7 +81,7 @@
                 <tr>
                     <td style="display:flex;align-items:center;gap:12px">
                         <img src="{{ $movie->poster_url }}" alt="{{ $movie->title }}" style="width:36px;height:52px;object-fit:cover;border-radius:4px;background:#333"
-                            onerror="this.style.background='#333';this.src='https://via.placeholder.com/36x52/333/666?text='">
+                            onerror="this.onerror=null">
                         <div>
                             <div style="font-weight:500;color:#fff">{{ $movie->title }}</div>
                             <div style="font-size:12px;color:#666">{{ $movie->release_date ? $movie->release_date->format('Y') : '-' }}</div>

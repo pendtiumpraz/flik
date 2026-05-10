@@ -1,3 +1,7 @@
+@php
+    $user = auth()->user();
+@endphp
+
 <div class="body-font fixed top-0 z-50 w-full bg-black/95 backdrop-blur-sm text-white border-b border-gray-800/50"
      x-data="{ mobileOpen: false }">
     <div class="flex items-center justify-between px-4 py-3 lg:px-16 lg:py-4">
@@ -8,11 +12,11 @@
 
         @auth
             <!-- Desktop Nav Links -->
-            <ul class="ml-10 hidden flex-row items-center gap-5 text-sm lg:flex">
-                <li><a href="{{ route('velflix.index') }}" class="font-semibold text-white hover:text-yellow-400 transition-colors">Home</a></li>
-                <li><a href="{{ route('velflix.index') }}" class="text-gray-300 hover:text-white transition-colors">Films</a></li>
-                <li><a href="{{ route('watchlist.index') }}" class="text-gray-300 hover:text-white transition-colors">My List</a></li>
-                <li><a href="{{ route('rewards.index') }}" class="text-gray-300 hover:text-white transition-colors">🎮 Rewards</a></li>
+            <ul class="ml-10 hidden flex-row items-center gap-6 text-sm lg:flex">
+                <li><a href="{{ route('velflix.index') }}" class="font-medium text-white hover:text-[#C5A55A] transition-colors">Home</a></li>
+                <li><a href="{{ route('velflix.index') }}" class="text-gray-300 hover:text-[#C5A55A] transition-colors">Films</a></li>
+                <li><a href="{{ route('watchlist.index') }}" class="text-gray-300 hover:text-[#C5A55A] transition-colors">My List</a></li>
+                <li><a href="{{ route('rewards.index') }}" class="text-gray-300 hover:text-[#C5A55A] transition-colors">Rewards</a></li>
             </ul>
         @endauth
 
@@ -20,18 +24,18 @@
         <nav class="hidden items-center gap-4 lg:flex">
             @auth
                 <livewire:search-flik />
-                <a href="{{ route('notifications.index') }}" class="relative">
-                    <svg class="h-5 w-5 text-gray-300 hover:text-yellow-400 transition-colors cursor-pointer" fill="currentColor" viewBox="0 0 16 16"><path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zm.995-14.901a1 1 0 1 0-1.99 0A5.002 5.002 0 0 0 3 6c0 1.098-.5 6-2 7h14c-1.5-1-2-5.902-2-7 0-2.42-1.72-4.44-4.005-4.901z"/></svg>
+                <a href="{{ route('notifications.index') }}" class="relative text-gray-300 hover:text-[#C5A55A] transition-colors" title="Notifications">
+                    <x-icon name="bell" :size="20" />
                 </a>
 
                 <!-- User Profile -->
                 <div x-data="{ open: false }" class="relative inline-block">
-                    <button @click="open = !open" @click.away="open = false" class="flex items-center gap-1">
-                        <div class="h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold text-black" style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">
-                            {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                    <button @click="open = !open" @click.away="open = false" class="flex items-center gap-2 group">
+                        <div class="h-8 w-8 rounded-full flex items-center justify-center text-sm font-semibold text-black ring-1 ring-[#C5A55A]/40" style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">
+                            {{ strtoupper(substr($user->name, 0, 1)) }}
                         </div>
-                        <span :class="open ? '-rotate-180' : ''" class="transform transition-transform duration-300">
-                            <svg class="h-3 w-3 text-gray-400" fill="currentColor" viewBox="0 0 16 16"><path d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>
+                        <span :class="open ? '-rotate-180' : ''" class="transform transition-transform duration-300 text-gray-400 group-hover:text-[#C5A55A]">
+                            <x-icon name="chevron-down" :size="14" />
                         </span>
                     </button>
 
@@ -42,74 +46,126 @@
                         x-transition:leave="transition ease-in duration-150"
                         x-transition:leave-start="opacity-100 scale-100"
                         x-transition:leave-end="opacity-0 scale-95"
-                        class="absolute right-0 mt-2 w-48 rounded-lg bg-gray-900 border border-gray-700 shadow-xl overflow-hidden">
-                        <div class="px-4 py-3 border-b border-gray-700">
-                            <p class="text-sm font-semibold text-white">{{ auth()->user()->name }}</p>
-                            <p class="text-xs text-gray-400">{{ auth()->user()->email }}</p>
+                        class="absolute right-0 mt-3 w-60 rounded-xl shadow-2xl overflow-hidden"
+                        style="background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%); border: 1px solid rgba(197,165,90,0.25)">
+
+                        <!-- User Info -->
+                        <div class="px-4 py-3.5 border-b" style="border-color: rgba(197,165,90,0.15)">
+                            <p class="text-sm font-semibold text-white truncate">{{ $user->name }}</p>
+                            <p class="text-xs text-gray-400 truncate">{{ $user->email }}</p>
+                            @if($user->isStaff())
+                                <span class="inline-flex mt-1.5 px-2 py-0.5 text-[10px] font-semibold rounded uppercase tracking-wider" style="background: rgba(197,165,90,0.15); color: #C5A55A">
+                                    {{ $user->role_label }}
+                                </span>
+                            @endif
                         </div>
-                        @can('admin')
-                            <a href="/admin" class="block px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
-                                ⚙️ Admin Dashboard
+
+                        <!-- Menu Items -->
+                        <div class="py-1">
+                            @if($user->isStaff())
+                                <a href="{{ $user->adminDashboardUrl() }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                    <x-icon name="cog" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                    <span>Admin Dashboard</span>
+                                </a>
+                            @endif
+                            <a href="{{ route('profile.show') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                <x-icon name="user" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                <span>Profile</span>
                             </a>
-                        @endcan
-                        <a href="{{ route('profile.show') }}" class="block px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
-                            👤 Profile
-                        </a>
-                        <a href="{{ route('watchlist.index') }}" class="block px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
-                            📋 My List
-                        </a>
-                        <a href="{{ route('rewards.index') }}" class="block px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
-                            🎮 Rewards
-                        </a>
-                        <a href="{{ route('plans.index') }}" class="block px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors">
-                            💎 Upgrade Plan
-                        </a>
-                        <form action="/logout" method="post">
+                            <a href="{{ route('watchlist.index') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                <x-icon name="bookmark" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                <span>My List</span>
+                            </a>
+                            <a href="{{ route('rewards.index') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                <x-icon name="trophy" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                <span>Rewards</span>
+                            </a>
+                            <a href="{{ route('plans.index') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                <x-icon name="gem" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                <span>Upgrade Plan</span>
+                            </a>
+                        </div>
+
+                        <!-- Logout -->
+                        <form action="/logout" method="post" class="border-t" style="border-color: rgba(197,165,90,0.15)">
                             @csrf
-                            <button type="submit" class="w-full text-left block px-4 py-2.5 text-sm text-red-400 hover:bg-gray-800 transition-colors border-t border-gray-700">
-                                🚪 Log Out
+                            <button type="submit" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-400 hover:text-red-400 hover:bg-red-500/5 transition-colors group">
+                                <x-icon name="logout" :size="16" />
+                                <span>Log Out</span>
                             </button>
                         </form>
                     </div>
                 </div>
             @else
-                <a href="/login" class="text-sm text-gray-300 hover:text-white transition-colors">Log In</a>
-                <a href="/register" class="text-sm font-semibold px-4 py-2 rounded text-black" style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">Sign Up</a>
+                <a href="/login" class="text-sm text-gray-300 hover:text-[#C5A55A] transition-colors">Log In</a>
+                <a href="/register" class="text-sm font-semibold px-4 py-2 rounded text-black hover:opacity-90 transition-opacity" style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">Sign Up</a>
             @endauth
         </nav>
 
         <!-- Mobile Hamburger Button -->
-        <button @click="mobileOpen = !mobileOpen" class="lg:hidden p-2 rounded-md text-gray-300 hover:text-white">
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path x-show="!mobileOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                <path x-show="mobileOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
+        <button @click="mobileOpen = !mobileOpen" class="lg:hidden p-2 rounded-md text-gray-300 hover:text-[#C5A55A] transition-colors">
+            <x-icon name="menu" x-show="!mobileOpen" :size="22" />
+            <x-icon name="x" x-show="mobileOpen" :size="22" />
         </button>
     </div>
 
     <!-- Mobile Menu -->
-    <div x-cloak x-show="mobileOpen" x-collapse class="lg:hidden border-t border-gray-800 bg-black/95">
-        <div class="px-4 py-4 space-y-1">
+    <div x-cloak x-show="mobileOpen" x-collapse class="lg:hidden border-t border-gray-800/60 bg-black/98">
+        <div class="px-4 py-4 space-y-0.5">
             @auth
-                <a href="{{ route('velflix.index') }}" class="block py-2.5 px-3 text-sm font-semibold rounded-md" style="color: #C5A55A">Home</a>
-                <a href="{{ route('velflix.index') }}" class="block py-2.5 px-3 text-sm text-gray-300 hover:bg-gray-800 rounded-md">Films</a>
-                <a href="{{ route('watchlist.index') }}" class="block py-2.5 px-3 text-sm text-gray-300 hover:bg-gray-800 rounded-md">📋 My List</a>
-                <a href="{{ route('rewards.index') }}" class="block py-2.5 px-3 text-sm text-gray-300 hover:bg-gray-800 rounded-md">🎮 Rewards</a>
-                <a href="{{ route('notifications.index') }}" class="block py-2.5 px-3 text-sm text-gray-300 hover:bg-gray-800 rounded-md">🔔 Notifications</a>
-                <a href="{{ route('plans.index') }}" class="block py-2.5 px-3 text-sm text-gray-300 hover:bg-gray-800 rounded-md">💎 Plans</a>
-                <div class="border-t border-gray-800 pt-3 mt-3">
-                    <a href="{{ route('profile.show') }}" class="block py-2.5 px-3 text-sm text-gray-300 hover:bg-gray-800 rounded-md">👤 Profile</a>
-                    @can('admin')
-                        <a href="/admin" class="block py-2.5 px-3 text-sm text-gray-300 hover:bg-gray-800 rounded-md">⚙️ Admin Dashboard</a>
-                    @endcan
+                <!-- User card -->
+                <div class="flex items-center gap-3 px-3 py-3 mb-2 rounded-lg" style="background: rgba(197,165,90,0.06); border: 1px solid rgba(197,165,90,0.15)">
+                    <div class="h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold text-black" style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">
+                        {{ strtoupper(substr($user->name, 0, 1)) }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-white truncate">{{ $user->name }}</p>
+                        @if($user->isStaff())
+                            <span class="inline-flex px-1.5 py-0.5 mt-0.5 text-[10px] font-semibold rounded uppercase tracking-wider" style="background: rgba(197,165,90,0.15); color: #C5A55A">{{ $user->role_label }}</span>
+                        @else
+                            <p class="text-xs text-gray-500 truncate">{{ $user->email }}</p>
+                        @endif
+                    </div>
+                </div>
+
+                <a href="{{ route('velflix.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                    <x-icon name="home" :size="18" class="text-[#C5A55A]/80" /> Home
+                </a>
+                <a href="{{ route('velflix.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                    <x-icon name="film" :size="18" class="text-[#C5A55A]/80" /> Films
+                </a>
+                <a href="{{ route('watchlist.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                    <x-icon name="bookmark" :size="18" class="text-[#C5A55A]/80" /> My List
+                </a>
+                <a href="{{ route('rewards.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                    <x-icon name="trophy" :size="18" class="text-[#C5A55A]/80" /> Rewards
+                </a>
+                <a href="{{ route('notifications.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                    <x-icon name="bell" :size="18" class="text-[#C5A55A]/80" /> Notifications
+                </a>
+                <a href="{{ route('plans.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                    <x-icon name="gem" :size="18" class="text-[#C5A55A]/80" /> Plans
+                </a>
+
+                <div class="pt-2 mt-2 border-t border-gray-800/60 space-y-0.5">
+                    <a href="{{ route('profile.show') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                        <x-icon name="user" :size="18" class="text-[#C5A55A]/80" /> Profile
+                    </a>
+                    @if($user->isStaff())
+                        <a href="{{ $user->adminDashboardUrl() }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                            <x-icon name="cog" :size="18" class="text-[#C5A55A]/80" /> Admin Dashboard
+                        </a>
+                    @endif
                     <form action="/logout" method="post">
                         @csrf
-                        <button type="submit" class="block w-full text-left py-2.5 px-3 text-sm text-red-400 hover:bg-gray-800 rounded-md">🚪 Log Out</button>
+                        <button type="submit" class="w-full flex items-center gap-3 py-2.5 px-3 text-sm text-gray-400 hover:text-red-400 hover:bg-red-500/5 rounded-lg transition-colors">
+                            <x-icon name="logout" :size="18" /> Log Out
+                        </button>
                     </form>
                 </div>
             @else
-                <a href="/login" class="block py-2.5 px-3 text-sm text-gray-300 hover:bg-gray-800 rounded-md">Log In</a>
-                <a href="/register" class="block py-2.5 px-3 text-sm font-semibold rounded-md" style="color: #C5A55A">Sign Up</a>
+                <a href="/login" class="block py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">Log In</a>
+                <a href="/register" class="block py-2.5 px-3 text-sm font-semibold text-black mt-1 rounded-lg text-center" style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">Sign Up</a>
             @endauth
         </div>
     </div>
