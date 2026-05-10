@@ -3,6 +3,27 @@ const defaultTheme = require('tailwindcss/defaultTheme');
 module.exports = {
     darkMode: 'class',
     content: ['./resources/**/*.blade.php', './resources/**/*.js', './resources/**/*.vue'],
+    // Failsafe: critical layout/dynamic classes that MUST be in production CSS
+    // (some can be missed by JIT scan if generated dynamically or in non-scanned files)
+    safelist: [
+        // Grid layout (3/4 + 1/4 split on desktop)
+        'lg:col-span-1', 'lg:col-span-2', 'lg:col-span-3', 'lg:col-span-4',
+        'md:col-span-1', 'md:col-span-2', 'md:col-span-3', 'md:col-span-4',
+        'col-span-1', 'col-span-2', 'col-span-3', 'col-span-4',
+        // Grid columns 1-12 across all breakpoints
+        'grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4', 'grid-cols-5',
+        'grid-cols-6', 'grid-cols-7', 'grid-cols-8',
+        'sm:grid-cols-2', 'sm:grid-cols-3', 'sm:grid-cols-4',
+        'md:grid-cols-2', 'md:grid-cols-3', 'md:grid-cols-4', 'md:grid-cols-5',
+        'lg:grid-cols-2', 'lg:grid-cols-3', 'lg:grid-cols-4', 'lg:grid-cols-5', 'lg:grid-cols-6',
+        'xl:grid-cols-5', 'xl:grid-cols-6', 'xl:grid-cols-7',
+        '2xl:grid-cols-6', '2xl:grid-cols-8',
+        // Common gold-themed arbitrary classes
+        'text-[#C5A55A]', 'bg-[#C5A55A]', 'border-[#C5A55A]',
+        'text-[#C5A55A]/80', 'bg-[#C5A55A]/10', 'bg-[#C5A55A]/20',
+        // Aspect ratios used dynamically
+        'aspect-[2/3]', 'aspect-video', 'aspect-square',
+    ],
     theme: {
         extend: {
             fontFamily: {
