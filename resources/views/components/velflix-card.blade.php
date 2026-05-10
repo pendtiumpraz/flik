@@ -1,12 +1,12 @@
 @props(['movie', 'genres'])
 
 <div class="card-movie group mr-3 w-[200px] lg:w-[220px]" x-data="{ open: false }">
-    <a href="{{ route('movies.show', $movie['id']) }}">
+    <a href="{{ route('movies.show', $movie['slug'] ?? $movie['id']) }}">
         <div class="relative aspect-[2/3] overflow-hidden rounded-lg">
             <img class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                  src="{{ $movie['poster_path'] }}"
                  alt="{{ $movie['title'] ?? 'poster' }}"
-                 onerror="this.onerror=null;this.src='https://via.placeholder.com/500x750/1a1a2e/e94560?text={{ urlencode($movie['title'] ?? 'No+Poster') }}'"
+                 onerror="this.onerror=null"
                  loading="lazy">
             
             <!-- Hover Overlay -->

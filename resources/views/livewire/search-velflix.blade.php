@@ -7,7 +7,7 @@
         @if ($searchVelflixResults->count() > 0 )
         <ul>
             @foreach ($searchVelflixResults as $searchResults)
-            <a href="{{ route('movies.show', $searchResults['id']) }}" class="hover:bg-gray-400">
+            <a href="{{ route('movies.show', $searchResults['slug'] ?? $searchResults['id']) }}" class="hover:bg-gray-400">
             <li class="border-b border-gray-500 p-1">
                     {{ $searchResults['title'] }}
                 </li>

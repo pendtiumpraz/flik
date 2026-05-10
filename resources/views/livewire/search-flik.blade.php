@@ -14,7 +14,7 @@
         <ul class="divide-y" style="divide-color:rgba(255,255,255,0.05)">
             @foreach ($results as $result)
             <li>
-                <a href="{{ route('movies.show', $result['id']) }}" class="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
+                <a href="{{ route('movies.show', $result['slug'] ?? $result['id']) }}" class="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
                     @if ($result['poster_url'])
                     <img src="{{ $result['poster_url'] }}" alt="" class="w-8 h-12 rounded object-cover flex-shrink-0">
                     @endif

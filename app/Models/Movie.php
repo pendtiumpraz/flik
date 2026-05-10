@@ -11,10 +11,12 @@ class Movie extends Model
 
     protected $fillable = [
         'title',
+        'slug',
         'original_title',
         'overview',
         'poster_path',
         'backdrop_path',
+        'slider_path',
         'release_date',
         'vote_average',
         'vote_count',
@@ -26,6 +28,26 @@ class Movie extends Model
         'video_disk',
         'youtube_key',
     ];
+
+    protected static function booted()
+    {
+        static::saving(function (Movie $movie) {
+            if (empty($movie->slug) && !empty($movie->title)) {
+                $base = \Illuminate\Support\Str::slug($movie->title);
+                $slug = $base;
+                $i = 1;
+                while (static::where('slug', $slug)->where('id', '!=', $movie->id ?? 0)->exists()) {
+                    $slug = $base . '-' . (++$i);
+                }
+                $movie->slug = $slug;
+            }
+        });
+    }
+
+    public function getRouteKeyName()
+    {
+        return 'slug';
+    }
 
     protected $casts = [
         'release_date' => 'date',
@@ -130,6 +152,24 @@ class Movie extends Model
         return asset('storage/' . $this->backdrop_path);
     }
 
+    /**
+     * Get the cinematic slider/hero URL.
+     * Falls back to backdrop_url, then poster_url.
+     * Recommended dimensions: 1920×800 (~2.4:1 cinematic widescreen).
+     */
+    public function getSliderUrlAttribute()
+    {
+        if (!$this->slider_path) {
+            return $this->backdrop_url;
+        }
+
+        if (str_starts_with($this->slider_path, 'http')) {
+            return $this->slider_path;
+        }
+
+        return asset('storage/' . $this->slider_path);
+    }
+
     // ── Additional Relations ──────────────────────────────────
 
     public function ratings()
@@ -150,6 +190,71 @@ class Movie extends Model
     public function watchHistories()
     {
         return $this->hasMany(WatchHistory::class);
+    }
+
+    public function assets()
+    {
+        return $this->hasMany(MovieAsset::class);
+    }
+
+    /**
+     * Get currently active variant for given asset type, with time-bucketed rotation.
+     *
+     * Behavior:
+     * - If movie has multiple active assets of $type → picks one based on time bucket
+     *   (so all users see SAME variant within the same time window — CDN-cacheable)
+     * - If single asset → uses it
+     * - If no assets → returns NULL (caller falls back to legacy column)
+     *
+     * Time bucket = floor(now / rotation_hours) % count(active assets)
+     */
+    public function currentAssetUrl(string $type): ?string
+    {
+        $assets = $this->assets()
+            ->ofType($type)
+            ->active()
+            ->orderBy('sort_order')
+            ->get();
+
+        if ($assets->isEmpty()) {
+            return null;
+        }
+
+        if ($assets->count() === 1) {
+            return $assets->first()->url;
+        }
+
+        // Determine rotation interval (use first asset's setting, fallback 1 hour)
+        $rotationHours = max(1, $assets->first()->rotation_hours ?: 1);
+
+        // Time-bucketed deterministic selection
+        $bucket = (int) floor(now()->timestamp / ($rotationHours * 3600)) % $assets->count();
+
+        return $assets->values()[$bucket]->url;
+    }
+
+    /**
+     * Effective URL for hero slider — rotating asset OR legacy slider_path.
+     */
+    public function getEffectiveSliderUrlAttribute(): string
+    {
+        return $this->currentAssetUrl(MovieAsset::TYPE_SLIDER) ?? $this->slider_url;
+    }
+
+    /**
+     * Effective URL for poster (card) — rotating asset OR legacy poster_path.
+     */
+    public function getEffectivePosterUrlAttribute(): string
+    {
+        return $this->currentAssetUrl(MovieAsset::TYPE_POSTER) ?? $this->poster_url;
+    }
+
+    /**
+     * Effective URL for backdrop — rotating asset OR legacy backdrop_path.
+     */
+    public function getEffectiveBackdropUrlAttribute(): string
+    {
+        return $this->currentAssetUrl(MovieAsset::TYPE_BACKDROP) ?? $this->backdrop_url;
     }
 
     // ── Accessors ─────────────────────────────────────────────

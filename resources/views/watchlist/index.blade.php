@@ -7,12 +7,12 @@
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     @foreach($movies as $movie)
                     <div class="group relative">
-                        <a href="{{ route('movies.show', $movie->id) }}">
+                        <a href="{{ route('movies.show', $movie->slug ?? $movie->id) }}">
                             <img src="{{ $movie->poster_url }}"
                                 alt="{{ $movie->title }}"
                                 class="w-full rounded-lg shadow-lg transition-transform group-hover:scale-105"
                                 style="aspect-ratio: 2/3; object-fit: cover;"
-                                onerror="this.onerror=null;this.style.background='linear-gradient(135deg,#1a1a1a,#333)';this.src='https://via.placeholder.com/300x450/1a1a1a/C5A55A?text={{ urlencode($movie->title) }}'">
+                                onerror="this.onerror=null">
                         </a>
                         <div class="mt-2">
                             <h3 class="text-sm font-medium text-white truncate">{{ $movie->title }}</h3>

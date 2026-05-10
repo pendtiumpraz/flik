@@ -71,9 +71,9 @@
                         @if($recentWatchlist->count())
                             <div class="grid grid-cols-3 gap-3">
                                 @foreach($recentWatchlist as $movie)
-                                <a href="{{ route('movies.show', $movie->id) }}">
+                                <a href="{{ route('movies.show', $movie->slug ?? $movie->id) }}">
                                     <img src="{{ $movie->poster_url }}" alt="{{ $movie->title }}" class="w-full rounded-lg hover:scale-105 transition-transform" style="aspect-ratio:2/3;object-fit:cover;background:#333"
-                                        onerror="this.style.background='#333';this.src='https://via.placeholder.com/150x225/333/C5A55A?text='">
+                                        onerror="this.onerror=null">
                                 </a>
                                 @endforeach
                             </div>
@@ -92,7 +92,7 @@
                         @forelse($recentRatings as $rating)
                         <div class="flex items-center gap-3 p-3 rounded-lg" style="background:#252525">
                             <img src="{{ $rating->movie->poster_url }}" alt="{{ $rating->movie->title }}" class="w-10 h-14 rounded object-cover" style="background:#333"
-                                onerror="this.style.background='#333';this.src='https://via.placeholder.com/40x56/333/C5A55A?text='">
+                                onerror="this.onerror=null">
                             <div class="flex-1 min-w-0">
                                 <div class="text-sm font-medium text-white truncate">{{ $rating->movie->title }}</div>
                                 <div class="text-xs text-gray-500 mt-0.5">{{ $rating->created_at->diffForHumans() }}</div>
