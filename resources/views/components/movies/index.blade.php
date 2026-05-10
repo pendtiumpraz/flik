@@ -1,81 +1,81 @@
 @props(['popular', 'genres', 'trending', 'comedies', 'action', 'western', 'horror', 'thriller', 'animation', 'continueWatching', 'topRated'])
 
-<div class="container my-6 mx-auto space-y-8 px-4">
-    <!-- Continue Watching (logged-in users with history) -->
+<div class="container mx-auto px-4 md:px-8 lg:px-16 py-6 md:py-10 space-y-10 md:space-y-14 max-w-[1600px]">
+
+    <!-- Continue Watching -->
     @auth
     @if($continueWatching->count() > 0)
-    <div>
-        <h2 class="mb-3 text-lg font-bold font-heading" style="color:#C5A55A">▶️ Lanjutkan Menonton</h2>
-        <div class="flex gap-3 overflow-x-auto pb-4" style="scrollbar-width:none">
-            @foreach($continueWatching as $movie)
-            <a href="/movie/{{ $movie['id'] }}" class="flex-shrink-0 relative group" style="width:160px">
-                <div class="relative overflow-hidden rounded-lg">
-                    <img src="{{ $movie['poster_path'] }}" alt="{{ $movie['title'] }}" class="w-full aspect-[2/3] object-cover rounded-lg transition-transform group-hover:scale-105" onerror="this.src='https://via.placeholder.com/300x450/1a1a1a/333?text=No+Poster'">
-                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-gray-800">
-                        <div class="h-full rounded-full" style="width:{{ $movie['progress'] }}%;background:#C5A55A"></div>
-                    </div>
-                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-lg">
-                        <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(197,165,90,0.9)">
-                            <svg class="w-5 h-5 text-black ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                        </div>
-                    </div>
-                </div>
-                <p class="mt-1 text-xs text-gray-400 truncate">{{ $movie['title'] }}</p>
-                <p class="text-xs text-gray-600">{{ $movie['progress'] }}% selesai</p>
-            </a>
-            @endforeach
-        </div>
-    </div>
+    <x-movies :movies="$continueWatching" :genres="$genres">
+        <x-slot:category>
+            <x-icon name="play-solid" :size="16" class="text-[#C5A55A]" />
+            <span>Continue Watching</span>
+        </x-slot:category>
+    </x-movies>
     @endif
     @endauth
 
-    <!-- Popular Movies -->
-    <x-movies :movies='$popular'>
-        <x-slot:category> Popular on FLiK &rsaquo; </x-slot:category>
+    <!-- Trending -->
+    @if($trending->count() > 0)
+    <x-movies :movies="$trending" :genres="$genres">
+        <x-slot:category>
+            <x-icon name="lightning" :size="16" class="text-[#C5A55A]" />
+            <span>Trending Now</span>
+        </x-slot:category>
     </x-movies>
-    <!-- End Popular Movies -->
+    @endif
 
-    <!-- Trending Movies -->
-    <x-movies :movies='$trending'>
-        <x-slot:category> Trending on FLiK &rsaquo; </x-slot:category>
+    <!-- Popular -->
+    <x-movies :movies="$popular" :genres="$genres">
+        <x-slot:category>
+            <x-icon name="sparkles" :size="16" class="text-[#C5A55A]" />
+            <span>Popular on FLiK</span>
+        </x-slot:category>
     </x-movies>
-    <!-- End Trending Movies -->
 
     <!-- Top Rated -->
     @if($topRated->count() > 0)
-    <x-movies :movies='$topRated'>
-        <x-slot:category> ⭐ Top Rated &rsaquo; </x-slot:category>
+    <x-movies :movies="$topRated" :genres="$genres">
+        <x-slot:category>
+            <x-icon name="star-solid" :size="16" class="text-[#C5A55A]" />
+            <span>Top Rated</span>
+        </x-slot:category>
     </x-movies>
     @endif
-    <!-- End Top Rated -->
 
-    <!-- Comedies Movies -->
-    <x-movies :movies='$comedies'>
-        <x-slot:category> Comedies &rsaquo; </x-slot:category>
+    <!-- Genre rows -->
+    @if($comedies->count() > 0)
+    <x-movies :movies="$comedies" :genres="$genres">
+        <x-slot:category><span>Comedies</span></x-slot:category>
     </x-movies>
-    <!-- End Comedies Movies -->
+    @endif
 
-    <!-- Action Movies -->
-    <x-movies :movies='$action'>
-        <x-slot:category> Action &rsaquo; </x-slot:category>
+    @if($action->count() > 0)
+    <x-movies :movies="$action" :genres="$genres">
+        <x-slot:category><span>Action</span></x-slot:category>
     </x-movies>
-    <!-- End Action Movies -->
+    @endif
 
-    <!-- Western Movies -->
-    <x-movies :movies='$western'>
-        <x-slot:category> Western &rsaquo; </x-slot:category>
+    @if($horror->count() > 0)
+    <x-movies :movies="$horror" :genres="$genres">
+        <x-slot:category><span>Horror</span></x-slot:category>
     </x-movies>
-    <!-- End Wester Movies -->
+    @endif
 
-    <!-- Horror Movies -->
-    <x-movies :movies=$horror>
-        <x-slot:category> Horror &rsaquo; </x-slot:category>
+    @if($thriller->count() > 0)
+    <x-movies :movies="$thriller" :genres="$genres">
+        <x-slot:category><span>Thriller</span></x-slot:category>
     </x-movies>
-    <!-- End Horror Movies -->
+    @endif
 
-    <!-- Animation Movies -->
-    <x-movies :movies='$animation'>
-        <x-slot:category> Animation &rsaquo; </x-slot:category>
+    @if($western->count() > 0)
+    <x-movies :movies="$western" :genres="$genres">
+        <x-slot:category><span>Western</span></x-slot:category>
     </x-movies>
-    <!-- End Animation Movies -->
+    @endif
+
+    @if($animation->count() > 0)
+    <x-movies :movies="$animation" :genres="$genres">
+        <x-slot:category><span>Animation</span></x-slot:category>
+    </x-movies>
+    @endif
 </div>
