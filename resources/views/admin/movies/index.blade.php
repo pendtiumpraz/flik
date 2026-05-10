@@ -58,6 +58,7 @@
                     <td>
                         <div style="display:flex;gap:6px">
                             <a href="{{ route('admin.movies.edit', $movie) }}" class="btn btn-ghost btn-sm">Edit</a>
+                            <a href="{{ route('admin.movies.subtitles.index', $movie) }}" class="btn btn-ghost btn-sm" title="Manage Subtitles">CC</a>
                             <form method="POST" action="{{ route('admin.movies.destroy', $movie) }}" onsubmit="return confirm('Delete {{ addslashes($movie->title) }}?')">
                                 @csrf @method('DELETE')
                                 <button type="submit" class="btn btn-danger btn-sm">Del</button>

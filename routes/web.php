@@ -66,6 +66,11 @@ Route::middleware('auth')->group(function () {
 // Midtrans Webhook (no auth required)
 Route::post('/payment/webhook', [\App\Http\Controllers\PaymentController::class, 'webhook'])->name('payment.webhook');
 
+// Health check endpoints (no auth — for load balancers / orchestrators)
+Route::get('/healthz', [\App\Http\Controllers\HealthController::class, 'live'])->name('health.live');
+Route::get('/healthz/ready', [\App\Http\Controllers\HealthController::class, 'ready'])->name('health.ready');
+Route::get('/healthz/detailed', [\App\Http\Controllers\HealthController::class, 'detailed'])->name('health.detailed');
+
 // AI Chatbot (auth required)
 Route::middleware('auth')->post('/chat', [\App\Http\Controllers\ChatController::class, 'respond'])->name('chat.respond');
 
@@ -105,6 +110,13 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::post('/banners', [\App\Http\Controllers\AdminController::class, 'storeBanner'])->name('banners.store');
     Route::put('/banners/{banner}/toggle', [\App\Http\Controllers\AdminController::class, 'toggleBanner'])->name('banners.toggle');
     Route::delete('/banners/{banner}', [\App\Http\Controllers\AdminController::class, 'destroyBanner'])->name('banners.destroy');
+
+    // Movie Subtitles (per-movie manager)
+    Route::get('/movies/{movie}/subtitles', [\App\Http\Controllers\Admin\SubtitleController::class, 'index'])->name('movies.subtitles.index');
+    Route::post('/movies/{movie}/subtitles/generate', [\App\Http\Controllers\Admin\SubtitleController::class, 'generate'])->name('movies.subtitles.generate');
+    Route::post('/movies/{movie}/subtitles/translate', [\App\Http\Controllers\Admin\SubtitleController::class, 'translate'])->name('movies.subtitles.translate');
+    Route::delete('/movies/{movie}/subtitles/{subtitle}', [\App\Http\Controllers\Admin\SubtitleController::class, 'destroy'])->name('movies.subtitles.destroy');
+    Route::post('/movies/{movie}/subtitles/{subtitle}/default', [\App\Http\Controllers\Admin\SubtitleController::class, 'setDefault'])->name('movies.subtitles.default');
 
     // AI Providers
     Route::get('/ai-settings', [\App\Http\Controllers\AdminController::class, 'aiSettings'])->name('ai.index');

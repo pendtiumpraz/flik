@@ -197,6 +197,19 @@ class Movie extends Model
         return $this->hasMany(MovieAsset::class);
     }
 
+    public function subtitles()
+    {
+        return $this->hasMany(MovieSubtitle::class);
+    }
+
+    public function activeSubtitles()
+    {
+        return $this->hasMany(MovieSubtitle::class)
+            ->where('is_active', true)
+            ->where('status', 'ready')
+            ->orderByDesc('is_default');
+    }
+
     /**
      * Get currently active variant for given asset type, with time-bucketed rotation.
      *

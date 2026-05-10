@@ -28,6 +28,31 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Queue Naming Convention (FLiK)
+    |--------------------------------------------------------------------------
+    | Use these queue names for multi-worker separation (microservices-ready).
+    | Dispatch jobs with ->onQueue('queue-name'). Run worker with --queue=name.
+    |
+    | - 'default'        : misc, low priority
+    | - 'transcoding'    : heavy CPU (FFmpeg) — dedicated worker
+    | - 'ai-realtime'    : low latency AI tasks (chat, on-demand subtitle)
+    | - 'ai-batch'       : nightly AI tasks (recommendations, bulk tagging)
+    | - 'notifications'  : email, push, in-app
+    | - 'audit'          : fire-and-forget audit logs
+    |
+    | Future: each queue can be served by separate worker pool / container.
+    */
+    'flik_queues' => [
+        'default'       => 'default',
+        'transcoding'   => 'transcoding',
+        'ai_realtime'   => 'ai-realtime',
+        'ai_batch'      => 'ai-batch',
+        'notifications' => 'notifications',
+        'audit'         => 'audit',
+    ],
+
     'connections' => [
 
         'sync' => [
