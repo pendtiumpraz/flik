@@ -30,7 +30,10 @@ class SessionsController extends Controller
         if (auth()->attempt($attributes)) {
             session()->regenerate();
 
-            return redirect('/movies')->with('success', 'Welcome ');
+            $user = auth()->user();
+            $destination = $user->isStaff() ? $user->adminDashboardUrl() : '/movies';
+
+            return redirect()->intended($destination)->with('success', 'Welcome ' . $user->name);
         }
 
         // auth filed

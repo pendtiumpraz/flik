@@ -25,8 +25,27 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->registerPolicies();
 
-        Gate::define('admin', function ($user) {
-            return (bool) $user->is_admin;
-        });
+        // Backwards-compat: existing routes use Gate::check('admin')
+        // Admin = anyone with staff role (super_admin or any specialty).
+        Gate::define('admin', fn ($user) => $user->isStaff() || $user->is_admin);
+
+        // Granular gates per role
+        Gate::define('super-admin', fn ($user) => $user->hasRole(\App\Models\User::ROLE_SUPER_ADMIN) || $user->is_admin);
+
+        Gate::define('manage-content', fn ($user) =>
+            $user->hasRole([\App\Models\User::ROLE_SUPER_ADMIN, \App\Models\User::ROLE_CONTENT_MANAGER]) || $user->is_admin
+        );
+
+        Gate::define('manage-users', fn ($user) =>
+            $user->hasRole([\App\Models\User::ROLE_SUPER_ADMIN, \App\Models\User::ROLE_CUSTOMER_SUPPORT]) || $user->is_admin
+        );
+
+        Gate::define('manage-finance', fn ($user) =>
+            $user->hasRole([\App\Models\User::ROLE_SUPER_ADMIN, \App\Models\User::ROLE_FINANCE]) || $user->is_admin
+        );
+
+        Gate::define('manage-system', fn ($user) =>
+            $user->hasRole(\App\Models\User::ROLE_SUPER_ADMIN) || $user->is_admin
+        );
     }
 }

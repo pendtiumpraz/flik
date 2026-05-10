@@ -4,41 +4,38 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
     /**
      * Seed the application's database.
-     *
-     * @return void
+     * Idempotent: safe to re-run, no duplicates.
      */
     public function run()
     {
-        // to remove all the data from users table
-        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
-        User::truncate();
-        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
+        // ── Default users (idempotent) ──────────────────────────
+        User::updateOrCreate(
+            ['email' => 'user@gmail.com'],
+            [
+                'name' => 'user',
+                'password' => Hash::make('password'),
+                'role' => User::ROLE_USER,
+                'is_admin' => false,
+            ]
+        );
 
-        // create a user
-        DB::table('users')->insert([
-            'name' => 'user',
-            'username' => 'user',
-            'email' => 'user@gmail.com',
-            'password' => Hash::make('password'), // password
-        ]);
+        User::updateOrCreate(
+            ['email' => 'admin@gmail.com'],
+            [
+                'name' => 'admin',
+                'password' => Hash::make('password'),
+                'role' => User::ROLE_SUPER_ADMIN,
+                'is_admin' => true,
+            ]
+        );
 
-        // create admin user
-        DB::table('users')->insert([
-            'name' => 'admin',
-            'username' => 'admin',
-            'email' => 'admin@gmail.com',
-            'password' => Hash::make('password'),
-            'is_admin' => true,
-        ]);
-
-        // Seed genres, movies, plans, and achievements
+        // ── Catalog & system data ──────────────────────────────
         $this->call([
             GenreSeeder::class,
             MovieSeeder::class,

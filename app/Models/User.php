@@ -11,7 +11,7 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     protected $fillable = [
-        'name', 'email', 'password', 'is_admin',
+        'name', 'email', 'password', 'is_admin', 'role',
     ];
 
     protected $hidden = [
@@ -22,6 +22,60 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'is_admin' => 'boolean',
     ];
+
+    // ── Roles ─────────────────────────────────────────────────
+    public const ROLE_SUPER_ADMIN = 'super_admin';
+    public const ROLE_CONTENT_MANAGER = 'content_manager';
+    public const ROLE_CUSTOMER_SUPPORT = 'customer_support';
+    public const ROLE_FINANCE = 'finance';
+    public const ROLE_USER = 'user';
+
+    public const ROLES = [
+        self::ROLE_SUPER_ADMIN => 'Super Admin',
+        self::ROLE_CONTENT_MANAGER => 'Content Manager',
+        self::ROLE_CUSTOMER_SUPPORT => 'Customer Support',
+        self::ROLE_FINANCE => 'Finance',
+        self::ROLE_USER => 'User',
+    ];
+
+    public function hasRole(string|array $role): bool
+    {
+        if (is_array($role)) {
+            return in_array($this->role, $role, true);
+        }
+        return $this->role === $role;
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === self::ROLE_SUPER_ADMIN || $this->is_admin;
+    }
+
+    public function isStaff(): bool
+    {
+        return in_array($this->role, [
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_CONTENT_MANAGER,
+            self::ROLE_CUSTOMER_SUPPORT,
+            self::ROLE_FINANCE,
+        ], true);
+    }
+
+    public function getRoleLabelAttribute(): string
+    {
+        return self::ROLES[$this->role] ?? 'User';
+    }
+
+    public function adminDashboardUrl(): string
+    {
+        return match ($this->role) {
+            self::ROLE_SUPER_ADMIN => '/admin',
+            self::ROLE_CONTENT_MANAGER => '/admin/movies',
+            self::ROLE_CUSTOMER_SUPPORT => '/admin/users',
+            self::ROLE_FINANCE => '/admin/plans',
+            default => '/movies',
+        };
+    }
 
     // ── Mutators ──────────────────────────────────────────────
     public function setPasswordAttribute($password)
