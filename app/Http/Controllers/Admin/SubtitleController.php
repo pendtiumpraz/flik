@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Movie;
 use App\Models\MovieSubtitle;
+use App\Services\Ai\Subtitle\DialectTranslator;
 use App\Services\Ai\Subtitle\LanguageCatalog;
+use App\Services\Ai\Subtitle\ProfanityFilter;
+use App\Services\Ai\Subtitle\SpeakerIdentifier;
 use App\Services\Ai\Subtitle\SubtitleGenerator;
 use App\Services\Ai\Subtitle\SubtitleTranslator;
 use Illuminate\Http\Request;
@@ -98,5 +101,66 @@ class SubtitleController extends Controller
         $subtitle->update(['is_default' => true]);
 
         return back()->with('success', "Default subtitle: {$subtitle->label}");
+    }
+
+    /**
+     * F2 — Translate an existing (Indonesian) subtitle to a regional dialect.
+     */
+    public function translateDialect(Request $request, Movie $movie, DialectTranslator $dialects)
+    {
+        $data = $request->validate([
+            'source_subtitle_id' => 'required|exists:movie_subtitles,id',
+            'dialect'            => 'required|string|in:' . implode(',', array_keys(DialectTranslator::supportedDialects())),
+        ]);
+
+        $source = MovieSubtitle::where('movie_id', $movie->id)
+            ->findOrFail($data['source_subtitle_id']);
+
+        try {
+            $subtitle = $dialects->translateDialect($source, $data['dialect']);
+            return back()->with('success', "Subtitle dialek {$subtitle->label} berhasil dibuat dari {$source->native_name}.");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Gagal translate ke dialek: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * F6 — Produce a kid-safe (profanity-filtered) variant of an existing subtitle.
+     */
+    public function kidSafeFilter(Request $request, Movie $movie, ProfanityFilter $filter)
+    {
+        $data = $request->validate([
+            'source_subtitle_id' => 'required|exists:movie_subtitles,id',
+        ]);
+
+        $source = MovieSubtitle::where('movie_id', $movie->id)
+            ->findOrFail($data['source_subtitle_id']);
+
+        try {
+            $subtitle = $filter->filterToKidSafe($source);
+            return back()->with('success', "Subtitle kid-safe {$subtitle->label} berhasil dibuat dari {$source->native_name}.");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Gagal filter kid-safe: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * L2 — Add speaker name tags to an existing subtitle using the movie's cast list.
+     */
+    public function addSpeakerTags(Request $request, Movie $movie, SpeakerIdentifier $tagger)
+    {
+        $data = $request->validate([
+            'source_subtitle_id' => 'required|exists:movie_subtitles,id',
+        ]);
+
+        $source = MovieSubtitle::where('movie_id', $movie->id)
+            ->findOrFail($data['source_subtitle_id']);
+
+        try {
+            $subtitle = $tagger->addSpeakerTags($source, $movie);
+            return back()->with('success', "Subtitle dengan speaker-tags {$subtitle->label} berhasil dibuat dari {$source->native_name}.");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Gagal tambah speaker tags: ' . $e->getMessage());
+        }
     }
 }

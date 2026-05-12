@@ -145,6 +145,14 @@
                     </aside>
                 </div>
 
+                {{-- ━━━ AI-generated content sections ━━━
+                     Each conditional: only renders if data exists. Models load via
+                     VelflixController::show() (trivia, quotes, aiReviews relations). --}}
+                <x-movies.ai-summary :movie="$movieModel" />
+                <x-movies.ai-trivia-strip :movie="$movieModel" />
+                <x-movies.ai-quotes :movie="$movieModel" />
+                <x-movies.ai-reviews-tabs :movie="$movieModel" />
+
                 <!-- Rating Section -->
                 <div class="mt-8 p-5 md:p-6 rounded-xl" style="background: linear-gradient(180deg, rgba(20,18,16,0.7) 0%, rgba(15,12,10,0.7) 100%); border: 1px solid rgba(197,165,90,0.15)">
                     <div class="flex items-center gap-2.5 mb-4">

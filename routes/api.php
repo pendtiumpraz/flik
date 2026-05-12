@@ -17,3 +17,9 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:api')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+// ━━━ X-Ray (O14) — Netflix-style actor info overlay ━━━
+// Auth enforced inside XrayController (web session); browser players hit this with
+// same-origin credentials so we use the `web` middleware group, not `auth:api`.
+Route::middleware('web')->get('/xray/{movie}', [\App\Http\Controllers\XrayController::class, 'forMovie'])
+    ->name('xray.forMovie');

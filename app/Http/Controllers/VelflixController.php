@@ -248,6 +248,13 @@ class VelflixController extends Controller
     {
         $movie = $watch->loadMissing(['genres', 'castMembers']);
 
+        // ── AI-generated assets (lazy-loaded; sections render conditionally) ───
+        $movie->load([
+            'trivia' => fn ($q) => $q->orderBy('sort_order')->limit(8),
+            'quotes' => fn ($q) => $q->limit(3),
+            'aiReviews',
+        ]);
+
         $playMovie = [
             'id' => $movie->id,
             'title' => $movie->title,

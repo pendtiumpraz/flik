@@ -74,6 +74,19 @@ Route::get('/healthz/detailed', [\App\Http\Controllers\HealthController::class, 
 // AI Chatbot (auth required)
 Route::middleware('auth')->post('/chat', [\App\Http\Controllers\ChatController::class, 'respond'])->name('chat.respond');
 
+// AI Plot Explainer (auth required, rate-limited inside controller)
+Route::post('/api/movies/{movie}/plot-explain', [\App\Http\Controllers\PlotExplainController::class, 'explain'])
+    ->middleware('auth')
+    ->name('movies.plot-explain');
+
+// ━━━ DRM Key Endpoint (no auth — JWT-protected, fetched by Shaka Player) ━━━
+Route::get('/drm/key/{sessionToken}/{keyId}', [\App\Http\Controllers\PlaybackController::class, 'key'])
+    ->name('drm.key');
+
+// ━━━ X-Ray Actor Overlay (api-style, web auth via session) ━━━
+Route::middleware('auth')->get('/api/xray/{movie}', [\App\Http\Controllers\XrayController::class, 'forMovie'])
+    ->name('xray.forMovie');
+
 Route::controller(LoginController::class)->group(function () {
     Route::get('login/google', 'redirectToProvider');
     Route::get('login/google/callback', 'handleProviderCallback');
@@ -158,6 +171,42 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::patch('/comments/{comment}/approve', [\App\Http\Controllers\Admin\CommentModerationController::class, 'approve'])->name('comments.approve');
     Route::patch('/comments/{comment}/reject', [\App\Http\Controllers\Admin\CommentModerationController::class, 'reject'])->name('comments.reject');
     Route::post('/comments/{comment}/rerun', [\App\Http\Controllers\Admin\CommentModerationController::class, 'rerun'])->name('comments.rerun');
+
+    // ━━━ SWARM 25 ROUTES ━━━
+
+    // Movie video upload + transcoding control
+    Route::post('/movies/{movie}/upload-master', [\App\Http\Controllers\Admin\MovieUploadController::class, 'uploadMaster'])->name('movies.upload-master');
+    Route::post('/movies/{movie}/start-transcode', [\App\Http\Controllers\Admin\MovieUploadController::class, 'startTranscode'])->name('movies.start-transcode');
+    Route::get('/movies/{movie}/encoding-status', [\App\Http\Controllers\Admin\MovieUploadController::class, 'encodingStatus'])->name('movies.encoding-status');
+
+    // Subtitle variants (dialect / kid-safe / speaker tags)
+    Route::post('/movies/{movie}/subtitles/dialect', [\App\Http\Controllers\Admin\SubtitleController::class, 'translateDialect'])->name('movies.subtitles.dialect');
+    Route::post('/movies/{movie}/subtitles/kid-safe', [\App\Http\Controllers\Admin\SubtitleController::class, 'kidSafeFilter'])->name('movies.subtitles.kid-safe');
+    Route::post('/movies/{movie}/subtitles/speaker-tags', [\App\Http\Controllers\Admin\SubtitleController::class, 'addSpeakerTags'])->name('movies.subtitles.speaker-tags');
+
+    // Director Auteur Analysis
+    Route::get('/director-analyses', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'index'])->name('director-analyses.index');
+    Route::post('/director-analyses', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'analyze'])->name('director-analyses.analyze');
+    Route::get('/director-analyses/{directorSlug}', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'show'])->name('director-analyses.show');
+    Route::post('/director-analyses/{directorSlug}/refresh', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'refresh'])->name('director-analyses.refresh');
+    Route::delete('/director-analyses/{directorSlug}', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'destroy'])->name('director-analyses.destroy');
+
+    // Churn Risk Dashboard
+    Route::get('/churn', [\App\Http\Controllers\Admin\ChurnDashboardController::class, 'index'])->name('churn.dashboard');
+
+    // AI Insights (content gap + pricing)
+    Route::get('/insights/content-gap', [\App\Http\Controllers\Admin\AiInsightsController::class, 'contentGap'])->name('insights.content-gap');
+    Route::get('/insights/pricing', [\App\Http\Controllers\Admin\AiInsightsController::class, 'pricing'])->name('insights.pricing');
+
+    // Marketing Ops (TikTok clips, title alternatives, email A/B, CS reply)
+    Route::get('/movies/{movie}/marketing-ops/tiktok-clips', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'tikTokClipsForm'])->name('movies.marketing-ops.tiktok-clips');
+    Route::post('/movies/{movie}/marketing-ops/tiktok-clips', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateTikTokClips'])->name('movies.marketing-ops.tiktok-clips.generate');
+    Route::get('/movies/{movie}/marketing-ops/title-alternatives', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'titleAlternativesForm'])->name('movies.marketing-ops.title-alternatives');
+    Route::post('/movies/{movie}/marketing-ops/title-alternatives', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateTitleAlternatives'])->name('movies.marketing-ops.title-alternatives.generate');
+    Route::get('/marketing-ops/email-subjects', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'emailSubjectsForm'])->name('marketing-ops.email-subjects');
+    Route::post('/marketing-ops/email-subjects', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateEmailSubjects'])->name('marketing-ops.email-subjects.generate');
+    Route::get('/marketing-ops/cs-reply', fn () => view('admin.marketing-ops.cs-reply-drafter'))->name('marketing-ops.cs-reply');
+    Route::post('/marketing-ops/cs-reply', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'csReplyDraft'])->name('marketing-ops.cs-reply.generate');
 });
 
 // ━━━ User-facing AI Features ━━━
@@ -173,4 +222,38 @@ Route::middleware('auth')->group(function () {
 
     // Personalized Recommendations
     Route::get('/api/recommendations', [\App\Http\Controllers\RecommendationController::class, 'forUser'])->name('recommendations.me');
+
+    // Movie Comparison
+    Route::get('/compare', [\App\Http\Controllers\MovieComparisonController::class, 'form'])->name('compare.form');
+    Route::post('/compare', [\App\Http\Controllers\MovieComparisonController::class, 'compare'])->name('compare.run');
+    Route::post('/api/compare', [\App\Http\Controllers\MovieComparisonController::class, 'compareApi'])->name('compare.api');
+
+    // Year In Review
+    Route::get('/year-in-review', [\App\Http\Controllers\YearInReviewController::class, 'show'])->name('year-in-review.show');
+    Route::get('/year-in-review/{year}', [\App\Http\Controllers\YearInReviewController::class, 'show'])
+        ->whereNumber('year')->name('year-in-review.year');
+    Route::post('/year-in-review/{id}/share', [\App\Http\Controllers\YearInReviewController::class, 'share'])
+        ->whereNumber('id')->name('year-in-review.share');
+
+    // Smart Watchlist + Family Movie Night
+    Route::get('/watchlist/smart', [\App\Http\Controllers\SmartWatchlistController::class, 'prioritized'])->name('watchlist.smart');
+    Route::get('/family-night', [\App\Http\Controllers\FamilyNightController::class, 'form'])->name('family-night.form');
+    Route::post('/family-night', [\App\Http\Controllers\FamilyNightController::class, 'recommend'])->name('family-night.recommend');
+
+    // Highlight Reels
+    Route::get('/movie/{movie}/highlight', [\App\Http\Controllers\HighlightReelController::class, 'show'])->name('highlight.show');
+    Route::get('/movie/{movie}/highlight/download', [\App\Http\Controllers\HighlightReelController::class, 'download'])->name('highlight.download');
+
+    // Advanced Search (image / vibe / person)
+    Route::get('/search/image', [\App\Http\Controllers\AdvancedSearchController::class, 'imageForm'])->name('search.image.form');
+    Route::post('/search/image', [\App\Http\Controllers\AdvancedSearchController::class, 'imageSearch'])->name('search.image');
+    Route::get('/search/vibe', [\App\Http\Controllers\AdvancedSearchController::class, 'vibeForm'])->name('search.vibe.form');
+    Route::post('/search/vibe', [\App\Http\Controllers\AdvancedSearchController::class, 'vibeSearch'])->name('search.vibe');
+    Route::get('/search/person', [\App\Http\Controllers\AdvancedSearchController::class, 'personForm'])->name('search.person.form');
+    Route::post('/search/person', [\App\Http\Controllers\AdvancedSearchController::class, 'personSearch'])->name('search.person');
+
+    // ── Encrypted playback (DRM-protected) ──
+    Route::get('/playback/{movie}/config', [\App\Http\Controllers\PlaybackController::class, 'config'])->name('playback.config');
+    Route::get('/playback/{movie}/manifest.m3u8', [\App\Http\Controllers\PlaybackController::class, 'manifest'])->name('playback.manifest');
+    Route::post('/playback/{movie}/heartbeat', [\App\Http\Controllers\PlaybackController::class, 'heartbeat'])->name('playback.heartbeat');
 });

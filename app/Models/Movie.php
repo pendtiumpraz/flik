@@ -203,6 +203,21 @@ class Movie extends Model
         return $this->hasMany(MovieAsset::class);
     }
 
+    public function trivia()
+    {
+        return $this->hasMany(MovieTrivia::class);
+    }
+
+    public function quotes()
+    {
+        return $this->hasMany(MovieQuote::class);
+    }
+
+    public function aiReviews()
+    {
+        return $this->hasMany(MovieAiReview::class);
+    }
+
     public function subtitles()
     {
         return $this->hasMany(MovieSubtitle::class);

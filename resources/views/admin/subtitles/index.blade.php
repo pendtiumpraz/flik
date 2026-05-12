@@ -175,6 +175,90 @@
 
     </div>
 
+    <!-- Subtitle Variants (F2 Dialect / F6 Kid-safe / L2 Speaker tags) -->
+    @php
+        $readySubtitles = $subtitles->where('status', 'ready');
+        $sourceCandidates = $readySubtitles->filter(fn ($s) => empty($s->variant));
+        $dialectOptions = \App\Services\Ai\Subtitle\DialectTranslator::supportedDialects();
+    @endphp
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;overflow:hidden;margin-top:24px">
+        <div style="padding:16px 20px;border-bottom:1px solid #2a2a2a">
+            <h3 style="font-size:15px;font-weight:600">Subtitle Variants</h3>
+            <p style="font-size:12px;color:#777;margin-top:4px">Generate varian per source subtitle: dialek lokal (F2), kid-safe (F6), atau speaker tags (L2). Setiap varian disimpan sebagai row MovieSubtitle baru dengan kolom <code style="background:#0f0f0f;padding:1px 6px;border-radius:3px;color:#C5A55A">variant</code> tersendiri.</p>
+        </div>
+
+        @if($sourceCandidates->isEmpty())
+            <div style="padding:32px 20px;text-align:center;color:#555;font-size:13px">
+                Belum ada source subtitle (status=ready, tanpa variant). Generate atau translate subtitle dasar dulu di atas.
+            </div>
+        @else
+            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px">
+                @foreach($sourceCandidates as $sub)
+                    <div style="background:#0f0f0f;border:1px solid #232323;border-radius:10px;padding:14px 16px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+                            <div>
+                                <div style="font-weight:500;color:#fff" {{ $sub->is_rtl ? 'dir="rtl"' : '' }}>{{ $sub->label }}</div>
+                                <div style="font-size:11px;color:#666;margin-top:2px">
+                                    <code style="background:#0a0a0a;padding:1px 6px;border-radius:3px;color:#C5A55A">{{ $sub->language_code }}</code>
+                                    · {{ $sub->cue_count ?? '—' }} cues
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+
+                            {{-- F2 — Dialect Translation (Indonesian source only) --}}
+                            <form method="POST" action="{{ route('admin.movies.subtitles.dialect', $movie) }}"
+                                  style="background:#161616;border:1px solid #232323;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px"
+                                  onsubmit="return confirm('Generate dialect translation? Ini akan AI-call ke DeepSeek (~$0.50).')">
+                                @csrf
+                                <input type="hidden" name="source_subtitle_id" value="{{ $sub->id }}">
+                                <div style="font-size:12px;color:#C5A55A;font-weight:600">Dialect Translation (F2)</div>
+                                <select name="dialect" class="form-input" required style="font-size:12px;padding:6px 8px"
+                                        @if($sub->language_code !== 'id') disabled @endif>
+                                    @foreach($dialectOptions as $code => $label)
+                                        <option value="{{ $code }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                <button type="submit" class="btn btn-ghost btn-sm"
+                                        @if($sub->language_code !== 'id') disabled style="opacity:0.4;cursor:not-allowed" @endif
+                                        title="{{ $sub->language_code !== 'id' ? 'Hanya support source bahasa Indonesia' : 'Translate ke dialek lokal' }}">
+                                    Generate Dialect
+                                </button>
+                                @if($sub->language_code !== 'id')
+                                    <div style="font-size:10px;color:#555">Hanya untuk source Bahasa Indonesia.</div>
+                                @endif
+                            </form>
+
+                            {{-- F6 — Kid-safe Profanity Filter --}}
+                            <form method="POST" action="{{ route('admin.movies.subtitles.kid-safe', $movie) }}"
+                                  style="background:#161616;border:1px solid #232323;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px"
+                                  onsubmit="return confirm('Generate kid-safe variant? Ini akan AI-call per batch 50 cues.')">
+                                @csrf
+                                <input type="hidden" name="source_subtitle_id" value="{{ $sub->id }}">
+                                <div style="font-size:12px;color:#C5A55A;font-weight:600">Kid-safe Filter (F6)</div>
+                                <div style="font-size:11px;color:#777;flex:1">Soften profanity & strong language menjadi versi ramah anak (bahasa sama).</div>
+                                <button type="submit" class="btn btn-ghost btn-sm">Generate Kid-safe</button>
+                            </form>
+
+                            {{-- L2 — Speaker Tags --}}
+                            <form method="POST" action="{{ route('admin.movies.subtitles.speaker-tags', $movie) }}"
+                                  style="background:#161616;border:1px solid #232323;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px"
+                                  onsubmit="return confirm('Generate speaker-tagged variant? Ini akan AI-call per batch 40 cues.')">
+                                @csrf
+                                <input type="hidden" name="source_subtitle_id" value="{{ $sub->id }}">
+                                <div style="font-size:12px;color:#C5A55A;font-weight:600">Speaker Tags (L2)</div>
+                                <div style="font-size:11px;color:#777;flex:1">Tambah prefix <code style="background:#0a0a0a;padding:1px 4px;border-radius:3px">[NAMA]:</code> dengan best-effort dari cast list ({{ $movie->castMembers()->count() }} cast).</div>
+                                <button type="submit" class="btn btn-ghost btn-sm">Generate Speaker Tags</button>
+                            </form>
+
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+    </div>
+
     <!-- Info Box -->
     <div style="margin-top:24px;background:rgba(197,165,90,0.06);border:1px solid rgba(197,165,90,0.25);border-radius:10px;padding:16px 20px">
         <div style="color:#C5A55A;font-weight:600;font-size:13px;margin-bottom:6px">💡 About Multi-language Subtitle</div>

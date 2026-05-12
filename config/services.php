@@ -59,4 +59,14 @@ return [
         // Wikipedia + DuckDuckGo, no API key needed.
         'enabled' => env('WEB_SEARCH_ENABLED', true),
     ],
+
+    'bunny' => [
+        'storage_zone' => env('BUNNY_STORAGE_ZONE'),
+        'storage_key' => env('BUNNY_STORAGE_KEY'),
+        'storage_hostname' => env('BUNNY_STORAGE_HOSTNAME', 'storage.bunnycdn.com'),
+        'pull_zone_url' => env('BUNNY_PULL_ZONE_URL'),
+        'pull_zone_token_key' => env('BUNNY_TOKEN_KEY'),
+        'stream_library_id' => env('BUNNY_STREAM_LIBRARY_ID'),
+        'stream_api_key' => env('BUNNY_STREAM_API_KEY'),
+    ],
 ];

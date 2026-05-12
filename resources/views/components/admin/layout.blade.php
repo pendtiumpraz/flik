@@ -163,14 +163,52 @@
             </a>
 
             <div class="nav-label" style="margin-top:16px">Intelligence</div>
-            <a href="{{ route('admin.ai.index') }}" class="nav-link {{ request()->routeIs('admin.ai.*') ? 'active' : '' }}">
+            <a href="{{ route('admin.ai.index') }}" class="nav-link {{ request()->routeIs('admin.ai.index') || request()->routeIs('admin.ai.store') || request()->routeIs('admin.ai.update') || request()->routeIs('admin.ai.toggle') || request()->routeIs('admin.ai.destroy') || request()->routeIs('admin.ai.test') ? 'active' : '' }}">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
                 AI Providers
             </a>
+            <a href="{{ route('admin.ai.usage') }}" class="nav-link {{ request()->routeIs('admin.ai.usage') ? 'active' : '' }}">
+                <x-icon name="lightning" :size="18" />
+                AI Usage
+            </a>
+            <a href="{{ route('admin.audit-logs.index') }}" class="nav-link {{ request()->routeIs('admin.audit-logs.*') ? 'active' : '' }}">
+                <x-icon name="info" :size="18" />
+                Audit Logs
+            </a>
+            <a href="{{ route('admin.sentiment.index') }}" class="nav-link {{ request()->routeIs('admin.sentiment.*') ? 'active' : '' }}">
+                <x-icon name="star" :size="18" />
+                Sentiment Dashboard
+            </a>
+            <a href="{{ route('admin.comments.queue') }}" class="nav-link {{ request()->routeIs('admin.comments.*') ? 'active' : '' }}">
+                <x-icon name="trophy" :size="18" />
+                Comment Queue
+            </a>
+            @if (\Illuminate\Support\Facades\Route::has('admin.churn.dashboard'))
+                <a href="{{ route('admin.churn.dashboard') }}" class="nav-link {{ request()->routeIs('admin.churn.*') ? 'active' : '' }}">
+                    <x-icon name="fire" :size="18" />
+                    Churn Risk
+                </a>
+            @endif
             <a href="{{ route('admin.pitch-deck') }}" class="nav-link {{ request()->routeIs('admin.pitch-deck') ? 'active' : '' }}">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                 Pitch Deck
             </a>
+
+            @if (\Illuminate\Support\Facades\Route::has('admin.insights.content-gap') || \Illuminate\Support\Facades\Route::has('admin.insights.pricing'))
+                <div class="nav-label" style="margin-top:16px">Marketing</div>
+                @if (\Illuminate\Support\Facades\Route::has('admin.insights.content-gap'))
+                    <a href="{{ route('admin.insights.content-gap') }}" class="nav-link {{ request()->routeIs('admin.insights.content-gap') ? 'active' : '' }}">
+                        <x-icon name="sparkles" :size="18" />
+                        Content Gap Analysis
+                    </a>
+                @endif
+                @if (\Illuminate\Support\Facades\Route::has('admin.insights.pricing'))
+                    <a href="{{ route('admin.insights.pricing') }}" class="nav-link {{ request()->routeIs('admin.insights.pricing') ? 'active' : '' }}">
+                        <x-icon name="cog" :size="18" />
+                        Pricing Optimization
+                    </a>
+                @endif
+            @endif
         </nav>
 
         <div class="nav-footer">

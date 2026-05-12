@@ -3,6 +3,7 @@
 namespace App\Services\Ai;
 
 use App\Models\AiProvider;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -14,15 +15,21 @@ use Illuminate\Support\Facades\Log;
  */
 class AiClient
 {
+    public function __construct(protected UsageTracker $tracker)
+    {
+    }
+
     /**
      * Send chat completion request.
      *
-     * @param  array  $messages  e.g. [['role'=>'system','content'=>'...'], ['role'=>'user','content'=>'...']]
-     * @param  array  $options   max_tokens, temperature, tools (for function calling)
+     * @param  array       $messages  e.g. [['role'=>'system','content'=>'...'], ['role'=>'user','content'=>'...']]
+     * @param  array       $options   max_tokens, temperature, tools (for function calling)
+     * @param  string      $taskType  Free-form label persisted with the usage log (e.g. "chat.recommend").
+     * @param  Model|null  $subject   Optional related Eloquent model (Movie, User, ...) for the usage log.
      * @return array  ['content', 'tool_calls', 'usage', 'provider', 'model', 'finish_reason']
      * @throws \RuntimeException if no provider configured or API call fails
      */
-    public function chat(array $messages, array $options = []): array
+    public function chat(array $messages, array $options = [], string $taskType = 'chat.generic', ?Model $subject = null): array
     {
         $provider = $this->pickProvider();
 
@@ -52,10 +59,14 @@ class AiClient
         $headers = $this->buildHeaders($provider);
         $payload = $this->normalizePayloadForProvider($provider->provider, $payload, $messages);
 
+        $startedAt = microtime(true);
+
         try {
             $response = Http::timeout(30)
                 ->withHeaders($headers)
                 ->post($endpoint, $payload);
+
+            $latencyMs = (int) round((microtime(true) - $startedAt) * 1000);
 
             if (!$response->successful()) {
                 Log::warning('AiClient API error', [
@@ -70,11 +81,20 @@ class AiClient
             $data = $response->json();
             $result = $this->parseResponse($provider->provider, $data);
 
-            // Track usage
-            $provider->update([
-                'last_used_at' => now(),
-                'total_tokens_used' => $provider->total_tokens_used + ($result['usage']['total_tokens'] ?? 0),
-            ]);
+            // Track usage (persists AiUsageLog row + rolls up provider totals).
+            $this->tracker->track(
+                provider: $provider,
+                taskType: $taskType,
+                inTokens: $result['usage']['input_tokens']
+                    ?? $result['usage']['prompt_tokens']
+                    ?? 0,
+                outTokens: $result['usage']['output_tokens']
+                    ?? $result['usage']['completion_tokens']
+                    ?? 0,
+                latencyMs: $latencyMs,
+                success: true,
+                subject: $subject,
+            );
 
             return [
                 'content' => $result['content'],
@@ -85,11 +105,32 @@ class AiClient
                 'model' => $provider->model,
             ];
         } catch (\Throwable $e) {
+            $latencyMs = (int) round((microtime(true) - $startedAt) * 1000);
+
             Log::error('AiClient exception', [
                 'provider' => $provider->provider,
                 'model' => $provider->model,
                 'error' => $e->getMessage(),
             ]);
+
+            // Best-effort failure tracking — never re-throw from the tracker.
+            try {
+                $this->tracker->track(
+                    provider: $provider,
+                    taskType: $taskType,
+                    inTokens: 0,
+                    outTokens: 0,
+                    latencyMs: $latencyMs,
+                    success: false,
+                    error: $e->getMessage(),
+                    subject: $subject,
+                );
+            } catch (\Throwable $trackerError) {
+                Log::warning('AiClient failed to record failure usage', [
+                    'error' => $trackerError->getMessage(),
+                ]);
+            }
+
             throw $e;
         }
     }
