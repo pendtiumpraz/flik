@@ -1,4 +1,19 @@
-<x-layout>
+@php
+    $seoTitle = trim(
+        ($movieModel->title ?? ($movies['title'] ?? 'FLiK'))
+        . (optional($movieModel->release_date)->format('Y') ? ' (' . $movieModel->release_date->format('Y') . ')' : '')
+        . ' — FLiK'
+    );
+    $seoDescription = \Illuminate\Support\Str::limit(
+        $movies['overview'] ?? ($movieModel->overview ?? 'Nonton di FLiK — Rumah Sinema Indonesia.'),
+        160,
+        ''
+    );
+    $seoOgImage = $movieModel->backdrop_url ?: $movieModel->poster_url;
+@endphp
+
+<x-layout :title="$seoTitle" :description="$seoDescription" :ogImage="$seoOgImage">
+    <x-seo.movie-jsonld :movie="$movieModel" />
     <div class="min-h-screen bg-black pt-16">
         <!-- Hero / Player Section -->
         <div class="relative w-full bg-black">
@@ -13,8 +28,78 @@
             <div class="relative z-10 container mx-auto px-4 md:px-8 lg:px-16 max-w-6xl py-8 md:py-12">
                 <!-- Player -->
                 <div class="rounded-2xl overflow-hidden shadow-2xl" style="border: 1px solid rgba(197,165,90,0.2)">
-                    <div class="relative bg-black" style="padding-top: 56.25%">
-                        @if($movieModel->video_path)
+                    <div id="flik-player-wrap" class="relative bg-black" style="padding-top: 56.25%">
+                        @if($movieModel->encoding_status === 'ready' && $movieModel->hls_manifest_path)
+                            {{-- ━━━ Shaka Player (DRM/HLS pipeline) ━━━
+                                 Used when the movie has been transcoded + DRM-packaged. The
+                                 FlikPlayer wrapper hits /playback/{slug}/config to bootstrap
+                                 the manifest URL + JWT, then Shaka handles ABR + AES key
+                                 fetches. Auto-skip and X-Ray overlay layer on top. --}}
+                            <video id="flik-shaka-player"
+                                class="absolute top-0 left-0 w-full h-full bg-black"
+                                controls preload="auto"
+                                poster="{{ $movies['backdrop_path'] }}"
+                                data-intro-start="{{ $movieModel->intro_start_seconds }}"
+                                data-intro-end="{{ $movieModel->intro_end_seconds }}"
+                                data-outro-start="{{ $movieModel->outro_start_seconds }}"
+                                data-recap-end="{{ $movieModel->recap_end_seconds }}"
+                                data-movie-slug="{{ $movieModel->slug }}"></video>
+                            <div
+                                x-data="{
+                                    player: null,
+                                    autoSkip: null,
+                                    xray: null,
+                                    error: null,
+                                    async init() {
+                                        await this.waitForShaka();
+                                        const videoEl = document.getElementById('flik-shaka-player');
+                                        const wrap = document.getElementById('flik-player-wrap');
+                                        if (!videoEl || typeof window.FlikPlayer !== 'function') return;
+                                        try {
+                                            this.player = new window.FlikPlayer('flik-shaka-player', '{{ $movieModel->slug }}');
+                                            await this.player.initialize();
+                                            this.autoSkip = window.initAutoSkip({
+                                                video: videoEl,
+                                                markerSource: videoEl,
+                                                overlay: wrap,
+                                                shakaPlayer: this.player.shakaPlayer,
+                                            });
+                                            this.xray = window.initXrayOverlay({
+                                                videoElement: videoEl,
+                                                movieSlug: '{{ $movieModel->slug }}',
+                                                containerEl: wrap,
+                                                csrfToken: document.querySelector('meta[name=csrf-token]')?.content || '',
+                                            });
+                                        } catch (e) {
+                                            console.error('[FLiK] player init failed', e);
+                                            this.error = e.message || 'Playback unavailable';
+                                        }
+                                    },
+                                    waitForShaka() {
+                                        return new Promise((resolve) => {
+                                            if (typeof window.shaka !== 'undefined') return resolve();
+                                            let tries = 0;
+                                            const id = setInterval(() => {
+                                                if (typeof window.shaka !== 'undefined' || tries++ > 100) {
+                                                    clearInterval(id);
+                                                    resolve();
+                                                }
+                                            }, 100);
+                                        });
+                                    },
+                                }"
+                                x-init="init()"
+                                @beforeunload.window="player?.destroy(); autoSkip?.destroy(); xray?.destroy();"
+                            >
+                                <template x-if="error">
+                                    <div class="absolute inset-0 flex items-center justify-center bg-[#0a0a0a]/90 z-30 pointer-events-none">
+                                        <div class="text-center text-gray-400 px-4">
+                                            <div class="text-sm" x-text="error"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        @elseif($movieModel->video_path)
                             <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet">
                             <video id="flik-player" class="video-js vjs-fluid vjs-big-play-centered absolute top-0 left-0 w-full h-full"
                                 controls preload="auto"
@@ -104,6 +189,27 @@
                                 <x-icon name="heart" :size="14" class="text-[#C5A55A]" /> Like
                             </button>
 
+                            {{-- AI Plot Explain modal launcher (renders both button + modal) --}}
+                            <x-movies.plot-explain-modal :movie="$movieModel" />
+
+                            {{-- Compare with another film --}}
+                            <a href="{{ route('compare.form', ['movie_a' => $movieModel->id]) }}"
+                               class="inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors hover:border-[#C5A55A]"
+                               style="background: rgba(255,255,255,0.05); border: 1px solid rgba(197,165,90,0.25); color: #C5A55A"
+                               title="Bandingkan film ini dengan film lain">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>
+                                <span>Bandingkan Film Ini</span>
+                            </a>
+
+                            {{-- Trivia Quiz Game (O5) --}}
+                            <a href="{{ route('quiz.start', $movieModel) }}"
+                               class="inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors hover:border-[#C5A55A]"
+                               style="background: rgba(255,255,255,0.05); border: 1px solid rgba(197,165,90,0.25); color: #C5A55A"
+                               title="Uji pengetahuan kamu tentang film ini — raih XP & koin">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                <span>Mainkan Trivia Quiz</span>
+                            </a>
+
                             @if($ratingsCount > 0)
                             <div class="ml-auto inline-flex items-center gap-1.5 text-sm">
                                 <x-icon name="star-solid" :size="14" class="text-[#C5A55A]" />
@@ -152,6 +258,59 @@
                 <x-movies.ai-trivia-strip :movie="$movieModel" />
                 <x-movies.ai-quotes :movie="$movieModel" />
                 <x-movies.ai-reviews-tabs :movie="$movieModel" />
+
+                {{-- Behind the Scenes (renders nothing if collection empty) --}}
+                <x-movies.behind-scenes :sections="$movieModel->behindScenes" />
+
+                {{-- Cinematography / colour analysis (renders nothing without data) --}}
+                <x-movies.cinematography :data="$movieModel->cinematography" />
+
+                {{-- Highlight Reel CTA — only when at least one ready reel exists --}}
+                @if($movieModel->highlightReels()->where('status', 'ready')->exists())
+                    <section class="mt-10 md:mt-12">
+                        <a href="{{ route('highlight.show', $movieModel) }}"
+                           class="group block rounded-2xl overflow-hidden transition-all hover:translate-y-[-2px]"
+                           style="background: linear-gradient(135deg, rgba(197,165,90,0.12) 0%, rgba(20,18,16,0.85) 60%); border: 1px solid rgba(197,165,90,0.35)">
+                            <div class="flex flex-col md:flex-row items-stretch">
+                                <div class="md:w-1/3 relative bg-black">
+                                    <img src="{{ $movieModel->backdrop_url }}" alt=""
+                                         class="w-full h-40 md:h-full object-cover opacity-70 group-hover:opacity-90 transition-opacity"
+                                         onerror="this.style.display='none'">
+                                    <div class="absolute inset-0 flex items-center justify-center">
+                                        <div class="w-16 h-16 rounded-full flex items-center justify-center shadow-2xl"
+                                             style="background: rgba(197,165,90,0.95)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-black ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M8 5v14l11-7z"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex-1 p-5 md:p-6 flex flex-col justify-center">
+                                    <div class="inline-flex items-center gap-2 mb-2">
+                                        <span class="text-[10px] uppercase tracking-widest font-semibold px-2 py-0.5 rounded"
+                                              style="background: rgba(197,165,90,0.18); color: #C5A55A; border: 1px solid rgba(197,165,90,0.35)">
+                                            AI Highlight Reel
+                                        </span>
+                                        <span class="text-[10px] uppercase tracking-widest font-semibold text-gray-500">~3 menit</span>
+                                    </div>
+                                    <h3 class="font-heading text-lg md:text-xl font-bold text-white mb-1.5">
+                                        Tonton Best-of 3 Menit
+                                    </h3>
+                                    <p class="text-sm text-gray-400 leading-relaxed">
+                                        Adegan-adegan paling dramatis dari film ini, dipilih otomatis oleh AI dan dijahit menjadi satu reel sinematik.
+                                    </p>
+                                    <div class="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold transition-colors"
+                                         style="color: #C5A55A">
+                                        <span>Putar Reel</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </section>
+                @endif
 
                 <!-- Rating Section -->
                 <div class="mt-8 p-5 md:p-6 rounded-xl" style="background: linear-gradient(180deg, rgba(20,18,16,0.7) 0%, rgba(15,12,10,0.7) 100%); border: 1px solid rgba(197,165,90,0.15)">
@@ -220,16 +379,44 @@
                                 <span class="text-sm font-medium text-white">{{ $comment->user->name }}</span>
                                 <span class="text-xs text-gray-500">{{ $comment->created_at->diffForHumans() }}</span>
                                 @if($comment->is_spoiler)
-                                    <span class="text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-semibold" style="background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3)">Spoiler</span>
+                                    <span class="text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-semibold inline-flex items-center gap-1" style="background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3)">
+                                        <span>Spoiler</span>
+                                        @if(!is_null($comment->spoiler_confidence) && (float) $comment->spoiler_confidence >= 0.7)
+                                            <span class="text-[9px] opacity-80" title="Terdeteksi otomatis oleh AI (confidence {{ number_format((float) $comment->spoiler_confidence * 100, 0) }}%)">AI</span>
+                                        @endif
+                                    </span>
                                 @endif
                             </div>
                             @if($comment->is_spoiler)
-                                <div x-data="{ show: false }">
-                                    <p x-show="!show" class="text-sm text-gray-500 cursor-pointer italic hover:text-gray-400 inline-flex items-center gap-1.5" @click="show = true">
-                                        <x-icon name="eye" :size="14" class="text-[#C5A55A]/70" />
-                                        Klik untuk lihat spoiler
-                                    </p>
-                                    <p x-show="show" x-cloak class="text-sm text-gray-300">{{ $comment->body }}</p>
+                                <div x-data="{ shown: false }" class="relative">
+                                    <p
+                                        class="text-sm text-gray-300 transition-[filter,opacity] duration-200 select-none"
+                                        :style="shown ? 'filter: none; pointer-events: auto;' : 'filter: blur(8px); pointer-events: none;'"
+                                    >{{ $comment->body }}</p>
+
+                                    <button
+                                        type="button"
+                                        x-show="!shown"
+                                        @click="shown = true"
+                                        class="absolute inset-0 flex items-center justify-center text-xs font-semibold rounded-lg cursor-pointer transition-colors"
+                                        style="background: rgba(20,18,16,0.55); color: #C5A55A; border: 1px solid rgba(197,165,90,0.35); backdrop-filter: blur(2px);"
+                                    >
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5">
+                                            <x-icon name="eye" :size="14" class="text-[#C5A55A]" />
+                                            <span>&#9888; Spoiler &mdash; Klik untuk lihat</span>
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        x-show="shown"
+                                        x-cloak
+                                        @click="shown = false"
+                                        class="mt-1 text-[11px] text-[#C5A55A]/80 hover:text-[#C5A55A] transition-colors inline-flex items-center gap-1"
+                                    >
+                                        <x-icon name="eye" :size="12" class="text-[#C5A55A]/80" />
+                                        <span>Sembunyikan lagi</span>
+                                    </button>
                                 </div>
                             @else
                                 <p class="text-sm text-gray-300">{{ $comment->body }}</p>

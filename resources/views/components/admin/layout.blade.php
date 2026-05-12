@@ -189,12 +189,29 @@
                     Churn Risk
                 </a>
             @endif
+            @if (\Illuminate\Support\Facades\Route::has('admin.director-analyses.index'))
+                <a href="{{ route('admin.director-analyses.index') }}" class="nav-link {{ request()->routeIs('admin.director-analyses.*') ? 'active' : '' }}">
+                    <x-icon name="user-circle" :size="18" />
+                    Director Analyses
+                </a>
+            @endif
             <a href="{{ route('admin.pitch-deck') }}" class="nav-link {{ request()->routeIs('admin.pitch-deck') ? 'active' : '' }}">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                 Pitch Deck
             </a>
 
-            @if (\Illuminate\Support\Facades\Route::has('admin.insights.content-gap') || \Illuminate\Support\Facades\Route::has('admin.insights.pricing'))
+            @if (\Illuminate\Support\Facades\Route::has('admin.movies.encoding-status') || \Illuminate\Support\Facades\Route::has('admin.movies.index'))
+                <div class="nav-label" style="margin-top:16px">Distribution</div>
+                <a href="{{ route('admin.movies.index') }}" class="nav-link {{ request()->routeIs('admin.movies.encoding-status') || request()->routeIs('admin.movies.upload-master') ? 'active' : '' }}">
+                    <x-icon name="server" :size="18" />
+                    Encoding Jobs
+                </a>
+            @endif
+
+            @if (\Illuminate\Support\Facades\Route::has('admin.insights.content-gap')
+                 || \Illuminate\Support\Facades\Route::has('admin.insights.pricing')
+                 || \Illuminate\Support\Facades\Route::has('admin.marketing-ops.email-subjects')
+                 || \Illuminate\Support\Facades\Route::has('admin.marketing-ops.cs-reply'))
                 <div class="nav-label" style="margin-top:16px">Marketing</div>
                 @if (\Illuminate\Support\Facades\Route::has('admin.insights.content-gap'))
                     <a href="{{ route('admin.insights.content-gap') }}" class="nav-link {{ request()->routeIs('admin.insights.content-gap') ? 'active' : '' }}">
@@ -206,6 +223,35 @@
                     <a href="{{ route('admin.insights.pricing') }}" class="nav-link {{ request()->routeIs('admin.insights.pricing') ? 'active' : '' }}">
                         <x-icon name="cog" :size="18" />
                         Pricing Optimization
+                    </a>
+                @endif
+                @if (\Illuminate\Support\Facades\Route::has('admin.marketing-ops.email-subjects'))
+                    <a href="{{ route('admin.marketing-ops.email-subjects') }}" class="nav-link {{ request()->routeIs('admin.marketing-ops.email-subjects*') ? 'active' : '' }}">
+                        <x-icon name="lightning" :size="18" />
+                        Email A/B Subjects
+                    </a>
+                @endif
+                @if (\Illuminate\Support\Facades\Route::has('admin.marketing-ops.cs-reply'))
+                    <a href="{{ route('admin.marketing-ops.cs-reply') }}" class="nav-link {{ request()->routeIs('admin.marketing-ops.cs-reply*') ? 'active' : '' }}">
+                        <x-icon name="chat" :size="18" />
+                        CS Reply Drafter
+                    </a>
+                @endif
+            @endif
+
+            @if (\Illuminate\Support\Facades\Route::has('admin.revenue.dashboard')
+                 || \Illuminate\Support\Facades\Route::has('admin.geo.distribution'))
+                <div class="nav-label" style="margin-top:16px">Business</div>
+                @if (\Illuminate\Support\Facades\Route::has('admin.revenue.dashboard'))
+                    <a href="{{ route('admin.revenue.dashboard') }}" class="nav-link {{ request()->routeIs('admin.revenue.*') ? 'active' : '' }}">
+                        <x-icon name="coin" :size="18" />
+                        Revenue Dashboard
+                    </a>
+                @endif
+                @if (\Illuminate\Support\Facades\Route::has('admin.geo.distribution'))
+                    <a href="{{ route('admin.geo.distribution') }}" class="nav-link {{ request()->routeIs('admin.geo.*') ? 'active' : '' }}">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3.6 9h16.8M3.6 15h16.8M11.5 3a16.5 16.5 0 000 18M12.5 3a16.5 16.5 0 010 18M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Geo Distribution
                     </a>
                 @endif
             @endif

@@ -253,6 +253,7 @@ class VelflixController extends Controller
             'trivia' => fn ($q) => $q->orderBy('sort_order')->limit(8),
             'quotes' => fn ($q) => $q->limit(3),
             'aiReviews',
+            'behindScenes',
         ]);
 
         $playMovie = [

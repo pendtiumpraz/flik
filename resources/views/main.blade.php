@@ -19,6 +19,11 @@
                 </div>
             </div>
 
+            <!-- Time-aware shelf — "Cocok ditonton sekarang" -->
+            @auth
+            <x-home.time-aware-shelf />
+            @endauth
+
             <!-- Continue Watching (auth) -->
             @auth
             @if($continueWatching->count() > 0)

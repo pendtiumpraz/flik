@@ -1,5 +1,6 @@
 <?php
 
+use App\Broadcasting\WatchPartyChannel;
 use Illuminate\Support\Facades\Broadcast;
 
 /*
@@ -16,3 +17,7 @@ use Illuminate\Support\Facades\Broadcast;
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
+
+// Watch Party presence channel — auth callback verifies the user is the
+// host or an active member of the room before allowing Pusher subscription.
+Broadcast::channel('watch-party.{roomCode}', [WatchPartyChannel::class, 'join']);

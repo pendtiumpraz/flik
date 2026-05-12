@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Route;
 Route::view('/', 'home');
 Route::post('newsletter', NewsletterController::class);
 
+// ━━━ SEO infrastructure (public, no auth — crawlers must reach these) ━━━
+Route::get('/sitemap.xml', [\App\Http\Controllers\SeoController::class, 'sitemap'])->name('seo.sitemap');
+Route::get('/robots.txt', [\App\Http\Controllers\SeoController::class, 'robots'])->name('seo.robots');
+
 Route::middleware('guest')->group(function () {
     Route::get('login', [SessionsController::class, 'create'])->name('login');
     Route::post('login', [SessionsController::class, 'store']);
@@ -61,6 +65,34 @@ Route::middleware('auth')->group(function () {
     // Payment
     Route::get('/checkout/{plan}', [\App\Http\Controllers\PaymentController::class, 'checkout'])->name('payment.checkout');
     Route::get('/payment/success', [\App\Http\Controllers\PaymentController::class, 'success'])->name('payment.success');
+
+    // Watch Party (synchronized playback rooms)
+    // {roomCode} is the literal column value — WatchParty::getRouteKeyName()
+    // returns 'room_code' so type-hinting the model in the controller would
+    // also work. We pass the string explicitly so the URL is human-friendly
+    // ("/watch-party/ABCD1234").
+    Route::get('/watch-party/create/{movie}', [\App\Http\Controllers\WatchPartyController::class, 'createForm'])->name('watch-party.create.form');
+    Route::post('/watch-party', [\App\Http\Controllers\WatchPartyController::class, 'create'])->name('watch-party.create');
+    Route::get('/watch-party/join', [\App\Http\Controllers\WatchPartyController::class, 'joinForm'])->name('watch-party.join.form');
+    Route::post('/watch-party/join', [\App\Http\Controllers\WatchPartyController::class, 'joinByCode'])->name('watch-party.join.action');
+    Route::get('/watch-party/{roomCode}', [\App\Http\Controllers\WatchPartyController::class, 'show'])->name('watch-party.show');
+    Route::post('/watch-party/{roomCode}/join', [\App\Http\Controllers\WatchPartyController::class, 'join'])->name('watch-party.join');
+    Route::post('/watch-party/{roomCode}/leave', [\App\Http\Controllers\WatchPartyController::class, 'leave'])->name('watch-party.leave');
+    Route::post('/watch-party/{roomCode}/sync', [\App\Http\Controllers\WatchPartyController::class, 'sync'])->name('watch-party.sync');
+    Route::post('/watch-party/{roomCode}/chat', [\App\Http\Controllers\WatchPartyController::class, 'chat'])->name('watch-party.chat');
+    Route::post('/watch-party/{roomCode}/end', [\App\Http\Controllers\WatchPartyController::class, 'end'])->name('watch-party.end');
+
+    // Save for Friday Night — schedule manager
+    Route::get('/my-schedule', [\App\Http\Controllers\ScheduleController::class, 'index'])->name('schedule.index');
+    Route::get('/my-schedule/create/{movie}', [\App\Http\Controllers\ScheduleController::class, 'create'])->name('schedule.create');
+    Route::post('/my-schedule/{movie}', [\App\Http\Controllers\ScheduleController::class, 'store'])->name('schedule.store');
+    Route::delete('/my-schedule/{schedule}', [\App\Http\Controllers\ScheduleController::class, 'destroy'])->name('schedule.destroy');
+    Route::get('/my-schedule/{schedule}/ics', [\App\Http\Controllers\ScheduleController::class, 'ics'])->name('schedule.ics');
+
+    // Movie Trivia Quiz Game (O5)
+    Route::get('/movie/{movie}/quiz', [\App\Http\Controllers\QuizController::class, 'start'])->name('quiz.start');
+    Route::post('/movie/{movie}/quiz', [\App\Http\Controllers\QuizController::class, 'submit'])->name('quiz.submit');
+    Route::get('/movie/{movie}/quiz/leaderboard', [\App\Http\Controllers\QuizController::class, 'leaderboard'])->name('quiz.leaderboard');
 });
 
 // Midtrans Webhook (no auth required)
@@ -83,9 +115,7 @@ Route::post('/api/movies/{movie}/plot-explain', [\App\Http\Controllers\PlotExpla
 Route::get('/drm/key/{sessionToken}/{keyId}', [\App\Http\Controllers\PlaybackController::class, 'key'])
     ->name('drm.key');
 
-// ━━━ X-Ray Actor Overlay (api-style, web auth via session) ━━━
-Route::middleware('auth')->get('/api/xray/{movie}', [\App\Http\Controllers\XrayController::class, 'forMovie'])
-    ->name('xray.forMovie');
+// X-Ray Actor Overlay route lives in routes/api.php (auto-prefixed /api)
 
 Route::controller(LoginController::class)->group(function () {
     Route::get('login/google', 'redirectToProvider');
@@ -198,6 +228,21 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::get('/insights/content-gap', [\App\Http\Controllers\Admin\AiInsightsController::class, 'contentGap'])->name('insights.content-gap');
     Route::get('/insights/pricing', [\App\Http\Controllers\Admin\AiInsightsController::class, 'pricing'])->name('insights.pricing');
 
+    // Revenue + Geo + Cohort + Funnel + A/B (D1/D14/D2/D3/D6)
+    Route::get('/revenue', [\App\Http\Controllers\Admin\RevenueDashboardController::class, 'index'])->name('revenue.dashboard');
+    Route::get('/geo', [\App\Http\Controllers\Admin\GeoDistributionController::class, 'index'])->name('geo.distribution');
+    Route::get('/cohorts', [\App\Http\Controllers\Admin\CohortDashboardController::class, 'index'])->name('cohorts.index');
+    Route::get('/cohorts/export.csv', [\App\Http\Controllers\Admin\CohortDashboardController::class, 'export'])->name('cohorts.export');
+    Route::get('/funnel', [\App\Http\Controllers\Admin\FunnelDashboardController::class, 'index'])->name('funnel.index');
+    Route::get('/ab-tests', [\App\Http\Controllers\Admin\AbTestController::class, 'index'])->name('ab-tests.index');
+    Route::get('/ab-tests/create', [\App\Http\Controllers\Admin\AbTestController::class, 'create'])->name('ab-tests.create');
+    Route::post('/ab-tests', [\App\Http\Controllers\Admin\AbTestController::class, 'store'])->name('ab-tests.store');
+    Route::get('/ab-tests/{experiment}', [\App\Http\Controllers\Admin\AbTestController::class, 'show'])->name('ab-tests.show');
+    Route::post('/ab-tests/{experiment}/{action}', [\App\Http\Controllers\Admin\AbTestController::class, 'act'])->name('ab-tests.act');
+
+    // Performance Dashboard (P1)
+    Route::get('/performance', [\App\Http\Controllers\Admin\PerformanceDashboardController::class, 'index'])->name('performance.index');
+
     // Marketing Ops (TikTok clips, title alternatives, email A/B, CS reply)
     Route::get('/movies/{movie}/marketing-ops/tiktok-clips', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'tikTokClipsForm'])->name('movies.marketing-ops.tiktok-clips');
     Route::post('/movies/{movie}/marketing-ops/tiktok-clips', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateTikTokClips'])->name('movies.marketing-ops.tiktok-clips.generate');
@@ -207,6 +252,15 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::post('/marketing-ops/email-subjects', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateEmailSubjects'])->name('marketing-ops.email-subjects.generate');
     Route::get('/marketing-ops/cs-reply', fn () => view('admin.marketing-ops.cs-reply-drafter'))->name('marketing-ops.cs-reply');
     Route::post('/marketing-ops/cs-reply', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'csReplyDraft'])->name('marketing-ops.cs-reply.generate');
+
+    // Performance Dashboard (P1) — AI latency, queue lag, cache + DB stats, slow queries
+    Route::get('/performance', [\App\Http\Controllers\Admin\PerformanceDashboardController::class, 'index'])->name('performance.index');
+
+    // Revenue Dashboard (D1) — MRR/ARR, churn, per-plan donut, 30-day trend
+    Route::get('/revenue', [\App\Http\Controllers\Admin\RevenueDashboardController::class, 'index'])->name('revenue.dashboard');
+
+    // Geo Distribution Dashboard (D14) — users / watches / revenue per country
+    Route::get('/geo', [\App\Http\Controllers\Admin\GeoDistributionController::class, 'index'])->name('geo.distribution');
 });
 
 // ━━━ User-facing AI Features ━━━
@@ -222,6 +276,7 @@ Route::middleware('auth')->group(function () {
 
     // Personalized Recommendations
     Route::get('/api/recommendations', [\App\Http\Controllers\RecommendationController::class, 'forUser'])->name('recommendations.me');
+    Route::get('/api/recommendations/time', [\App\Http\Controllers\RecommendationController::class, 'byTimeOfDay'])->name('recommendations.time');
 
     // Movie Comparison
     Route::get('/compare', [\App\Http\Controllers\MovieComparisonController::class, 'form'])->name('compare.form');
@@ -243,6 +298,10 @@ Route::middleware('auth')->group(function () {
     // Highlight Reels
     Route::get('/movie/{movie}/highlight', [\App\Http\Controllers\HighlightReelController::class, 'show'])->name('highlight.show');
     Route::get('/movie/{movie}/highlight/download', [\App\Http\Controllers\HighlightReelController::class, 'download'])->name('highlight.download');
+
+    // Universal Smart Search (intent classification → routed to specialised services)
+    Route::get('/search', [\App\Http\Controllers\SmartSearchController::class, 'search'])->name('search.smart');
+    Route::get('/api/search/autocomplete', [\App\Http\Controllers\SmartSearchController::class, 'autocomplete'])->name('search.autocomplete');
 
     // Advanced Search (image / vibe / person)
     Route::get('/search/image', [\App\Http\Controllers\AdvancedSearchController::class, 'imageForm'])->name('search.image.form');

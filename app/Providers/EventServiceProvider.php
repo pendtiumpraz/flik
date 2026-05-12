@@ -38,5 +38,17 @@ class EventServiceProvider extends ServiceProvider
                 ]);
             }
         });
+
+        // AI spoiler detection — runs alongside moderation, separate task on `ai-realtime`.
+        \App\Models\Comment::created(function (\App\Models\Comment $comment) {
+            try {
+                app(\App\Listeners\DetectSpoilerOnComment::class)->handle($comment);
+            } catch (\Throwable $e) {
+                \Log::warning('Spoiler detection dispatch failed', [
+                    'comment_id' => $comment->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\UserRecommendation;
 use App\Services\Ai\Recommendations\RecommendationEngine;
+use App\Services\Ai\Recommendations\TimeAwareRecommender;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -74,6 +75,70 @@ class RecommendationController extends Controller
             'count'           => $payload->count(),
             'recommendations' => $payload,
             'cache_hit'       => (bool) $this->engine->getCached($user),
+        ]);
+    }
+
+    /**
+     * GET /api/recommendations/time
+     *
+     * Time-of-day aware shelf — returns movies matching the current slot
+     * (morning/afternoon/evening/late_night/overnight) blended with user taste.
+     *
+     * Responds with JSON when the request asks for JSON (or `?format=json`),
+     * otherwise renders the partial Blade component for fragment use.
+     */
+    public function byTimeOfDay(Request $request, TimeAwareRecommender $timeAware): mixed
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
+        $count = (int) $request->query('count', 12);
+        $count = max(1, min(30, $count));
+
+        $now = \Carbon\Carbon::now(TimeAwareRecommender::TIMEZONE);
+        $slot = $timeAware->slotFor($now);
+        $label = $timeAware->slotLabel($slot);
+
+        $movies = $timeAware->recommendByTimeOfDay($user, $now, $count);
+
+        $wantsJson = $request->wantsJson() || $request->query('format') === 'json';
+
+        if ($wantsJson) {
+            $payload = $movies->map(function ($movie) {
+                return [
+                    'id'                => $movie->id,
+                    'slug'              => $movie->slug,
+                    'title'             => $movie->title,
+                    'overview'          => $movie->overview,
+                    'poster_url'        => $movie->poster_url,
+                    'backdrop_url'      => $movie->backdrop_url,
+                    'vote_average'      => (float) $movie->vote_average,
+                    'year'              => optional($movie->release_date)->format('Y'),
+                    'duration_seconds'  => $movie->duration_seconds ?? null,
+                    'url'               => '/movie/' . $movie->slug,
+                    'genres'            => $movie->relationLoaded('genres')
+                        ? $movie->genres->pluck('name')
+                        : [],
+                    'time_aware_score'  => (float) ($movie->getAttribute('time_aware_score') ?? 0),
+                ];
+            })->values();
+
+            return response()->json([
+                'slot'            => $slot,
+                'label'           => $label,
+                'hour'            => (int) $now->format('G'),
+                'count'           => $payload->count(),
+                'recommendations' => $payload,
+            ]);
+        }
+
+        return view('components.home.time-aware-shelf', [
+            'movies'   => $movies,
+            'slot'     => $slot,
+            'label'    => $label,
+            'standalone' => true,
         ]);
     }
 

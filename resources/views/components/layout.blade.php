@@ -1,4 +1,19 @@
-@props(['hideHeader' => false, 'title' => null])
+@props([
+    'hideHeader' => false,
+    'title' => 'FLiK — Rumah Sinema Indonesia',
+    'description' => null,
+    'ogImage' => null,
+])
+
+@php
+    $metaDescription = $description
+        ?? 'FLiK — Rumah Sinema Indonesia. Platform streaming film premium dengan koleksi terlengkap film Indonesia dan internasional.';
+    $metaOgImage = $ogImage ?: asset('img/flik-logo.png');
+    if ($metaOgImage && !\Illuminate\Support\Str::startsWith($metaOgImage, ['http://', 'https://'])) {
+        $metaOgImage = url($metaOgImage);
+    }
+    $metaUrl = url()->current();
+@endphp
 
 <!DOCTYPE html>
 <html lang="id" x-data="{ darkMode: localStorage.getItem('theme') !== 'light' }"
@@ -9,20 +24,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="description" content="FLiK — Rumah Sinema Indonesia. Platform streaming film premium dengan koleksi terlengkap film Indonesia dan internasional.">
+    <meta name="description" content="{{ $metaDescription }}">
     <meta name="theme-color" content="#0A0A0A">
     <meta name="msapplication-TileColor" content="#C5A55A">
     @auth
     <meta name="user-name" content="{{ auth()->user()->name }}">
     @endauth
-    
+
     <!-- Open Graph -->
-    <meta property="og:title" content="FLiK — Rumah Sinema Indonesia">
-    <meta property="og:description" content="Platform streaming film premium dengan koleksi terlengkap.">
-    <meta property="og:image" content="{{ asset('img/flik-logo.png') }}">
+    <meta property="og:title" content="{{ $title }}">
+    <meta property="og:description" content="{{ $metaDescription }}">
+    <meta property="og:image" content="{{ $metaOgImage }}">
     <meta property="og:type" content="website">
-    
-    <title>{{ $title ?? 'FLiK — Rumah Sinema Indonesia' }}</title>
+    <meta property="og:url" content="{{ $metaUrl }}">
+    <meta property="og:site_name" content="FLiK">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $title }}">
+    <meta name="twitter:description" content="{{ $metaDescription }}">
+    <meta name="twitter:image" content="{{ $metaOgImage }}">
+
+    <!-- hreflang -->
+    <link rel="alternate" hreflang="id" href="{{ $metaUrl }}">
+    <link rel="alternate" hreflang="x-default" href="{{ $metaUrl }}">
+
+    <title>{{ $title }}</title>
     
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}">
@@ -95,6 +122,9 @@
             navigator.serviceWorker.register('/sw.js').catch(() => {});
         }
     </script>
+    {{-- Shaka Player (DRM/HLS playback). Loaded site-wide for simplicity;
+         the FlikPlayer wrapper only instantiates when a player view mounts. --}}
+    <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.7.11/dist/shaka-player.compiled.js" defer></script>
     @stack('scripts')
 </body>
 </html>

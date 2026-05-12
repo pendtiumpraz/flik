@@ -56,13 +56,40 @@
                         @if($movie->is_trending) <span class="badge badge-green">Trend</span> @endif
                     </td>
                     <td>
-                        <div style="display:flex;gap:6px">
-                            <a href="{{ route('admin.movies.edit', $movie) }}" class="btn btn-ghost btn-sm">Edit</a>
-                            <a href="{{ route('admin.movies.subtitles.index', $movie) }}" class="btn btn-ghost btn-sm" title="Manage Subtitles">CC</a>
-                            <form method="POST" action="{{ route('admin.movies.destroy', $movie) }}" onsubmit="return confirm('Delete {{ addslashes($movie->title) }}?')">
-                                @csrf @method('DELETE')
-                                <button type="submit" class="btn btn-danger btn-sm">Del</button>
-                            </form>
+                        <div style="display:flex;flex-direction:column;gap:6px">
+                            <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                <a href="{{ route('admin.movies.edit', $movie) }}" class="btn btn-ghost btn-sm">Edit</a>
+                                <a href="{{ route('admin.movies.subtitles.index', $movie) }}" class="btn btn-ghost btn-sm" title="Manage Subtitles">CC</a>
+                                <form method="POST" action="{{ route('admin.movies.destroy', $movie) }}" onsubmit="return confirm('Delete {{ addslashes($movie->title) }}?')">
+                                    @csrf @method('DELETE')
+                                    <button type="submit" class="btn btn-danger btn-sm">Del</button>
+                                </form>
+                            </div>
+                            <div style="display:flex;gap:4px;flex-wrap:wrap">
+                                @if (\Illuminate\Support\Facades\Route::has('highlight.show'))
+                                    <a href="{{ route('highlight.show', $movie) }}" class="btn btn-ghost btn-sm" title="Highlight Reel" style="font-size:11px;padding:4px 8px">Highlight</a>
+                                @elseif (\Illuminate\Support\Facades\Route::has('admin.movies.encoding-status'))
+                                    <a href="{{ route('admin.movies.encoding-status', $movie) }}" class="btn btn-ghost btn-sm" title="Encoding Status" style="font-size:11px;padding:4px 8px">Highlight</a>
+                                @endif
+                                @if (\Illuminate\Support\Facades\Route::has('admin.movies.marketing-ops.tiktok-clips'))
+                                    <a href="{{ route('admin.movies.marketing-ops.tiktok-clips', $movie) }}" class="btn btn-ghost btn-sm" title="TikTok Clips" style="font-size:11px;padding:4px 8px">TikTok</a>
+                                @endif
+                                @if (\Illuminate\Support\Facades\Route::has('admin.movies.marketing-ops.title-alternatives'))
+                                    <a href="{{ route('admin.movies.marketing-ops.title-alternatives', $movie) }}" class="btn btn-ghost btn-sm" title="Title A/B Alternatives" style="font-size:11px;padding:4px 8px">Title A/B</a>
+                                @endif
+                                @if (\Illuminate\Support\Facades\Route::has('admin.movies.upload-master'))
+                                    <form method="POST" action="{{ route('admin.movies.upload-master', $movie) }}" enctype="multipart/form-data" style="display:inline-flex;gap:4px;align-items:center" onsubmit="return this.querySelector('input[type=file]').files.length > 0 || (alert('Pick a master file first'), false)">
+                                        @csrf
+                                        <label class="btn btn-ghost btn-sm" title="Upload Master Video" style="font-size:11px;padding:4px 8px;cursor:pointer;margin:0">
+                                            <input type="file" name="master" accept="video/*" style="display:none" onchange="this.form.requestSubmit()">
+                                            Upload Master
+                                        </label>
+                                    </form>
+                                @endif
+                                @if (\Illuminate\Support\Facades\Route::has('admin.movies.encoding-status'))
+                                    <a href="{{ route('admin.movies.encoding-status', $movie) }}" class="btn btn-ghost btn-sm" title="View Behind-the-scenes (run via console: php artisan flik:behind-scenes:generate {{ $movie->id }})" style="font-size:11px;padding:4px 8px">BTS</a>
+                                @endif
+                            </div>
                         </div>
                     </td>
                 </tr>

@@ -302,4 +302,31 @@ class Movie extends Model
     {
         return $this->ratings()->count();
     }
+
+    // ── Swarm 25 relations (behind-the-scenes + highlight reels) ──────
+
+    /**
+     * Up to 6 narrative behind-the-scenes sections, ordered by sort_order.
+     */
+    public function behindScenes()
+    {
+        return $this->hasMany(MovieBehindScenes::class)->orderBy('sort_order');
+    }
+
+    /**
+     * Auto-generated highlight reels (status: pending|processing|ready|failed).
+     */
+    public function highlightReels()
+    {
+        return $this->hasMany(MovieHighlightReel::class);
+    }
+
+    /**
+     * Cinematography / colour analysis (one row per movie).
+     * Populated by App\Services\Ai\Tasks\CinematographyAnalyzer.
+     */
+    public function cinematography()
+    {
+        return $this->hasOne(MovieCinematography::class);
+    }
 }

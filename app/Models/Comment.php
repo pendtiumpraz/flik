@@ -13,6 +13,8 @@ class Comment extends Model
 
     protected $casts = [
         'is_spoiler' => 'boolean',
+        'spoiler_confidence' => 'float',
+        'spoiler_checked_at' => 'datetime',
     ];
 
     public function user()
