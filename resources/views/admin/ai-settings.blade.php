@@ -66,7 +66,34 @@
                 </thead>
                 <tbody>
                     @foreach($providers as $provider)
-                    <tr>
+                    <tr x-data="{
+                            testing: false,
+                            result: null,
+                            async runTest() {
+                                this.testing = true;
+                                this.result = null;
+                                try {
+                                    const res = await fetch(@js(route('admin.ai.test', $provider)), {
+                                        method: 'POST',
+                                        headers: {
+                                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '{{ csrf_token() }}',
+                                            'Accept': 'application/json',
+                                            'X-Requested-With': 'XMLHttpRequest',
+                                        },
+                                        credentials: 'same-origin',
+                                    });
+                                    this.result = await res.json().catch(() => ({
+                                        success: false,
+                                        error: 'Server returned non-JSON response (HTTP ' + res.status + ').',
+                                        latency_ms: 0,
+                                    }));
+                                } catch (e) {
+                                    this.result = { success: false, error: 'Network error: ' + (e?.message || e), latency_ms: 0 };
+                                } finally {
+                                    this.testing = false;
+                                }
+                            },
+                        }">
                         <td>
                             <div style="font-weight:500;color:#fff">{{ $provider->name }}</div>
                             @if($provider->is_default)
@@ -83,9 +110,35 @@
                             @else
                                 <span class="badge" style="background:#2a2a2a;color:#777">Disabled</span>
                             @endif
+
+                            <!-- Inline test result -->
+                            <template x-if="result">
+                                <div x-cloak style="margin-top:8px;padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.5;max-width:280px"
+                                     :style="result.success
+                                        ? 'background:rgba(34,197,94,0.10);border:1px solid rgba(34,197,94,0.35);color:#86efac'
+                                        : 'background:rgba(220,38,38,0.10);border:1px solid rgba(220,38,38,0.35);color:#fca5a5'">
+                                    <div style="display:flex;align-items:center;gap:6px;font-weight:600;margin-bottom:4px">
+                                        <span x-text="result.success ? 'Connected' : 'Failed'"></span>
+                                        <span style="color:#888;font-weight:400" x-text="'· ' + (result.latency_ms ?? 0) + 'ms'"></span>
+                                        <button type="button" @click="result = null" style="margin-left:auto;background:none;border:none;color:#777;cursor:pointer;font-size:14px;line-height:1;padding:0">×</button>
+                                    </div>
+                                    <div x-show="result.success" style="color:#cbd5e1;word-break:break-word">
+                                        <span style="color:#888">Reply:</span> <span x-text="(result.response || '').slice(0, 120) || '(empty)'"></span>
+                                        <template x-if="result.usage && (result.usage.total_tokens || result.usage.completion_tokens)">
+                                            <div style="color:#888;margin-top:2px" x-text="'Tokens: ' + (result.usage.total_tokens ?? ((result.usage.prompt_tokens||0) + (result.usage.completion_tokens||0)))"></div>
+                                        </template>
+                                    </div>
+                                    <div x-show="!result.success" style="color:#fecaca;word-break:break-word" x-text="result.error || 'Unknown error'"></div>
+                                </div>
+                            </template>
                         </td>
                         <td style="text-align:right">
-                            <div style="display:inline-flex;gap:8px;align-items:center">
+                            <div style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+                                <button type="button" @click="runTest()" :disabled="testing" class="btn btn-ghost btn-sm" title="Send a minimal probe to verify API key & model">
+                                    <x-icon name="lightning" :size="13" style="color:#C5A55A" />
+                                    <span x-show="!testing" style="margin-left:4px">Test</span>
+                                    <span x-show="testing" x-cloak style="margin-left:4px">Testing…</span>
+                                </button>
                                 <form method="POST" action="{{ route('admin.ai.toggle', $provider) }}" style="display:inline">
                                     @csrf @method('PUT')
                                     <button type="submit" class="btn btn-ghost btn-sm" title="Toggle active">

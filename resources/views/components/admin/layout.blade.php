@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>FLiK Admin — {{ $title ?? 'Dashboard' }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -119,7 +120,10 @@
             .mobile-toggle { display: flex; }
             .mobile-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 35; }
         }
+        /* Alpine x-cloak: hide until Alpine initialises */
+        [x-cloak] { display: none !important; }
     </style>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
     <!-- Sidebar -->

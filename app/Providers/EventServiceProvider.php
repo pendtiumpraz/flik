@@ -27,6 +27,16 @@ class EventServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        //
+        // Auto-moderate new comments via AI (CommentModerator → Gemini Flash-Lite / DeepSeek)
+        \App\Models\Comment::created(function (\App\Models\Comment $comment) {
+            try {
+                app(\App\Listeners\ModerateNewComment::class)->handle($comment);
+            } catch (\Throwable $e) {
+                \Log::warning('Comment moderation dispatch failed', [
+                    'comment_id' => $comment->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
     }
 }

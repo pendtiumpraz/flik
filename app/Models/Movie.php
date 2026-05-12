@@ -54,6 +54,12 @@ class Movie extends Model
         'vote_average' => 'decimal:1',
         'is_popular' => 'boolean',
         'is_trending' => 'boolean',
+        'ai_tags' => 'array',
+        'ai_metadata' => 'array',
+        'ai_tagged_at' => 'datetime',
+        'ai_synopsis_generated_at' => 'datetime',
+        'ai_short_summary_generated_at' => 'datetime',
+        'seo_generated_at' => 'datetime',
     ];
 
     /**

@@ -128,4 +128,49 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     // Pitch Deck
     Route::get('/pitch-deck', [\App\Http\Controllers\AdminController::class, 'pitchDeck'])->name('pitch-deck');
     Route::get('/pitch-deck.md', [\App\Http\Controllers\AdminController::class, 'pitchDeckMarkdown'])->name('pitch-deck.md');
+
+    // ━━━ SWARM AI FEATURES INTEGRATION ━━━
+
+    // AI Usage Dashboard
+    Route::get('/ai-usage', [\App\Http\Controllers\Admin\AiUsageController::class, 'index'])->name('ai.usage');
+
+    // AI Provider connection tester
+    Route::post('/ai-settings/{aiProvider}/test', [\App\Http\Controllers\Admin\AiProviderTestController::class, 'test'])->name('ai.test');
+
+    // Audit Logs
+    Route::get('/audit-logs', [\App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
+
+    // Sentiment Dashboard
+    Route::get('/sentiment/{movie?}', [\App\Http\Controllers\Admin\SentimentDashboardController::class, 'index'])->name('sentiment.index');
+
+    // AI Movie Reviews (multi-perspective)
+    Route::get('/movies/{movie}/ai-reviews', [\App\Http\Controllers\Admin\AiReviewController::class, 'index'])->name('movies.ai-reviews.index');
+    Route::post('/movies/{movie}/ai-reviews/generate', [\App\Http\Controllers\Admin\AiReviewController::class, 'generate'])->name('movies.ai-reviews.generate');
+
+    // Marketing AI (banner + social media)
+    Route::get('/movies/{movie}/marketing-ai/banner', [\App\Http\Controllers\Admin\MarketingAiController::class, 'bannerForm'])->name('movies.marketing-ai.banner');
+    Route::post('/movies/{movie}/marketing-ai/banner', [\App\Http\Controllers\Admin\MarketingAiController::class, 'generateBanner'])->name('movies.marketing-ai.banner.generate');
+    Route::get('/movies/{movie}/marketing-ai/social', [\App\Http\Controllers\Admin\MarketingAiController::class, 'socialForm'])->name('movies.marketing-ai.social');
+    Route::post('/movies/{movie}/marketing-ai/social', [\App\Http\Controllers\Admin\MarketingAiController::class, 'generateSocial'])->name('movies.marketing-ai.social.generate');
+
+    // Comment Moderation Queue
+    Route::get('/comments/queue', [\App\Http\Controllers\Admin\CommentModerationController::class, 'queue'])->name('comments.queue');
+    Route::patch('/comments/{comment}/approve', [\App\Http\Controllers\Admin\CommentModerationController::class, 'approve'])->name('comments.approve');
+    Route::patch('/comments/{comment}/reject', [\App\Http\Controllers\Admin\CommentModerationController::class, 'reject'])->name('comments.reject');
+    Route::post('/comments/{comment}/rerun', [\App\Http\Controllers\Admin\CommentModerationController::class, 'rerun'])->name('comments.rerun');
+});
+
+// ━━━ User-facing AI Features ━━━
+
+Route::middleware('auth')->group(function () {
+    // Onboarding (cold-start)
+    Route::get('/onboarding', [\App\Http\Controllers\OnboardingController::class, 'quiz'])->name('onboarding.quiz');
+    Route::post('/onboarding', [\App\Http\Controllers\OnboardingController::class, 'submit'])->name('onboarding.submit');
+
+    // Mood Discovery
+    Route::get('/discover/mood', [\App\Http\Controllers\MoodDiscoveryController::class, 'form'])->name('discovery.mood.form');
+    Route::post('/discover/mood', [\App\Http\Controllers\MoodDiscoveryController::class, 'discover'])->name('discovery.mood.discover');
+
+    // Personalized Recommendations
+    Route::get('/api/recommendations', [\App\Http\Controllers\RecommendationController::class, 'forUser'])->name('recommendations.me');
 });
