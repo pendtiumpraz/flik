@@ -17,7 +17,7 @@ jobs:
       issues: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
         with:
@@ -33,7 +33,7 @@ jobs:
       issues: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: ZAP Full Scan
         uses: zaproxy/action-full-scan@v0.10.0
         with:
