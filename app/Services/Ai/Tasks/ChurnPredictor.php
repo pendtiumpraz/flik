@@ -84,17 +84,19 @@ class ChurnPredictor
                 ?: $this->fallbackAction($signals);
         }
 
+        // ChurnPrediction uses $guarded = ['*'] (mass-assignment audit,
+        // 2026-05-13). Build the row through forceFill so the system-trusted
+        // ChurnPredictor write isn't blocked by the guard.
         /** @var ChurnPrediction $prediction */
-        $prediction = ChurnPrediction::updateOrCreate(
-            ['user_id' => $user->id],
-            [
-                'risk_score'       => round($score, 3),
-                'risk_level'       => $level,
-                'signals'          => $signals,
-                'suggested_action' => $suggestedAction,
-                'computed_at'      => now(),
-            ],
-        );
+        $prediction = ChurnPrediction::firstOrNew(['user_id' => $user->id]);
+        $prediction->forceFill([
+            'user_id'          => $user->id,
+            'risk_score'       => round($score, 3),
+            'risk_level'       => $level,
+            'signals'          => $signals,
+            'suggested_action' => $suggestedAction,
+            'computed_at'      => now(),
+        ])->save();
 
         return $prediction;
     }

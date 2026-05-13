@@ -2,6 +2,7 @@
 
 namespace App\Events;
 
+use App\Services\Security\HtmlSanitizer;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -36,7 +37,12 @@ class WatchPartyChat implements ShouldBroadcast
         ?int $userId = null
     ) {
         $this->roomCode = $roomCode;
-        $this->message = $message;
+        // Sanitize at construction so every downstream consumer (Pusher
+        // broadcast, future moderation log, transcript export) sees the
+        // safe form. The current frontend `appendChat()` already calls
+        // `escapeHtml()` defensively but we don't trust that to never
+        // regress.
+        $this->message = app(HtmlSanitizer::class)->sanitize($message);
         $this->userName = $userName;
         $this->userId = $userId;
         $this->timestamp = now()->getTimestampMs();

@@ -21,17 +21,22 @@ class LoginController extends Controller
     public function handleProviderCallback()
     {
         $googleUser = Socialite::driver('google')->user();
-        // dd($googleuser);
 
-        $user = User::firstOrCreate(
-            [
+        // SECURITY: `provider_id` and `email_verified_at` are intentionally NOT
+        // in User::$fillable (mass-assignment audit). Look the user up first
+        // and write provider-set fields through forceFill so they actually land.
+        $user = User::where('provider_id', $googleUser->getId())->first();
+
+        if (! $user) {
+            $user = new User();
+            $user->name = $googleUser->getName();
+            $user->email = $googleUser->getEmail();
+            $user->forceFill([
                 'provider_id' => $googleUser->getId(),
-            ],
-            [
-                'email' => $googleUser->getEmail(),
-                'name' => $googleUser->getName(),
-            ]
-        );
+                // OAuth identity providers vouch for the email address — mark it verified.
+                'email_verified_at' => now(),
+            ])->save();
+        }
 
         // Log the user in
         auth()->login($user);

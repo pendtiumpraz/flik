@@ -6,10 +6,13 @@ use App\Contracts\Ai\AiClientContract;
 use App\Contracts\Storage\CdnStorageContract;
 use App\Models\User;
 use App\Services\Ai\AiClient;
+use App\Services\Security\HtmlSanitizer;
 use App\Services\Storage\BunnyStorageService;
 use App\Services\Storage\S3StorageService;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -53,6 +56,12 @@ class AppServiceProvider extends ServiceProvider
 
             return $app->make('storage.s3');
         });
+
+        // HTML sanitizer for user-generated content (comments, chat,
+        // rich-text fields). Singleton because the instance is stateless
+        // and we want to avoid re-allocating DOMDocument-adjacent state
+        // per call.
+        $this->app->singleton(HtmlSanitizer::class, fn () => new HtmlSanitizer());
     }
 
     /**
@@ -62,8 +71,29 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
+        // Force every generated URL onto HTTPS in production so route() /
+        // url() / asset() never emit http:// links that would trigger mixed-
+        // content blocks or break OAuth redirect URI matching. We deliberately
+        // skip local + testing so artisan serve & PHPUnit keep working over
+        // plain HTTP (Vite dev server too).
+        if ($this->app->environment('production')) {
+            URL::forceScheme('https');
+        }
+
         Gate::define('admin', function (User $user) {
             return $user->username === 'admin';
+        });
+
+        // @safe($html) — render-time HTML sanitization for cases where
+        // re-sanitizing on output is preferred over (or in addition to)
+        // sanitizing on save. Compiles to a single function call so the
+        // Blade cache stays small.
+        //
+        // Usage: @safe($comment->body)
+        //
+        // Equivalent inline form: {!! app(HtmlSanitizer::class)->sanitize($comment->body) !!}
+        Blade::directive('safe', function (string $expression): string {
+            return "<?php echo app(\\App\\Services\\Security\\HtmlSanitizer::class)->sanitize($expression); ?>";
         });
     }
 }

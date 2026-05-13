@@ -1,17 +1,13 @@
 includes:
-    - ./vendor/nunomaduro/larastan/extension.neon
+    - ./vendor/larastan/larastan/extension.neon
 parameters:
+    level: 8
     paths:
         - app
-        - bootstrap
-        - config
-        - public
-        - routes
-    level: 8
-    inferPrivatePropertyTypeFromConstructor: true
+    excludePaths:
+        - app/Console/Commands/Inspire.php
     checkMissingIterableValueType: false
     checkGenericClassInNonGenericObjectType: false
-    excludePaths:
-        - public/index.php
-        - routes/console.php
+    inferPrivatePropertyTypeFromConstructor: true
+    reportUnmatchedIgnoredErrors: false
     ignoreErrors:

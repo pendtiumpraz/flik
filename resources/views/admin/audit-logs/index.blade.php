@@ -7,7 +7,20 @@
             <h3 style="font-size:14px;font-weight:600;color:#C5A55A;letter-spacing:1px;text-transform:uppercase">
                 <x-icon name="search" size="14" /> Filters
             </h3>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;align-items:center">
+                {{-- Security-only chip. The hidden input makes the chip a
+                     normal form value so it round-trips with pagination
+                     (the form submits as GET; chip state is in the URL). --}}
+                <label
+                    title="Show only rows flagged as security events (logins, 2FA, password lifecycle, DRM denials, admin actions, GDPR…)"
+                    style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;cursor:pointer;font-size:12px;letter-spacing:0.4px;border:1px solid {{ ($filters['security_only'] ?? false) ? '#ef4444' : '#3a3a3a' }};background:{{ ($filters['security_only'] ?? false) ? 'rgba(239,68,68,0.15)' : '#0f0f0f' }};color:{{ ($filters['security_only'] ?? false) ? '#fca5a5' : '#bbb' }};user-select:none">
+                    <input type="checkbox" name="security_only" value="1"
+                        @checked($filters['security_only'] ?? false)
+                        onchange="this.form.submit()"
+                        style="margin:0;accent-color:#ef4444;width:14px;height:14px">
+                    <x-icon name="shield" size="14" />
+                    Security only
+                </label>
                 <button type="submit" class="btn btn-gold btn-sm">
                     <x-icon name="search" size="14" /> Apply
                 </button>
@@ -99,10 +112,46 @@
                 </thead>
                 <tbody>
                     @forelse($logs as $log)
-                        <tr>
+                        @php
+                            // is_security may be missing on rows written before
+                            // the migration ran — fall back to the SecurityEvents
+                            // taxonomy for legacy rows (severity != 'low' implies
+                            // a recognised security event name).
+                            $isSec = (bool) ($log->is_security ?? false);
+                            if (! $isSec && class_exists(\App\Support\SecurityEvents::class)) {
+                                $isSec = \App\Support\SecurityEvents::severity($log->action) !== 'low'
+                                    && in_array($log->action, \App\Support\SecurityEvents::all(), true);
+                            }
+                            $severity = class_exists(\App\Support\SecurityEvents::class)
+                                ? \App\Support\SecurityEvents::severity($log->action)
+                                : 'low';
+                            $rowBg = match (true) {
+                                $isSec && $severity === 'critical' => 'rgba(220,38,38,0.18)', // red-600 @ 18%
+                                $isSec && $severity === 'high'     => 'rgba(239,68,68,0.10)', // red-500 @ 10%
+                                $isSec && $severity === 'medium'   => 'rgba(239,68,68,0.06)', // red-500 @ 6%
+                                $isSec                              => 'rgba(239,68,68,0.04)', // subtle red tint
+                                default                             => 'transparent',
+                            };
+                            $borderLeft = $isSec ? '3px solid #ef4444' : '3px solid transparent';
+                            $sevBadgeBg = match ($severity) {
+                                'critical' => '#7f1d1d', // red-900
+                                'high'     => '#b91c1c', // red-700
+                                'medium'   => '#a16207', // yellow-700
+                                default    => '#374151', // gray-700
+                            };
+                        @endphp
+                        <tr style="background:{{ $rowBg }};border-left:{{ $borderLeft }}"
+                            @if($isSec) title="Security event ({{ $severity }})" @endif>
                             <td style="color:#888;font-size:12px;white-space:nowrap">
                                 <div style="color:#e5e5e5">{{ $log->created_at?->format('d M Y') }}</div>
                                 <div style="color:#666">{{ $log->created_at?->format('H:i:s') }}</div>
+                                @if($isSec)
+                                    <div style="margin-top:4px">
+                                        <span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:9px;letter-spacing:0.6px;text-transform:uppercase;color:#fff;background:{{ $sevBadgeBg }}">
+                                            {{ $severity }}
+                                        </span>
+                                    </div>
+                                @endif
                             </td>
                             <td>
                                 @if($log->user)
@@ -124,9 +173,15 @@
                                 @endif
                             </td>
                             <td>
-                                <span class="badge badge-gold" style="font-family:'Inter',monospace">
-                                    {{ $log->action }}
-                                </span>
+                                @if($isSec)
+                                    <span class="badge" style="font-family:'Inter',monospace;background:#7f1d1d;color:#fecaca;border:1px solid #b91c1c;padding:3px 8px;border-radius:4px;font-size:11px">
+                                        <x-icon name="shield" size="11" /> {{ $log->action }}
+                                    </span>
+                                @else
+                                    <span class="badge badge-gold" style="font-family:'Inter',monospace">
+                                        {{ $log->action }}
+                                    </span>
+                                @endif
                             </td>
                             <td style="color:#aaa;font-size:13px">
                                 @if($log->subject_type)

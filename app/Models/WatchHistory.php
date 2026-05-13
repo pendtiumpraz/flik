@@ -9,9 +9,19 @@ class WatchHistory extends Model
 {
     use HasFactory;
 
+    /**
+     * `completed` is a SERVER-DERIVED flag (set by
+     * WatchHistoryController::updateProgress when progress >= 90% and
+     * gating XP / coin grants). Keeping it mass-assignable lets a crafted
+     * AJAX payload skip ahead and farm completion bonuses without playing.
+     * Excluded — controllers + jobs forceFill('completed' => ...) when
+     * they need to set it.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
         'user_id', 'movie_id', 'progress_seconds',
-        'duration_seconds', 'completed', 'last_watched_at',
+        'duration_seconds', 'last_watched_at',
     ];
 
     protected $casts = [

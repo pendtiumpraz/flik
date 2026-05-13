@@ -15,7 +15,9 @@ class NotificationController extends Controller
 
     public function markAsRead(Notification $notification)
     {
-        if ($notification->user_id !== auth()->id()) abort(403);
+        // NotificationPolicy::markAsRead() — strict ownership, admin override.
+        $this->authorize('markAsRead', $notification);
+
         $notification->markAsRead();
 
         if ($notification->action_url) {

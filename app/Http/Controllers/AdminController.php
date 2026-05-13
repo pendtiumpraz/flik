@@ -6,7 +6,14 @@ use App\Models\Cast;
 use App\Models\Genre;
 use App\Models\Movie;
 use App\Models\User;
+use App\Services\Audit\AuditLogger;
+use App\Services\Security\FileUploadValidator;
+use App\Services\Security\LoginThrottle;
+use App\Services\Security\VirusScanner;
+use App\Support\SafeFilename;
+use App\Support\SecurityEvents;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class AdminController extends Controller
 {
@@ -23,7 +30,7 @@ class AdminController extends Controller
             'total_comments' => \App\Models\Comment::count(),
             'total_watchlists' => \App\Models\Watchlist::count(),
             'active_banners' => \App\Models\Banner::where('is_active', true)->count(),
-            'payment_enabled' => !empty(config('services.midtrans.server_key')),
+            'payment_enabled' => ! empty(config('services.midtrans.server_key')),
             'storage_disk' => config('filesystems.default'),
         ];
 
@@ -55,13 +62,14 @@ class AdminController extends Controller
     public function createMovie()
     {
         $genres = Genre::orderBy('name')->get();
+
         return view('admin.movies.form', [
             'movie' => null,
             'genres' => $genres,
         ]);
     }
 
-    public function storeMovie(Request $request)
+    public function storeMovie(Request $request, FileUploadValidator $uploads, VirusScanner $scanner)
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -73,7 +81,10 @@ class AdminController extends Controller
             'vote_average' => 'nullable|numeric|min:0|max:10',
             'popularity' => 'nullable|numeric|min:0',
             'youtube_key' => 'nullable|string|max:50',
-            'video_file' => 'nullable|file|mimes:mp4,webm,mov,avi|max:512000',
+            // The deep validation lives in FileUploadValidator below; the
+            // 'mimes' rule here is just a fast first-pass hint that maps
+            // to a friendlier error message via the request validator.
+            'video_file' => 'nullable|file|mimes:mp4,webm,mov,mkv|max:512000',
             'is_popular' => 'boolean',
             'is_trending' => 'boolean',
             'genres' => 'array',
@@ -83,9 +94,33 @@ class AdminController extends Controller
         $movieData['is_popular'] = $request->boolean('is_popular');
         $movieData['is_trending'] = $request->boolean('is_trending');
 
-        // Handle video upload
+        // Handle video upload — magic-byte sniff + extension check + size cap
+        // + filename safety + (optional) ClamAV scan, all centralised in
+        // FileUploadValidator so the same rules are enforced for every
+        // upload surface.
         if ($request->hasFile('video_file')) {
-            $path = $request->file('video_file')->store('videos', 'public');
+            $upload = $request->file('video_file');
+
+            $check = $uploads->validateVideo($upload);
+            if (! $check['ok']) {
+                return back()->withErrors(['video_file' => $check['errors']])->withInput();
+            }
+
+            if (! $scanner->scan($check['safe_path'] ?? $upload->getRealPath())) {
+                return back()->withErrors(['video_file' => 'File ditolak oleh anti-malware scanner.'])->withInput();
+            }
+
+            // Always rename to a UUID-based safe filename — never persist
+            // the client-supplied name, which is hostile input.
+            // Operator precedence note: `'movie_' . ($x ?? 'video')` —
+            // the parens matter; without them PHP concatenates first and
+            // the `??` never fires.
+            $safeName = SafeFilename::generate(
+                $upload->getClientOriginalName(),
+                'movie_'.($movieData['title'] ?? 'video')
+            );
+
+            $path = $upload->storeAs('videos', $safeName, 'public');
             $movieData['video_path'] = $path;
             $movieData['video_disk'] = 'public';
         }
@@ -111,7 +146,7 @@ class AdminController extends Controller
         ]);
     }
 
-    public function updateMovie(Request $request, Movie $movie)
+    public function updateMovie(Request $request, Movie $movie, FileUploadValidator $uploads, VirusScanner $scanner)
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -123,7 +158,7 @@ class AdminController extends Controller
             'vote_average' => 'nullable|numeric|min:0|max:10',
             'popularity' => 'nullable|numeric|min:0',
             'youtube_key' => 'nullable|string|max:50',
-            'video_file' => 'nullable|file|mimes:mp4,webm,mov,avi|max:512000',
+            'video_file' => 'nullable|file|mimes:mp4,webm,mov,mkv|max:512000',
             'is_popular' => 'boolean',
             'is_trending' => 'boolean',
             'genres' => 'array',
@@ -133,13 +168,32 @@ class AdminController extends Controller
         $movieData['is_popular'] = $request->boolean('is_popular');
         $movieData['is_trending'] = $request->boolean('is_trending');
 
-        // Handle video upload
+        // Handle video upload — see storeMovie() for the rationale; we
+        // mirror the same defence-in-depth pipeline here.
         if ($request->hasFile('video_file')) {
-            // Delete old video if exists
-            if ($movie->video_path) {
-                \Storage::disk($movie->video_disk ?? 'public')->delete($movie->video_path);
+            $upload = $request->file('video_file');
+
+            $check = $uploads->validateVideo($upload);
+            if (! $check['ok']) {
+                return back()->withErrors(['video_file' => $check['errors']])->withInput();
             }
-            $path = $request->file('video_file')->store('videos', 'public');
+
+            if (! $scanner->scan($check['safe_path'] ?? $upload->getRealPath())) {
+                return back()->withErrors(['video_file' => 'File ditolak oleh anti-malware scanner.'])->withInput();
+            }
+
+            // Delete old video if exists. Done AFTER validation so a bad
+            // upload doesn't destroy the existing-good file.
+            if ($movie->video_path) {
+                Storage::disk($movie->video_disk ?? 'public')->delete($movie->video_path);
+            }
+
+            $safeName = SafeFilename::generate(
+                $upload->getClientOriginalName(),
+                'movie_'.($movie->slug ?: 'video')
+            );
+
+            $path = $upload->storeAs('videos', $safeName, 'public');
             $movieData['video_path'] = $path;
             $movieData['video_disk'] = 'public';
         }
@@ -170,6 +224,7 @@ class AdminController extends Controller
     public function genres()
     {
         $genres = Genre::withCount('movies')->orderBy('name')->get();
+
         return view('admin.genres.index', compact('genres'));
     }
 
@@ -209,6 +264,7 @@ class AdminController extends Controller
         }
 
         $casts = $query->orderBy('name')->paginate(20);
+
         return view('admin.casts.index', compact('casts'));
     }
 
@@ -243,6 +299,7 @@ class AdminController extends Controller
     public function users()
     {
         $users = User::orderBy('created_at', 'desc')->paginate(20);
+
         return view('admin.users.index', compact('users'));
     }
 
@@ -254,7 +311,7 @@ class AdminController extends Controller
                 ->with('error', 'Tidak bisa mengubah status admin sendiri!');
         }
 
-        $user->update(['is_admin' => !$user->is_admin]);
+        $user->update(['is_admin' => ! $user->is_admin]);
         $status = $user->is_admin ? 'admin' : 'user biasa';
 
         return redirect()->route('admin.users.index')
@@ -269,10 +326,58 @@ class AdminController extends Controller
         }
 
         $name = $user->name;
+        $email = $user->email;
+        $deletedId = $user->id;
+
         $user->delete();
+
+        // Snapshot the identifying fields BEFORE delete so the audit row
+        // carries useful context after the model is gone. Routed through
+        // ::security() because admin-initiated user deletion is a critical
+        // action that must light up the security dashboard.
+        try {
+            app(AuditLogger::class)->security(
+                event: SecurityEvents::ADMIN_USER_DELETED,
+                meta: [
+                    'deleted_user_id' => $deletedId,
+                    'deleted_email' => $email,
+                    'deleted_name' => $name,
+                ],
+            );
+        } catch (\Throwable $e) {
+            \Log::warning('AdminController: audit write failed for user delete', [
+                'deleted_user_id' => $deletedId,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return redirect()->route('admin.users.index')
             ->with('success', "User \"{$name}\" berhasil dihapus!");
+    }
+
+    /**
+     * Clear login-attempt failures for a user that has been locked out by
+     * the brute-force protection layer (App\Services\Security\LoginThrottle).
+     *
+     * Writes an audit_logs row so the unlock action is itself reviewable
+     * later. Successful login_attempt rows are preserved as history.
+     */
+    public function unlockLogin(User $user, LoginThrottle $throttle, AuditLogger $audit)
+    {
+        $throttle->unlock($user->email);
+
+        // Routed through ::security() so the unlock shows up under the
+        // "Security only" filter chip alongside the LOGIN_LOCKED_OUT rows
+        // that prompted it. Constant value 'admin.user.unlock' replaces
+        // the legacy 'user.login_unlocked' string going forward.
+        $audit->security(
+            event: SecurityEvents::ADMIN_USER_UNLOCK,
+            subject: $user,
+            meta: ['email' => $user->email],
+        );
+
+        return redirect()->route('admin.users.index')
+            ->with('success', "Login lock untuk \"{$user->name}\" berhasil dibuka.");
     }
 
     // ── BANNER MANAGEMENT ─────────────────────────────────────
@@ -280,6 +385,7 @@ class AdminController extends Controller
     public function banners()
     {
         $banners = \App\Models\Banner::orderBy('sort_order')->orderByDesc('created_at')->get();
+
         return view('admin.banners.index', compact('banners'));
     }
 
@@ -315,7 +421,7 @@ class AdminController extends Controller
 
     public function toggleBanner(\App\Models\Banner $banner)
     {
-        $banner->update(['is_active' => !$banner->is_active]);
+        $banner->update(['is_active' => ! $banner->is_active]);
         $status = $banner->is_active ? 'diaktifkan' : 'dinonaktifkan';
 
         return redirect()->route('admin.banners.index')
@@ -416,7 +522,7 @@ class AdminController extends Controller
 
     public function toggleAiProvider(\App\Models\AiProvider $aiProvider)
     {
-        $aiProvider->update(['is_active' => !$aiProvider->is_active]);
+        $aiProvider->update(['is_active' => ! $aiProvider->is_active]);
         $status = $aiProvider->is_active ? 'diaktifkan' : 'dinonaktifkan';
 
         return redirect()->route('admin.ai.index')

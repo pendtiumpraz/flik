@@ -2,8 +2,10 @@
 
 namespace App\Services\Ai\Tasks;
 
+use App\Exceptions\SsrfException;
 use App\Models\AiProvider;
 use App\Models\Movie;
+use App\Services\Security\SsrfGuard;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -202,8 +204,14 @@ class ThumbnailPicker
         ];
 
         try {
+            (new SsrfGuard())->assertUrlAllowed($endpoint);
+
             $response = Http::timeout(45)
+                ->connectTimeout(5)
                 ->withHeaders(['Content-Type' => 'application/json'])
+                ->withOptions([
+                    'allow_redirects' => ['max' => 3, 'protocols' => ['http', 'https'], 'strict' => true],
+                ])
                 ->post($endpoint, $payload);
 
             if (!$response->successful()) {
@@ -222,6 +230,12 @@ class ThumbnailPicker
             $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
 
             return $this->parseScore($text);
+        } catch (SsrfException $e) {
+            Log::warning('ThumbnailPicker: SSRF guard blocked Gemini endpoint', [
+                'movie_id' => $movie->id,
+                'error'    => $e->getMessage(),
+            ]);
+            return null;
         } catch (\Throwable $e) {
             Log::warning('ThumbnailPicker: Gemini exception while scoring frame', [
                 'movie_id' => $movie->id,

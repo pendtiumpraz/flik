@@ -4,6 +4,7 @@ namespace App\Services\Ai\Subtitle;
 
 use App\Models\Movie;
 use App\Models\MovieSubtitle;
+use App\Services\Security\SsrfGuard;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process;
@@ -162,11 +163,21 @@ class SubtitleGenerator
 
         $whisperLang = LanguageCatalog::toWhisperCode($language);
         $base = rtrim($provider->base_url ?: 'https://api.openai.com/v1', '/');
+        $endpoint = $base . '/audio/transcriptions';
+
+        // SSRF guard — a misconfigured admin could have set base_url to an
+        // internal IP. The transcription endpoint receives the full audio
+        // payload so the blast radius is significant; fail fast.
+        (new SsrfGuard())->assertUrlAllowed($endpoint);
 
         $response = Http::timeout(600)
+            ->connectTimeout(10)
             ->withHeaders(['Authorization' => 'Bearer ' . $provider->api_key])
+            ->withOptions([
+                'allow_redirects' => ['max' => 3, 'protocols' => ['http', 'https'], 'strict' => true],
+            ])
             ->attach('file', file_get_contents($audioPath), basename($audioPath))
-            ->post($base . '/audio/transcriptions', [
+            ->post($endpoint, [
                 'model' => $provider->model,
                 'language' => $whisperLang,
                 'response_format' => 'verbose_json', // returns segments with timestamps

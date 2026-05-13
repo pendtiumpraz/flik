@@ -73,8 +73,9 @@ class TranscodingPipeline
             }
 
             // Persist requested specs so the admin UI can show "what we tried"
-            // even before any rendition completes.
-            $job->update(['rendition_specs' => $ladder]);
+            // even before any rendition completes. EncodingJob uses
+            // $guarded = ['*'] (mass-assignment audit, 2026-05-13).
+            $job->forceFill(['rendition_specs' => $ladder])->save();
 
             $jobWorkDir = $this->ensureWorkDir($job);
             $outputs = [];

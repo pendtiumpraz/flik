@@ -16,11 +16,18 @@
         <div class="space-y-3">
             <a href="{{ route('rewards.index') }}" class="block hover:text-white transition-colors">Rewards & Coins</a>
             <div class="hover:text-white transition-colors cursor-pointer">FAQ</div>
-            <div class="hover:text-white transition-colors cursor-pointer">Kebijakan Privasi</div>
+            <a href="{{ route('legal.privacy') }}" class="block hover:text-white transition-colors">Kebijakan Privasi</a>
         </div>
         <div class="space-y-3">
-            <div class="hover:text-white transition-colors cursor-pointer">Syarat & Ketentuan</div>
-            <div class="hover:text-white transition-colors cursor-pointer">Cookie Preferences</div>
+            <a href="{{ route('legal.terms') }}" class="block hover:text-white transition-colors">Syarat & Ketentuan</a>
+            <a href="{{ route('legal.refund') }}" class="block hover:text-white transition-colors">Kebijakan Refund</a>
+            {{-- Re-opens the cookie consent banner. window.FlikConsent is
+                 registered in resources/js/cookie-consent.js. --}}
+            <button type="button"
+                    onclick="window.FlikConsent && window.FlikConsent.reopen()"
+                    class="block text-left w-full hover:text-white transition-colors cursor-pointer bg-transparent border-0 p-0">
+                Cookie Settings
+            </button>
             <div class="hover:text-white transition-colors cursor-pointer">Karir</div>
         </div>
         <div class="space-y-3">

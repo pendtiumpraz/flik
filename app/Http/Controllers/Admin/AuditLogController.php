@@ -56,7 +56,7 @@ class AuditLogController extends Controller
     }
 
     /**
-     * @return array{user_id:?int,action:?string,subject_type:?string,date_from:?string,date_to:?string}
+     * @return array{user_id:?int,action:?string,subject_type:?string,date_from:?string,date_to:?string,security_only:bool}
      */
     private function filters(Request $request): array
     {
@@ -66,11 +66,12 @@ class AuditLogController extends Controller
             'subject_type' => $request->filled('subject_type') ? (string) $request->input('subject_type') : null,
             'date_from' => $request->filled('date_from') ? (string) $request->input('date_from') : null,
             'date_to' => $request->filled('date_to') ? (string) $request->input('date_to') : null,
+            'security_only' => $request->boolean('security_only'),
         ];
     }
 
     /**
-     * @param  array{user_id:?int,action:?string,subject_type:?string,date_from:?string,date_to:?string} $filters
+     * @param  array{user_id:?int,action:?string,subject_type:?string,date_from:?string,date_to:?string,security_only:bool} $filters
      */
     private function buildQuery(array $filters): \Illuminate\Database\Eloquent\Builder
     {
@@ -92,6 +93,12 @@ class AuditLogController extends Controller
         }
         if ($filters['date_to']) {
             $query->where('created_at', '<=', Carbon::parse($filters['date_to'])->endOfDay());
+        }
+        if ($filters['security_only']) {
+            // Delegates to the model scope, which transparently falls back
+            // to action-prefix matching when the column hasn't been
+            // migrated yet. See AuditLog::scopeSecurityOnly().
+            $query->securityOnly();
         }
 
         return $query;

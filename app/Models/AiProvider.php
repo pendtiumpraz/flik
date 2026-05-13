@@ -9,6 +9,18 @@ class AiProvider extends Model
 {
     use HasFactory;
 
+    /**
+     * Mass-assignable for admin AI-settings CRUD only.
+     *
+     * SECURITY: this table holds API keys for paid LLM providers — only the
+     * /admin/ai-settings routes (gated by `can:admin`) write here. The
+     * counter columns (`last_used_at`, `total_tokens_used`, `total_cost_usd`)
+     * are bookkeeping for UsageTracker and stay in $fillable because the
+     * existing `$provider->update([...])` calls there already build the
+     * payload from server-trusted state, not request input.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
         'name',
         'provider',

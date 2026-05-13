@@ -161,6 +161,12 @@
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                 Banners
             </a>
+            @if (\Illuminate\Support\Facades\Route::has('admin.api-keys.index'))
+                <a href="{{ route('admin.api-keys.index') }}" class="nav-link {{ request()->routeIs('admin.api-keys.*') ? 'active' : '' }}">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                    API Keys
+                </a>
+            @endif
 
             <div class="nav-label" style="margin-top:16px">Intelligence</div>
             <a href="{{ route('admin.ai.index') }}" class="nav-link {{ request()->routeIs('admin.ai.index') || request()->routeIs('admin.ai.store') || request()->routeIs('admin.ai.update') || request()->routeIs('admin.ai.toggle') || request()->routeIs('admin.ai.destroy') || request()->routeIs('admin.ai.test') ? 'active' : '' }}">

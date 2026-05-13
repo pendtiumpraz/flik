@@ -23,19 +23,16 @@ class DrmSession extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'user_id',
-        'movie_id',
-        'session_token',
-        'device_fingerprint',
-        'client_ip',
-        'country_code',
-        'content_key',
-        'last_key_request_at',
-        'key_request_count',
-        'expires_at',
-        'revoked_at',
-    ];
+    /**
+     * SECURITY: drm_sessions stores the content_key + session_token used to
+     * unlock playback. Only DrmTokenService / DrmKeyService write here. End
+     * users never POST data into this table. Guarding everything closes
+     * off any accidental Eloquent::create($input) path that could let an
+     * attacker forge a session_token / extend expires_at.
+     *
+     * @var array<int, string>
+     */
+    protected $guarded = ['*'];
 
     protected $casts = [
         // Built-in symmetric encryption — APP_KEY rotation requires reencryption.

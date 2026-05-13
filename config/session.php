@@ -166,9 +166,19 @@ return [
     | to the server if the browser has a HTTPS connection. This will keep
     | the cookie from being sent to you if it can not be done securely.
     |
+    | IMPORTANT: SESSION_SECURE_COOKIE=true is REQUIRED in production. Pair
+    | it with the ForceHttps middleware + URL::forceScheme('https'). If you
+    | leave this unset on a prod box that's still running on plain HTTP,
+    | the session cookie travels in clear text and is trivially sniffable.
+    |
+    | Default null = framework decides per request (sends Secure when the
+    | inbound request is HTTPS). Setting true forces the Secure flag even
+    | on internal HTTP-fronted health checks, which is the safer default
+    | in any TLS-terminated production deployment.
+    |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => env('SESSION_SECURE_COOKIE', null),
 
     /*
     |--------------------------------------------------------------------------

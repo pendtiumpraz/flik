@@ -30,16 +30,17 @@ class EncodingJob extends Model
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_FAILED = 'failed';
 
-    protected $fillable = [
-        'movie_id',
-        'status',
-        'rendition_specs',
-        'output_paths',
-        'error_message',
-        'progress_percent',
-        'started_at',
-        'completed_at',
-    ];
+    /**
+     * SECURITY: this is a backend pipeline state row written by the
+     * TranscodingPipeline + admin transcode trigger only. End users never
+     * write here. Guarding everything stops a controller bug from ever
+     * letting a request body forge encoding state. Internal callers use
+     * forceFill() / forceCreate() (already done in markStarted, markCompleted,
+     * markFailed, MovieUploadController::startTranscode, TranscodeMovie job).
+     *
+     * @var array<int, string>
+     */
+    protected $guarded = ['*'];
 
     protected $casts = [
         'rendition_specs' => 'array',

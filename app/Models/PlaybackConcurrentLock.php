@@ -30,13 +30,15 @@ class PlaybackConcurrentLock extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'user_id',
-        'session_token',
-        'movie_id',
-        'heartbeat_at',
-        'expires_at',
-    ];
+    /**
+     * SECURITY: written exclusively by ConcurrentStreamLimiter (server-side
+     * concurrent-stream enforcement). End users never POST data into this
+     * table. Guarding everything stops a request body forging a lock with
+     * a fake session_token to bypass the device limit.
+     *
+     * @var array<int, string>
+     */
+    protected $guarded = ['*'];
 
     protected $casts = [
         'heartbeat_at' => 'datetime',

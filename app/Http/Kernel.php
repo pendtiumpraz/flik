@@ -20,11 +20,29 @@ class Kernel extends HttpKernel
     protected $middleware = [
         // \App\Http\Middleware\TrustHosts::class,
         \App\Http\Middleware\TrustProxies::class,
+        // ForceHttps must run AFTER TrustProxies so $request->isSecure()
+        // sees the real scheme behind a load balancer; otherwise it would
+        // 301-loop. Skipped in local + testing envs (see middleware class).
+        \App\Http\Middleware\ForceHttps::class,
+        // WAF-lite: signature-based request inspector (path traversal,
+        // SQLi, XSS, RCE, LFI/RFI, webshells). Runs early so malicious
+        // payloads never reach a controller, but AFTER TrustProxies so
+        // $request->ip() is the real client (used for ban-list lookups
+        // + audit). Tunable / disablable via config('security.waf') —
+        // see docs/security/waf-lite.md.
+        \App\Http\Middleware\RequestFirewall::class,
+        \App\Http\Middleware\SecurityHeaders::class,
         \Illuminate\Http\Middleware\HandleCors::class,
         \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \App\Http\Middleware\TrimStrings::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
+
+        // Records HTTP 429 responses to audit_logs. Sits at the end of the
+        // global stack so it sees responses from every throttle middleware
+        // further down the pipeline. Disable with RATE_LIMIT_AUDIT_ENABLED=0
+        // (see config/security.php → rate_limit_audit) for noisy environments.
+        \App\Http\Middleware\RecordRateLimitHits::class,
     ];
 
     /**
@@ -63,9 +81,23 @@ class Kernel extends HttpKernel
         'can' => \Illuminate\Auth\Middleware\Authorize::class,
         'geoblock' => \App\Http\Middleware\GeoBlock::class,
         'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
+        // Anti-bot honeypot: rejects POSTs that fill the hidden trap field
+        // or submit faster than a human can. Apply to public POST routes
+        // (login, register, password reset, newsletter). Authenticated
+        // users are skipped inside the middleware. Pair with `<x-honeypot />`
+        // on the form so the trap field + form-start timestamp are emitted.
+        'honeypot' => \App\Http\Middleware\Honeypot::class,
         'password.confirm' => \Illuminate\Auth\Middleware\RequirePassword::class,
         'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+        '2fa' => \App\Http\Middleware\TwoFactorVerified::class,
+        // Defence-in-depth IDOR guard. Usage: ->middleware('owns:schedule')
+        // — the param name MUST match the route binding ({schedule}).
+        'owns' => \App\Http\Middleware\EnsureOwnership::class,
+        // Service-to-service API key auth. Reads Authorization: Bearer flk_...
+        // or X-Api-Key. On success, the verified ApiKey is exposed via
+        // $request->attributes->get('api_key').
+        'auth.apikey' => \App\Http\Middleware\AuthenticateApiKey::class,
     ];
 }

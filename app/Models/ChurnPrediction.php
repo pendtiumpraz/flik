@@ -35,14 +35,15 @@ class ChurnPrediction extends Model
         self::LEVEL_CRITICAL,
     ];
 
-    protected $fillable = [
-        'user_id',
-        'risk_score',
-        'risk_level',
-        'signals',
-        'suggested_action',
-        'computed_at',
-    ];
+    /**
+     * SECURITY: ChurnPredictor (a backend AI Task) is the only writer.
+     * End users never POST a churn score for themselves. Guarding everything
+     * keeps risk_score/risk_level/suggested_action immutable from the HTTP
+     * surface so users cannot self-rate "low risk" to dodge retention work.
+     *
+     * @var array<int, string>
+     */
+    protected $guarded = ['*'];
 
     protected $casts = [
         'risk_score'  => 'float',

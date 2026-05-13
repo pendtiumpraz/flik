@@ -56,6 +56,14 @@
         statusEl.classList.toggle('text-gray-500', !isError);
     }
 
+    // XSS NOTE: this function uses `innerHTML` for layout convenience.
+    // Both `name` and `message` MUST be passed through `escapeHtml()`
+    // (below) before interpolation. The class-list strings on the
+    // template are static, but if you add any new dynamic field here
+    // wrap it in escapeHtml() too — and as a second line of defence
+    // the server-side WatchPartyChat event already sanitizes incoming
+    // messages with App\Services\Security\HtmlSanitizer. See
+    // docs/security/xss-audit.md.
     function appendChat(name, message, mine = false) {
         if (!chatLog) return;
         const wrap = document.createElement('div');

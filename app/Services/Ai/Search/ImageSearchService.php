@@ -2,9 +2,11 @@
 
 namespace App\Services\Ai\Search;
 
+use App\Exceptions\SsrfException;
 use App\Models\AiProvider;
 use App\Models\Movie;
 use App\Services\Ai\FilmKnowledgeService;
+use App\Services\Security\SsrfGuard;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -32,6 +34,7 @@ class ImageSearchService
 
     public function __construct(
         protected FilmKnowledgeService $knowledge,
+        protected SsrfGuard $ssrfGuard = new SsrfGuard(),
     ) {
     }
 
@@ -130,8 +133,14 @@ class ImageSearchService
         ];
 
         try {
+            $this->ssrfGuard->assertUrlAllowed($endpoint);
+
             $response = Http::timeout(45)
+                ->connectTimeout(5)
                 ->withHeaders(['Content-Type' => 'application/json'])
+                ->withOptions([
+                    'allow_redirects' => ['max' => 3, 'protocols' => ['http', 'https'], 'strict' => true],
+                ])
                 ->post($endpoint, $payload);
 
             if (!$response->successful()) {
@@ -148,6 +157,11 @@ class ImageSearchService
             $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
 
             return $this->parseCandidatesJson($text);
+        } catch (SsrfException $e) {
+            Log::warning('ImageSearchService: SSRF guard blocked Gemini endpoint', [
+                'error' => $e->getMessage(),
+            ]);
+            return [];
         } catch (\Throwable $e) {
             Log::warning('ImageSearchService: Gemini exception', [
                 'error' => $e->getMessage(),

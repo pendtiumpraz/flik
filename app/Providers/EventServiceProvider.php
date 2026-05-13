@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Events\SecurityEventLogged;
+use App\Listeners\PushSecurityAlerts;
+use App\Listeners\SendLoginAlert;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
@@ -17,6 +21,21 @@ class EventServiceProvider extends ServiceProvider
     protected $listen = [
         Registered::class => [
             SendEmailVerificationNotification::class,
+        ],
+
+        // Security: detect sign-ins from new devices / countries and
+        // alert the user via in-app notification + queued email.
+        // Listener runs synchronously in the auth flow but defers the
+        // mail to the queue.
+        Login::class => [
+            SendLoginAlert::class,
+        ],
+
+        // Security: real-time Slack/Discord fan-out for severity-gated
+        // events fired by AuditLogger::security(). Listener no-ops when
+        // SECURITY_ALERTS_ENABLED=false or webhooks are not configured.
+        SecurityEventLogged::class => [
+            PushSecurityAlerts::class,
         ],
     ];
 

@@ -4,11 +4,28 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\URL;
 
 class Movie extends Model
 {
     use HasFactory;
 
+    /**
+     * Mass-assignable attributes for catalog CRUD (admin movie form).
+     *
+     * SECURITY: distribution + AI-pipeline columns are intentionally
+     * EXCLUDED so a forged admin form (or future controller bug) cannot
+     * flip encoding/DRM/geo state. Specifically NOT in $fillable:
+     *   encoding_status, encoding_renditions, master_file_path,
+     *   master_file_disk, drm_strategy, drm_config, hls_manifest_path,
+     *   dash_manifest_path, cdn_disk, geo_allow, intro_*_seconds,
+     *   outro_*_seconds, recap_end_seconds, duration_seconds, ai_tags,
+     *   ai_synopsis, ai_short_summary, seo_meta, ai_*_generated_at.
+     * Those land via forceFill() inside MovieUploadController, the
+     * TranscodingPipeline, the DRM services, and AI Tasks/*.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
         'title',
         'slug',
@@ -32,12 +49,12 @@ class Movie extends Model
     protected static function booted()
     {
         static::saving(function (Movie $movie) {
-            if (empty($movie->slug) && !empty($movie->title)) {
+            if (empty($movie->slug) && ! empty($movie->title)) {
                 $base = \Illuminate\Support\Str::slug($movie->title);
                 $slug = $base;
                 $i = 1;
                 while (static::where('slug', $slug)->where('id', '!=', $movie->id ?? 0)->exists()) {
-                    $slug = $base . '-' . (++$i);
+                    $slug = $base.'-'.(++$i);
                 }
                 $movie->slug = $slug;
             }
@@ -67,18 +84,20 @@ class Movie extends Model
      */
     public function getVideoFullUrlAttribute(): ?string
     {
-        if (!$this->video_path) return $this->video_url;
+        if (! $this->video_path) {
+            return $this->video_url;
+        }
 
         if ($this->video_disk === 's3') {
             return \Storage::disk('s3')->url($this->video_path);
         }
 
-        return asset('storage/' . $this->video_path);
+        return asset('storage/'.$this->video_path);
     }
 
     public function hasVideo(): bool
     {
-        return !empty($this->video_path) || !empty($this->video_url) || !empty($this->youtube_key);
+        return ! empty($this->video_path) || ! empty($this->video_url) || ! empty($this->youtube_key);
     }
 
     /**
@@ -127,35 +146,28 @@ class Movie extends Model
 
     /**
      * Get the poster URL.
-     * Returns full URL if it starts with http, otherwise prepends storage path.
+     *
+     * Resolution order:
+     *   1. Empty path     → built-in placeholder.
+     *   2. Absolute URL   → returned verbatim (CDN / external image).
+     *   3. `private/...`  → 2-hour signed URL via the media.poster route
+     *                       (file lives outside webroot).
+     *   4. Anything else  → public symlink (`/storage/...`) — legacy path.
      */
     public function getPosterUrlAttribute()
     {
-        if (!$this->poster_path) {
-            return '/images/no-poster.png';
-        }
-
-        if (str_starts_with($this->poster_path, 'http')) {
-            return $this->poster_path;
-        }
-
-        return asset('storage/' . $this->poster_path);
+        return $this->resolveAssetUrl($this->poster_path, 'media.poster')
+            ?? '/images/no-poster.png';
     }
 
     /**
-     * Get the backdrop URL.
+     * Get the backdrop URL. See getPosterUrlAttribute() for resolution order;
+     * falls back to poster_url when backdrop is empty.
      */
     public function getBackdropUrlAttribute()
     {
-        if (!$this->backdrop_path) {
-            return $this->poster_url;
-        }
-
-        if (str_starts_with($this->backdrop_path, 'http')) {
-            return $this->backdrop_path;
-        }
-
-        return asset('storage/' . $this->backdrop_path);
+        return $this->resolveAssetUrl($this->backdrop_path, 'media.backdrop')
+            ?? $this->poster_url;
     }
 
     /**
@@ -165,15 +177,48 @@ class Movie extends Model
      */
     public function getSliderUrlAttribute()
     {
-        if (!$this->slider_path) {
-            return $this->backdrop_url;
+        return $this->resolveAssetUrl($this->slider_path, 'media.slider')
+            ?? $this->backdrop_url;
+    }
+
+    /**
+     * Shared resolver for poster/backdrop/slider URLs.
+     *
+     * The single point of truth that decides whether a stored path becomes
+     * an absolute URL, a signed private-disk URL, or a legacy public-disk
+     * URL. Centralising it here means any future storage backend (e.g. a
+     * `cdn://` scheme prefix) is one edit, not three.
+     *
+     * @param  string|null  $path  Raw stored path (`poster_path` etc.).
+     * @param  string  $signedRoute  Named route used for `private/` paths.
+     */
+    protected function resolveAssetUrl(?string $path, string $signedRoute): ?string
+    {
+        if (! $path) {
+            return null;
         }
 
-        if (str_starts_with($this->slider_path, 'http')) {
-            return $this->slider_path;
+        // Absolute URL stored verbatim — TMDB images, Bunny CDN URLs, S3
+        // public-bucket URLs, etc. NEVER signed (they're already public).
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
         }
 
-        return asset('storage/' . $this->slider_path);
+        // `private/...` prefix is the convention for files on the private
+        // disk (storage/app/private/...). Serve via signed-URL route so the
+        // file is reachable without making the disk web-accessible.
+        if (str_starts_with($path, 'private/')) {
+            return URL::temporarySignedRoute(
+                $signedRoute,
+                now()->addHours(2),
+                ['movie' => $this->id]
+            );
+        }
+
+        // Legacy: anything else is on the public disk (`storage/app/public`
+        // → symlinked into `public/storage`). Backwards-compatible with
+        // every row that pre-dates the private-disk migration.
+        return asset('storage/'.$path);
     }
 
     // ── Additional Relations ──────────────────────────────────

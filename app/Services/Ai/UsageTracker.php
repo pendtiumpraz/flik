@@ -101,7 +101,10 @@ class UsageTracker
         $cost = $this->computeCost($provider->model, $in, $out);
 
         try {
-            $log = AiUsageLog::create([
+            // AiUsageLog uses $guarded = ['*'] (mass-assignment audit,
+            // 2026-05-13). UsageTracker is the canonical write path; use
+            // forceCreate to bypass guard from this trusted system sink.
+            $log = AiUsageLog::forceCreate([
                 'ai_provider_id' => $provider->id,
                 'task_type'      => $taskType,
                 'subject_type'   => $subject?->getMorphClass(),

@@ -54,6 +54,15 @@ return [
             'days' => 14,
         ],
 
+        // CSP violation reports + future security telemetry. Routed to the
+        // shared laravel.log so existing log shippers pick them up; switch
+        // to a dedicated path if/when SIEM splits these out.
+        'security' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/laravel.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

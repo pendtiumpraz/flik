@@ -304,7 +304,10 @@ class WatchPartyController extends Controller
             return response()->json(['error' => 'Watch Party sudah berakhir.'], 410);
         }
 
-        if (! $party->isHost(auth()->id())) {
+        // WatchPartyPolicy::sync() — host only. We use Gate::denies (vs
+        // $this->authorize) so we can return JSON rather than the default
+        // 403 redirect that Authorize throws.
+        if (! \Gate::forUser($request->user())->allows('sync', $party)) {
             return response()->json(['error' => 'Hanya host yang boleh mengontrol playback.'], 403);
         }
 
@@ -350,15 +353,13 @@ class WatchPartyController extends Controller
             return response()->json(['error' => 'Watch Party sudah berakhir.'], 410);
         }
 
-        $userId = auth()->id();
-        $isMember = $party->isHost($userId) || $party->members()
-            ->where('user_id', $userId)
-            ->whereNull('left_at')
-            ->exists();
-
-        if (! $isMember) {
+        // WatchPartyPolicy::chat() — host or active member. Same JSON-vs-
+        // redirect rationale as sync(): use Gate::allows manually.
+        if (! \Gate::forUser($request->user())->allows('chat', $party)) {
             return response()->json(['error' => 'Bukan anggota room.'], 403);
         }
+
+        $userId = auth()->id();
 
         if (! $this->pusherConfigured()) {
             return response()->json([
@@ -406,7 +407,8 @@ class WatchPartyController extends Controller
     {
         $party = WatchParty::where('room_code', $roomCode)->firstOrFail();
 
-        if (! $party->isHost(auth()->id())) {
+        // WatchPartyPolicy::end() — host only.
+        if (! \Gate::forUser($request->user())->allows('end', $party)) {
             return $this->respond($request, ['error' => 'Hanya host yang boleh mengakhiri Watch Party.'], 403);
         }
 

@@ -11,19 +11,21 @@ class AuditLog extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'user_id',
-        'action',
-        'subject_type',
-        'subject_id',
-        'client_ip',
-        'user_agent',
-        'meta',
-    ];
+    /**
+     * SECURITY: audit_logs is a system-only sink. Only AuditLogger writes
+     * here, and it builds the row from server-trusted values (auth user,
+     * request IP/UA, structured action constants). Guarding everything
+     * means even if someone wires AuditLog::create($input) by mistake,
+     * the write becomes a no-op rather than a tamper vector.
+     *
+     * @var array<int, string>
+     */
+    protected $guarded = ['*'];
 
     protected $casts = [
         'meta' => 'array',
         'subject_id' => 'integer',
+        'is_security' => 'boolean',
     ];
 
     // ── Relations ─────────────────────────────────────────────
@@ -64,6 +66,29 @@ class AuditLog extends Model
         return $query;
     }
 
+    /**
+     * "Security only" filter — used by /admin/audit-logs filter chip.
+     *
+     * Falls back to a string-prefix match when the dedicated `is_security`
+     * column hasn't been migrated yet, so the scope is safe to query from
+     * application code regardless of migration state.
+     */
+    public function scopeSecurityOnly(Builder $query): Builder
+    {
+        if (\Illuminate\Support\Facades\Schema::hasColumn('audit_logs', 'is_security')) {
+            return $query->where('is_security', true);
+        }
+
+        return $query->where(function (Builder $q): void {
+            $q->where('action', 'like', 'auth.%')
+              ->orWhere('action', 'like', 'security.%')
+              ->orWhere('action', 'like', 'admin.%')
+              ->orWhere('action', 'like', 'privacy.%')
+              ->orWhere('action', 'like', 'payment.chargeback')
+              ->orWhere('action', 'like', 'drm.key%');
+        });
+    }
+
     // ── Helpers ───────────────────────────────────────────────
     /**
      * Best-effort resolution of the related subject model instance.
@@ -89,5 +114,20 @@ class AuditLog extends Model
         return str_contains($this->action, '.')
             ? explode('.', $this->action, 2)[0]
             : $this->action;
+    }
+
+    /**
+     * Severity bucket for the row, derived from the action name via
+     * {@see \App\Support\SecurityEvents::severity()}. Returns 'low' for
+     * non-security rows so callers can render uniformly.
+     *
+     * @return 'low'|'medium'|'high'|'critical'
+     */
+    public function getSeverityAttribute(): string
+    {
+        if (! class_exists(\App\Support\SecurityEvents::class)) {
+            return 'low';
+        }
+        return \App\Support\SecurityEvents::severity($this->action);
     }
 }

@@ -61,8 +61,10 @@ class PaymentController extends Controller
         try {
             $snapToken = \Midtrans\Snap::getSnapToken($params);
 
-            // Store pending subscription
-            $subscription = Subscription::create([
+            // Store pending subscription.
+            // SECURITY: payment fields are guarded — use forceCreate so this
+            // server-controlled write isn't blocked by mass-assignment guard.
+            $subscription = Subscription::forceCreate([
                 'user_id' => $user->id,
                 'subscription_plan_id' => $plan->id,
                 'order_id' => $orderId,
@@ -110,11 +112,15 @@ class PaymentController extends Controller
 
             if ($status == 'capture' || $status == 'settlement') {
                 if ($fraudStatus == 'accept' || empty($fraudStatus)) {
-                    $subscription->update([
+                    // Webhook updates status/payment_method/paid_at — guarded
+                    // fields, so write via forceFill to bypass mass-assignment
+                    // protection (this path is server-trusted: signature is
+                    // validated upstream by Midtrans\Notification).
+                    $subscription->forceFill([
                         'status' => 'active',
                         'payment_method' => $notification->payment_type ?? 'midtrans',
                         'paid_at' => now(),
-                    ]);
+                    ])->save();
 
                     // Create notification for user
                     \App\Models\Notification::create([
@@ -130,9 +136,9 @@ class PaymentController extends Controller
                     $level->addXp(50);
                 }
             } elseif (in_array($status, ['deny', 'cancel', 'expire'])) {
-                $subscription->update(['status' => 'cancelled']);
+                $subscription->forceFill(['status' => 'cancelled'])->save();
             } elseif ($status == 'pending') {
-                $subscription->update(['status' => 'pending']);
+                $subscription->forceFill(['status' => 'pending'])->save();
             }
 
             return response()->json(['status' => 'ok']);
@@ -157,7 +163,9 @@ class PaymentController extends Controller
     {
         $user = auth()->user();
 
-        Subscription::create([
+        // SECURITY: payment fields are guarded — use forceCreate so this
+        // server-controlled write isn't blocked by mass-assignment guard.
+        Subscription::forceCreate([
             'user_id' => $user->id,
             'subscription_plan_id' => $plan->id,
             'order_id' => 'FREE-' . $user->id . '-' . time(),

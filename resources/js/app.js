@@ -16,3 +16,8 @@ import initXrayOverlay from './player/xray-overlay';
 window.FlikPlayer = FlikPlayer;
 window.initAutoSkip = initAutoSkip;
 window.initXrayOverlay = initXrayOverlay;
+
+// ━━━ Cookie consent (registers `window.FlikConsent`, dispatches
+// `flik:cookies-updated` after persisted prefs load). Must load eagerly
+// so analytics/marketing scripts can gate themselves before they fire. ━━━
+import './cookie-consent';

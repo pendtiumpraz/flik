@@ -9,11 +9,26 @@ class Subscription extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'user_id', 'subscription_plan_id', 'status',
-        'starts_at', 'ends_at', 'cancelled_at',
-        'payment_method', 'transaction_id',
-        'order_id', 'amount', 'paid_at',
+    /**
+     * SECURITY: This table is *system-controlled* via PaymentController +
+     * the Midtrans webhook. End users never POST data that lands here
+     * directly. To prevent a forged checkout payload from rewriting
+     * `status`, `transaction_id`, `paid_at`, etc., we use $guarded with
+     * an explicit denylist instead of $fillable. Internal callers
+     * (PaymentController::checkout, ::activateFreePlan, ::webhook,
+     * UserDataEraser) write through forceFill(...) / forceCreate(...).
+     *
+     * @var array<int, string>
+     */
+    protected $guarded = [
+        'id',
+        'status',
+        'transaction_id',
+        'order_id',
+        'payment_method',
+        'paid_at',
+        'cancelled_at',
+        'amount',
     ];
 
     protected $casts = [
@@ -21,6 +36,11 @@ class Subscription extends Model
         'ends_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'paid_at' => 'datetime',
+        // PII at rest — encrypted via Laravel's encrypter (AES-256-CBC).
+        // Column is TEXT (see migration 2026_05_10_040100) because encrypted
+        // output is ~3.5x the plaintext length and would not fit in a
+        // VARCHAR(255).
+        'billing_address' => 'encrypted',
     ];
 
     public function user()

@@ -347,6 +347,21 @@
                     </div>
 
                     <!-- Comment Form -->
+                    @php
+                        // Mirror CommentController::requiresCaptcha() so the
+                        // widget only renders for new accounts that have already
+                        // posted >= 3 comments in the past hour. Established
+                        // users see no friction at all.
+                        $u = auth()->user();
+                        $needsCommentCaptcha = false;
+                        if ($u && $u->created_at && $u->created_at->gte(now()->subDay())) {
+                            $recent = \App\Models\Comment::query()
+                                ->where('user_id', $u->getAuthIdentifier())
+                                ->where('created_at', '>=', now()->subHour())
+                                ->count();
+                            $needsCommentCaptcha = $recent >= 3;
+                        }
+                    @endphp
                     <form method="POST" action="{{ route('comment.store') }}" class="mb-6">
                         @csrf
                         <input type="hidden" name="movie_id" value="{{ $movies['id'] }}">
@@ -354,6 +369,10 @@
                                   class="w-full p-4 rounded-xl text-sm text-white placeholder-gray-500 resize-none focus:outline-none focus:border-[#C5A55A] transition-colors"
                                   style="background: rgba(20,18,16,0.6); border: 1px solid rgba(197,165,90,0.15)"
                                   placeholder="Tulis komentar..." required></textarea>
+                        @if ($needsCommentCaptcha)
+                            {{-- Cloudflare Turnstile CAPTCHA (no-op when env keys absent). --}}
+                            <x-captcha-turnstile action="comment" theme="dark" />
+                        @endif
                         <div class="flex items-center justify-between mt-2.5">
                             <label class="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
                                 <input type="checkbox" name="is_spoiler" value="1" class="rounded">

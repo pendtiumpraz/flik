@@ -39,6 +39,7 @@
 
                 <form action="/register" method="post" class="mt-8 space-y-4">
                     @csrf
+                    <x-honeypot />
 
                     <!-- Name -->
                     <div>
@@ -78,8 +79,24 @@
                         <label for="password" class="block text-sm font-medium text-gray-400 mb-1.5">Password</label>
                         <input class="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 transition-all focus:outline-none focus:ring-2"
                             style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1)"
-                            type="password" name="password" id="password" placeholder="Minimal 8 karakter" required>
+                            type="password" name="password" id="password"
+                            placeholder="Min 10 karakter: huruf besar+kecil+angka+simbol" required>
+                        @error('password')
+                            <p class="mt-1 text-xs" style="color:#f87171">{{ $message }}</p>
+                        @enderror
                     </div>
+
+                    <!-- Password confirmation -->
+                    <div>
+                        <label for="password_confirmation" class="block text-sm font-medium text-gray-400 mb-1.5">Konfirmasi Password</label>
+                        <input class="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 transition-all focus:outline-none focus:ring-2"
+                            style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1)"
+                            type="password" name="password_confirmation" id="password_confirmation"
+                            placeholder="Ulangi password" required>
+                    </div>
+
+                    {{-- Cloudflare Turnstile CAPTCHA (no-op when env keys absent). --}}
+                    <x-captcha-turnstile action="register" theme="dark" />
 
                     <!-- Submit -->
                     <button type="submit"

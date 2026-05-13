@@ -175,7 +175,18 @@
                 return div.innerHTML;
             },
 
-            // Tiny markdown renderer: **bold**, *italic*, [text](url), newlines, lists
+            // Tiny markdown renderer: **bold**, *italic*, [text](url), newlines, lists.
+            //
+            // XSS NOTE: this function feeds an Alpine `x-html` directive
+            // (see template above) so its output is injected raw into
+            // the DOM. Step 1 escapes the whole input first so any HTML
+            // in the AI reply becomes inert text; subsequent regex
+            // passes only re-introduce a small, fixed allow list of
+            // tags (<strong>/<em>/<a>/<ul>/<li>/<br>). The link regex
+            // explicitly rejects schemes other than http/https or
+            // /movie/* internal paths. Any change here MUST keep step 1
+            // first or the widget becomes a script-injection sink.
+            // See docs/security/xss-audit.md.
             renderMarkdown(text) {
                 // 1. Escape HTML first
                 let html = this.escapeHtml(text);

@@ -2,7 +2,9 @@
 
 namespace App\Services\Ai;
 
+use App\Exceptions\SsrfException;
 use App\Models\AiProvider;
+use App\Services\Security\SsrfGuard;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -12,11 +14,19 @@ use Illuminate\Support\Facades\Log;
  *
  * Default routing: text-based tasks → DeepSeek V4 Flash (or whatever is set as default in /admin/ai-settings).
  * For audio/vision/embedding tasks, future implementation should add ProviderRouter.
+ *
+ * Security: every constructed endpoint is screened by {@see SsrfGuard} before
+ * the HTTP call goes out. This protects us from a misconfigured admin who
+ * pastes a base_url that resolves to an internal IP (e.g. http://localhost:8080
+ * or http://169.254.169.254). The guard throws {@see SsrfException}, which we
+ * surface as a normal RuntimeException to keep call-site error handling stable.
  */
 class AiClient
 {
-    public function __construct(protected UsageTracker $tracker)
-    {
+    public function __construct(
+        protected UsageTracker $tracker,
+        protected SsrfGuard $ssrfGuard,
+    ) {
     }
 
     /**
@@ -59,11 +69,35 @@ class AiClient
         $headers = $this->buildHeaders($provider);
         $payload = $this->normalizePayloadForProvider($provider->provider, $payload, $messages);
 
+        // SSRF guard: refuse to talk to a base_url that resolves to a private
+        // network or cloud-metadata host. Misconfigured providers fail fast
+        // here rather than silently exfiltrating metadata to a malicious admin.
+        try {
+            $this->ssrfGuard->assertUrlAllowed($endpoint);
+        } catch (SsrfException $e) {
+            Log::error('AiClient: provider base_url rejected by SSRF guard', [
+                'provider' => $provider->provider,
+                'reason'   => $e->getMessage(),
+            ]);
+            throw new \RuntimeException(
+                'AI provider base_url failed safety check. Update it at /admin/ai-settings.'
+            );
+        }
+
         $startedAt = microtime(true);
 
         try {
             $response = Http::timeout(30)
+                ->connectTimeout(5)
                 ->withHeaders($headers)
+                ->withOptions([
+                    'allow_redirects' => [
+                        'max'       => 3,
+                        'protocols' => ['http', 'https'],
+                        'strict'    => true,
+                        'referer'   => false,
+                    ],
+                ])
                 ->post($endpoint, $payload);
 
             $latencyMs = (int) round((microtime(true) - $startedAt) * 1000);

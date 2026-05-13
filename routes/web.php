@@ -8,21 +8,124 @@ use App\Http\Controllers\VelflixController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'home');
-Route::post('newsletter', NewsletterController::class);
+// Anonymous public endpoint — easy spam target. Hard cap via the named
+// 'newsletter' limiter (see RouteServiceProvider): 2/min/IP by default.
+// Honeypot trap field (`website_url`) + form-fill timer rejects naive bots
+// with a silent 200 — see App\Http\Middleware\Honeypot. Pair with the
+// `<x-honeypot />` Blade component in the form view.
+Route::post('newsletter', NewsletterController::class)
+    ->middleware(['throttle:newsletter', 'honeypot'])
+    ->name('newsletter.subscribe');
 
 // ━━━ SEO infrastructure (public, no auth — crawlers must reach these) ━━━
 Route::get('/sitemap.xml', [\App\Http\Controllers\SeoController::class, 'sitemap'])->name('seo.sitemap');
 Route::get('/robots.txt', [\App\Http\Controllers\SeoController::class, 'robots'])->name('seo.robots');
 
+// ━━━ Legal pages (public, no auth — required for app-store review,
+// cookie banner links, and prospective users browsing pre-signup) ━━━
+// NOTE: `/privacy` is reserved for the auth-protected user-data rights
+// hub (export/erasure UI) defined further below by the privacy controller.
+// The static Privacy Policy doc lives at `/privacy-policy` so the two
+// don't collide. The Privacy Policy doc links into `/privacy` for
+// rights-exercise actions.
+Route::get('/privacy-policy', [\App\Http\Controllers\LegalController::class, 'privacy'])->name('legal.privacy');
+Route::get('/terms', [\App\Http\Controllers\LegalController::class, 'terms'])->name('legal.terms');
+Route::get('/refund-policy', [\App\Http\Controllers\LegalController::class, 'refund'])->name('legal.refund');
+
+// ━━━ Security disclosure (RFC 9116 — public, no auth) ━━━
+// security.txt lives at /public/.well-known/security.txt and is served as a
+// static file. These routes back the human-facing pages it points at.
+// reportSubmit is throttled tight: it ships an email + writes to the security
+// log channel, so abuse here turns into spam in ops' inbox.
+Route::get('/security/policy', [\App\Http\Controllers\SecurityPolicyController::class, 'policy'])->name('security.policy');
+Route::get('/security/report', [\App\Http\Controllers\SecurityPolicyController::class, 'reportForm'])->name('security.report.form');
+Route::post('/security/report', [\App\Http\Controllers\SecurityPolicyController::class, 'reportSubmit'])
+    ->middleware('throttle:5,60')
+    ->name('security.report.submit');
+
+// ━━━ CSP violation reports (browsers POST here when SecurityHeaders blocks something) ━━━
+// Public on purpose — browsers send these from any context, no session.
+// Throttled tight because a misconfigured CSP can fire thousands per minute.
+Route::post('/csp-report', function (\Illuminate\Http\Request $request) {
+    $payload = $request->isJson() ? $request->json()->all() : $request->all();
+    \Illuminate\Support\Facades\Log::channel('security')->warning('CSP violation', [
+        'report' => $payload['csp-report'] ?? $payload,
+        'ip' => $request->ip(),
+        'ua' => $request->userAgent(),
+    ]);
+
+    return response()->noContent();
+})
+    ->middleware('throttle:60,1')
+    ->name('security.csp-report');
+
 Route::middleware('guest')->group(function () {
     Route::get('login', [SessionsController::class, 'create'])->name('login');
-    Route::post('login', [SessionsController::class, 'store']);
+    // 'login' is a named RateLimiter (RouteServiceProvider) — coarse outer
+    // guard against floods. The fine-grained per-account/per-IP lockout +
+    // progressive delay live inside SessionsController via LoginThrottle.
+    // Anti-bot honeypot (`<x-honeypot />` in resources/views/auth/login.blade.php)
+    // sits alongside the throttle. Authenticated users are skipped, so the
+    // post-login `auth` redirect is unaffected.
+    Route::post('login', [SessionsController::class, 'store'])->middleware(['throttle:login', 'honeypot']);
     Route::get('register', [RegisterController::class, 'create'])->name('register');
-    Route::post('register', [RegisterController::class, 'store']);
+    // Per-IP 'register' limiter — registrations create real DB rows so the
+    // outer guard is intentionally tight (3/min/IP). Tunable via
+    // config('security.rate_limits.register'). Honeypot adds a behavioural
+    // check on top so naive registration spammers never hit the controller.
+    Route::post('register', [RegisterController::class, 'store'])->middleware(['throttle:register', 'honeypot']);
+
+    // ━━━ Password reset (Laravel-broker-backed, hardened) ━━━
+    // Both endpoints share the named 'password-reset' limiter (3/hr/IP by
+    // default — see config/security.php). Tight on purpose so attackers
+    // can't use the broker as an enumeration oracle. The response is a
+    // single generic flash regardless of whether the email exists.
+    Route::get('forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'showRequest'])
+        ->name('password.request');
+    Route::post('forgot-password', [\App\Http\Controllers\PasswordResetController::class, 'request'])
+        ->middleware(['throttle:password-reset', 'honeypot'])
+        ->name('password.email');
+
+    Route::get('reset-password/{token}', [\App\Http\Controllers\PasswordResetController::class, 'showReset'])
+        ->name('password.reset');
+    Route::post('reset-password', [\App\Http\Controllers\PasswordResetController::class, 'update'])
+        ->middleware(['throttle:password-reset', 'honeypot'])
+        ->name('password.update');
 });
+
+// ━━━ Email verification (Laravel-built-in flow) ━━━
+// `notice` and `resend` need an authenticated session (we just registered).
+// `verify` itself uses a signed URL so it doesn't need auth — the request
+// class validates signature + hash and returns 401 on tamper.
+Route::middleware('auth')->group(function () {
+    Route::get('email/verify', [\App\Http\Controllers\Auth\EmailVerificationController::class, 'notice'])
+        ->name('verification.notice');
+
+    // Named 'verification-resend' limiter (per user when authenticated) —
+    // tunable via config('security.rate_limits.verification-resend').
+    Route::post('email/verification-notification', [\App\Http\Controllers\Auth\EmailVerificationController::class, 'resend'])
+        ->middleware('throttle:verification-resend')
+        ->name('verification.send');
+});
+
+Route::get('email/verify/{id}/{hash}', [\App\Http\Controllers\Auth\EmailVerificationController::class, 'verify'])
+    ->middleware(['auth', 'signed', 'throttle:verification-resend'])
+    ->name('verification.verify');
+
+// ━━━ 2FA challenge (auth NOT required — gated by 2fa.pending_user_id session key) ━━━
+Route::get('/2fa/challenge', [\App\Http\Controllers\TwoFactorController::class, 'challenge'])->name('2fa.challenge');
+Route::post('/2fa/verify', [\App\Http\Controllers\TwoFactorController::class, 'verify'])
+    ->middleware('throttle:10,1')
+    ->name('2fa.verify');
 
 Route::middleware('auth')->group(function () {
     Route::post('logout', [SessionsController::class, 'destroy'])->name('logout');
+
+    // ━━━ 2FA management (must be logged in) ━━━
+    Route::get('/2fa/setup', [\App\Http\Controllers\TwoFactorController::class, 'setup'])->name('2fa.setup');
+    Route::post('/2fa/confirm', [\App\Http\Controllers\TwoFactorController::class, 'confirm'])->name('2fa.confirm');
+    Route::post('/2fa/disable', [\App\Http\Controllers\TwoFactorController::class, 'disable'])->name('2fa.disable');
+
     Route::get('/movies', [VelflixController::class, 'index'])->name('velflix.index');
     Route::get('/movie/{watch}', [VelflixController::class, 'show'])->name('movies.show');
 
@@ -34,17 +137,35 @@ Route::middleware('auth')->group(function () {
     Route::post('/rating', [\App\Http\Controllers\RatingController::class, 'store'])->name('rating.store');
     Route::delete('/rating', [\App\Http\Controllers\RatingController::class, 'destroy'])->name('rating.destroy');
 
-    // Comments
-    Route::post('/comment', [\App\Http\Controllers\CommentController::class, 'store'])->name('comment.store');
+    // Comments — store is rate-limited per user (named 'comments' limiter,
+    // 10/min/user by default) so a single account can't spam threads.
+    // Destroy is unguarded because it's gated by ownership in the
+    // controller and has no abuse vector beyond the user's own data.
+    Route::post('/comment', [\App\Http\Controllers\CommentController::class, 'store'])
+        ->middleware('throttle:comments')
+        ->name('comment.store');
     Route::delete('/comment/{comment}', [\App\Http\Controllers\CommentController::class, 'destroy'])->name('comment.destroy');
 
     // Profile
     Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'show'])->name('profile.show');
     Route::put('/profile', [\App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
+    Route::put('/profile/password', [\App\Http\Controllers\ProfileController::class, 'updatePassword'])->name('profile.password.update');
 
-    // Subscription Plans
+    // Profile — active session management
+    Route::get('/profile/sessions', [\App\Http\Controllers\Profile\SessionController::class, 'index'])->name('profile.sessions.index');
+    Route::delete('/profile/sessions/{id}', [\App\Http\Controllers\Profile\SessionController::class, 'destroy'])->name('profile.sessions.destroy');
+    Route::post('/profile/sessions/destroy-all', [\App\Http\Controllers\Profile\SessionController::class, 'destroyAll'])->name('profile.sessions.destroyAll');
+
+    // Profile — known/trusted device management (backs LoginAlertService)
+    Route::post('/profile/devices/{device}/trust', [\App\Http\Controllers\Profile\SessionController::class, 'trustDevice'])->name('profile.devices.trust');
+    Route::delete('/profile/devices/{device}', [\App\Http\Controllers\Profile\SessionController::class, 'forgetDevice'])->name('profile.devices.forget');
+
+    // Subscription Plans — viewing is fine for unverified users (lets them
+    // see what they're missing) but the actual checkout below is gated by
+    // the `verified` middleware.
     Route::get('/plans', function () {
         $plans = \App\Models\SubscriptionPlan::active()->get();
+
         return view('plans.index', compact('plans'));
     })->name('plans.index');
 
@@ -62,9 +183,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/watch/progress', [\App\Http\Controllers\WatchHistoryController::class, 'updateProgress'])->name('watch.progress');
     Route::get('/watch/resume', [\App\Http\Controllers\WatchHistoryController::class, 'getProgress'])->name('watch.resume');
 
-    // Payment
-    Route::get('/checkout/{plan}', [\App\Http\Controllers\PaymentController::class, 'checkout'])->name('payment.checkout');
-    Route::get('/payment/success', [\App\Http\Controllers\PaymentController::class, 'success'])->name('payment.success');
+    // Payment — checkout requires a verified email so we can deliver receipts
+    // and recovery codes. Browsing is intentionally NOT gated (see /movies).
+    Route::middleware('verified')->group(function () {
+        Route::get('/checkout/{plan}', [\App\Http\Controllers\PaymentController::class, 'checkout'])->name('payment.checkout');
+        Route::get('/payment/success', [\App\Http\Controllers\PaymentController::class, 'success'])->name('payment.success');
+    });
 
     // Watch Party (synchronized playback rooms)
     // {roomCode} is the literal column value — WatchParty::getRouteKeyName()
@@ -93,27 +217,69 @@ Route::middleware('auth')->group(function () {
     Route::get('/movie/{movie}/quiz', [\App\Http\Controllers\QuizController::class, 'start'])->name('quiz.start');
     Route::post('/movie/{movie}/quiz', [\App\Http\Controllers\QuizController::class, 'submit'])->name('quiz.submit');
     Route::get('/movie/{movie}/quiz/leaderboard', [\App\Http\Controllers\QuizController::class, 'leaderboard'])->name('quiz.leaderboard');
+
+    // ━━━ Privacy & GDPR (export + erase) ━━━
+    // Self-service "right to access" + "right to be forgotten". The download
+    // route is wrapped in `signed` middleware so the temporary URL produced
+    // by UserDataExporter::signedUrl() is the only way out of the private
+    // disk. Delete is a DELETE verb so a stray <a> click can't trigger it.
+    Route::get('/privacy', [\App\Http\Controllers\Privacy\UserDataController::class, 'index'])->name('privacy.index');
+    Route::get('/privacy/export', [\App\Http\Controllers\Privacy\UserDataController::class, 'exportForm'])->name('privacy.export.request');
+    Route::post('/privacy/export', [\App\Http\Controllers\Privacy\UserDataController::class, 'exportRequest'])->name('privacy.export.submit');
+    Route::get('/privacy/export/download/{filename}', [\App\Http\Controllers\Privacy\UserDataController::class, 'exportDownload'])
+        ->where('filename', '[A-Za-z0-9_.\-]+')
+        ->middleware('signed')
+        ->name('privacy.export.download');
+    Route::get('/privacy/delete-account', [\App\Http\Controllers\Privacy\UserDataController::class, 'confirmDelete'])->name('privacy.delete.confirm');
+    Route::delete('/privacy/delete-account', [\App\Http\Controllers\Privacy\UserDataController::class, 'delete'])->name('privacy.delete.execute');
 });
 
-// Midtrans Webhook (no auth required)
-Route::post('/payment/webhook', [\App\Http\Controllers\PaymentController::class, 'webhook'])->name('payment.webhook');
+// Midtrans Webhook (no auth required) — gateway can fan out per state
+// change so the cap is generous (named 'webhook' limiter = 100/min/IP).
+// Anchored on the IP so a single misbehaving sender can't drown legit ones.
+Route::post('/payment/webhook', [\App\Http\Controllers\PaymentController::class, 'webhook'])
+    ->middleware('throttle:webhook')
+    ->name('payment.webhook');
 
 // Health check endpoints (no auth — for load balancers / orchestrators)
 Route::get('/healthz', [\App\Http\Controllers\HealthController::class, 'live'])->name('health.live');
 Route::get('/healthz/ready', [\App\Http\Controllers\HealthController::class, 'ready'])->name('health.ready');
 Route::get('/healthz/detailed', [\App\Http\Controllers\HealthController::class, 'detailed'])->name('health.detailed');
 
-// AI Chatbot (auth required)
-Route::middleware('auth')->post('/chat', [\App\Http\Controllers\ChatController::class, 'respond'])->name('chat.respond');
+// AI Chatbot (auth required) — named 'ai-chat' limiter = 20/min/user,
+// catches runaway client loops without blocking real conversation pace.
+Route::post('/chat', [\App\Http\Controllers\ChatController::class, 'respond'])
+    ->middleware(['auth', 'throttle:ai-chat'])
+    ->name('chat.respond');
 
-// AI Plot Explainer (auth required, rate-limited inside controller)
+// AI Plot Explainer (auth required) — named 'ai-batch' limiter (50/hr/user)
+// is the outer guard. The controller still keeps its own per-feature 10/hr
+// budget for cost control, so this is intentional defence-in-depth, not a
+// double-application of the same limit.
 Route::post('/api/movies/{movie}/plot-explain', [\App\Http\Controllers\PlotExplainController::class, 'explain'])
-    ->middleware('auth')
+    ->middleware(['auth', 'throttle:ai-batch'])
     ->name('movies.plot-explain');
 
 // ━━━ DRM Key Endpoint (no auth — JWT-protected, fetched by Shaka Player) ━━━
 Route::get('/drm/key/{sessionToken}/{keyId}', [\App\Http\Controllers\PlaybackController::class, 'key'])
     ->name('drm.key');
+
+// ━━━ Signed-URL media accessors (no auth — gated by `signed` middleware) ━━━
+// Backs Movie::getPosterUrlAttribute() for any poster/backdrop/slider that
+// lives on the `private` disk. Public CDN URLs (Bunny / S3 with public ACL)
+// keep returning their direct URL; only files on the private disk go
+// through these routes. The signed URL TTL is set by the accessor (2 h
+// default — long enough for browser cache, short enough that a leaked link
+// expires before search-engine indexing).
+Route::get('/media/poster/{movie}', [\App\Http\Controllers\MediaController::class, 'poster'])
+    ->middleware('signed')
+    ->name('media.poster');
+Route::get('/media/backdrop/{movie}', [\App\Http\Controllers\MediaController::class, 'backdrop'])
+    ->middleware('signed')
+    ->name('media.backdrop');
+Route::get('/media/slider/{movie}', [\App\Http\Controllers\MediaController::class, 'slider'])
+    ->middleware('signed')
+    ->name('media.slider');
 
 // X-Ray Actor Overlay route lives in routes/api.php (auto-prefixed /api)
 
@@ -147,6 +313,9 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::get('/users', [\App\Http\Controllers\AdminController::class, 'users'])->name('users.index');
     Route::put('/users/{user}/toggle-admin', [\App\Http\Controllers\AdminController::class, 'toggleAdmin'])->name('users.toggleAdmin');
     Route::delete('/users/{user}', [\App\Http\Controllers\AdminController::class, 'destroyUser'])->name('users.destroy');
+    // Brute-force protection — unlock a locked-out account (clears
+    // failed login_attempts rows + writes audit_logs entry).
+    Route::post('/users/{user}/unlock-login', [\App\Http\Controllers\AdminController::class, 'unlockLogin'])->name('users.unlock-login');
 
     // Banners
     Route::get('/banners', [\App\Http\Controllers\AdminController::class, 'banners'])->name('banners.index');
@@ -182,6 +351,16 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
 
     // Audit Logs
     Route::get('/audit-logs', [\App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
+
+    // ━━━ Security: WAF-lite banned IP manager ━━━
+    // Lists IPs currently in the WAF temp-ban list (cache key
+    // `waf:ip:ban:{ip}`) and offers a one-click unban. Read-only entry
+    // also includes the most recent block events for diagnostic
+    // purposes — see docs/security/waf-lite.md.
+    Route::get('/security/waf-banned-ips', [\App\Http\Controllers\Admin\WafController::class, 'index'])
+        ->name('security.waf.banned-ips');
+    Route::post('/security/waf-banned-ips/unban', [\App\Http\Controllers\Admin\WafController::class, 'unban'])
+        ->name('security.waf.unban');
 
     // Sentiment Dashboard
     Route::get('/sentiment/{movie?}', [\App\Http\Controllers\Admin\SentimentDashboardController::class, 'index'])->name('sentiment.index');
@@ -261,6 +440,14 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
 
     // Geo Distribution Dashboard (D14) — users / watches / revenue per country
     Route::get('/geo', [\App\Http\Controllers\Admin\GeoDistributionController::class, 'index'])->name('geo.distribution');
+
+    // ━━━ API Keys (service-to-service auth) ━━━
+    // Plaintext keys are shown ONCE in a flash modal after creation.
+    // Revoke is soft (sets revoked_at) so audit_logs entries remain joinable.
+    Route::get('/api-keys', [\App\Http\Controllers\Admin\ApiKeyController::class, 'index'])->name('api-keys.index');
+    Route::post('/api-keys', [\App\Http\Controllers\Admin\ApiKeyController::class, 'store'])->name('api-keys.store');
+    Route::delete('/api-keys/{apiKey}', [\App\Http\Controllers\Admin\ApiKeyController::class, 'destroy'])
+        ->whereNumber('apiKey')->name('api-keys.destroy');
 });
 
 // ━━━ User-facing AI Features ━━━
@@ -270,18 +457,33 @@ Route::middleware('auth')->group(function () {
     Route::get('/onboarding', [\App\Http\Controllers\OnboardingController::class, 'quiz'])->name('onboarding.quiz');
     Route::post('/onboarding', [\App\Http\Controllers\OnboardingController::class, 'submit'])->name('onboarding.submit');
 
-    // Mood Discovery
+    // Mood Discovery — POST kicks off a real LLM call so it goes through
+    // the 'ai-batch' limiter (50/hr/user). The GET form view is cheap and
+    // intentionally unguarded.
     Route::get('/discover/mood', [\App\Http\Controllers\MoodDiscoveryController::class, 'form'])->name('discovery.mood.form');
-    Route::post('/discover/mood', [\App\Http\Controllers\MoodDiscoveryController::class, 'discover'])->name('discovery.mood.discover');
+    Route::post('/discover/mood', [\App\Http\Controllers\MoodDiscoveryController::class, 'discover'])
+        ->middleware('throttle:ai-batch')
+        ->name('discovery.mood.discover');
 
-    // Personalized Recommendations
-    Route::get('/api/recommendations', [\App\Http\Controllers\RecommendationController::class, 'forUser'])->name('recommendations.me');
-    Route::get('/api/recommendations/time', [\App\Http\Controllers\RecommendationController::class, 'byTimeOfDay'])->name('recommendations.time');
+    // Personalized Recommendations — read-only JSON endpoints. Named
+    // 'search' limiter (60/min/user) absorbs autocomplete-style polling
+    // without firing on real navigation.
+    Route::get('/api/recommendations', [\App\Http\Controllers\RecommendationController::class, 'forUser'])
+        ->middleware('throttle:search')
+        ->name('recommendations.me');
+    Route::get('/api/recommendations/time', [\App\Http\Controllers\RecommendationController::class, 'byTimeOfDay'])
+        ->middleware('throttle:search')
+        ->name('recommendations.time');
 
-    // Movie Comparison
+    // Movie Comparison — POSTs trigger LLM calls so they share the
+    // 'ai-batch' budget. The GET form is unguarded (cheap view render).
     Route::get('/compare', [\App\Http\Controllers\MovieComparisonController::class, 'form'])->name('compare.form');
-    Route::post('/compare', [\App\Http\Controllers\MovieComparisonController::class, 'compare'])->name('compare.run');
-    Route::post('/api/compare', [\App\Http\Controllers\MovieComparisonController::class, 'compareApi'])->name('compare.api');
+    Route::post('/compare', [\App\Http\Controllers\MovieComparisonController::class, 'compare'])
+        ->middleware('throttle:ai-batch')
+        ->name('compare.run');
+    Route::post('/api/compare', [\App\Http\Controllers\MovieComparisonController::class, 'compareApi'])
+        ->middleware('throttle:ai-batch')
+        ->name('compare.api');
 
     // Year In Review
     Route::get('/year-in-review', [\App\Http\Controllers\YearInReviewController::class, 'show'])->name('year-in-review.show');
@@ -290,26 +492,44 @@ Route::middleware('auth')->group(function () {
     Route::post('/year-in-review/{id}/share', [\App\Http\Controllers\YearInReviewController::class, 'share'])
         ->whereNumber('id')->name('year-in-review.share');
 
-    // Smart Watchlist + Family Movie Night
+    // Smart Watchlist + Family Movie Night — recommend POST is an LLM call
+    // (combines multiple users' preferences) so it lives in the ai-batch
+    // budget. The list and form views are unguarded.
     Route::get('/watchlist/smart', [\App\Http\Controllers\SmartWatchlistController::class, 'prioritized'])->name('watchlist.smart');
     Route::get('/family-night', [\App\Http\Controllers\FamilyNightController::class, 'form'])->name('family-night.form');
-    Route::post('/family-night', [\App\Http\Controllers\FamilyNightController::class, 'recommend'])->name('family-night.recommend');
+    Route::post('/family-night', [\App\Http\Controllers\FamilyNightController::class, 'recommend'])
+        ->middleware('throttle:ai-batch')
+        ->name('family-night.recommend');
 
     // Highlight Reels
     Route::get('/movie/{movie}/highlight', [\App\Http\Controllers\HighlightReelController::class, 'show'])->name('highlight.show');
     Route::get('/movie/{movie}/highlight/download', [\App\Http\Controllers\HighlightReelController::class, 'download'])->name('highlight.download');
 
-    // Universal Smart Search (intent classification → routed to specialised services)
-    Route::get('/search', [\App\Http\Controllers\SmartSearchController::class, 'search'])->name('search.smart');
-    Route::get('/api/search/autocomplete', [\App\Http\Controllers\SmartSearchController::class, 'autocomplete'])->name('search.autocomplete');
+    // Universal Smart Search (intent classification → routed to specialised
+    // services). Both endpoints share the 'search' limiter (60/min/user)
+    // which is sized for autocomplete keystroke traffic.
+    Route::get('/search', [\App\Http\Controllers\SmartSearchController::class, 'search'])
+        ->middleware('throttle:search')
+        ->name('search.smart');
+    Route::get('/api/search/autocomplete', [\App\Http\Controllers\SmartSearchController::class, 'autocomplete'])
+        ->middleware('throttle:search')
+        ->name('search.autocomplete');
 
-    // Advanced Search (image / vibe / person)
+    // Advanced Search (image / vibe / person) — POSTs do real ML work
+    // (CLIP embeddings / vibe classification) so they go through the
+    // 'ai-batch' budget. Form views are unguarded.
     Route::get('/search/image', [\App\Http\Controllers\AdvancedSearchController::class, 'imageForm'])->name('search.image.form');
-    Route::post('/search/image', [\App\Http\Controllers\AdvancedSearchController::class, 'imageSearch'])->name('search.image');
+    Route::post('/search/image', [\App\Http\Controllers\AdvancedSearchController::class, 'imageSearch'])
+        ->middleware('throttle:ai-batch')
+        ->name('search.image');
     Route::get('/search/vibe', [\App\Http\Controllers\AdvancedSearchController::class, 'vibeForm'])->name('search.vibe.form');
-    Route::post('/search/vibe', [\App\Http\Controllers\AdvancedSearchController::class, 'vibeSearch'])->name('search.vibe');
+    Route::post('/search/vibe', [\App\Http\Controllers\AdvancedSearchController::class, 'vibeSearch'])
+        ->middleware('throttle:ai-batch')
+        ->name('search.vibe');
     Route::get('/search/person', [\App\Http\Controllers\AdvancedSearchController::class, 'personForm'])->name('search.person.form');
-    Route::post('/search/person', [\App\Http\Controllers\AdvancedSearchController::class, 'personSearch'])->name('search.person');
+    Route::post('/search/person', [\App\Http\Controllers\AdvancedSearchController::class, 'personSearch'])
+        ->middleware('throttle:ai-batch')
+        ->name('search.person');
 
     // ── Encrypted playback (DRM-protected) ──
     Route::get('/playback/{movie}/config', [\App\Http\Controllers\PlaybackController::class, 'config'])->name('playback.config');

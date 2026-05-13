@@ -64,7 +64,9 @@ class ConcurrentStreamLimiter
             return false;
         }
 
-        PlaybackConcurrentLock::create([
+        // PlaybackConcurrentLock uses $guarded = ['*'] (mass-assignment audit,
+        // 2026-05-13). ConcurrentStreamLimiter is the canonical write path.
+        PlaybackConcurrentLock::forceCreate([
             'user_id'       => $user->id,
             'session_token' => $sessionToken,
             'movie_id'      => $movieId,

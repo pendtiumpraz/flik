@@ -42,6 +42,15 @@ return [
             'visibility' => 'public',
         ],
 
+        // Private disk — server-only, NEVER symlinked into public/.
+        // Backs GDPR data exports (signed-URL gated downloads), audit dumps,
+        // and any other PII payload that must not be web-reachable.
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'visibility' => 'private',
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

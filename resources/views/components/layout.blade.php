@@ -125,6 +125,13 @@
     {{-- Shaka Player (DRM/HLS playback). Loaded site-wide for simplicity;
          the FlikPlayer wrapper only instantiates when a player view mounts. --}}
     <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.7.11/dist/shaka-player.compiled.js" defer></script>
+
+    {{-- Cookie consent banner (GDPR / UU PDP). Self-hides once a decision
+         is persisted under localStorage `flik_cookie_consent`. The footer
+         "Cookie Settings" link calls `window.FlikConsent.reopen()` to bring
+         it back. --}}
+    <x-cookie-banner />
+
     @stack('scripts')
 </body>
 </html>

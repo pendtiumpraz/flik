@@ -1,0 +1,8 @@
+Contact: mailto:security@flik.example.com
+Contact: https://flik.example.com/security/report
+Expires: 2027-12-31T23:59:59.000Z
+Encryption: https://flik.example.com/.well-known/pgp-key.txt
+Acknowledgments: https://flik.example.com/security/hall-of-fame
+Preferred-Languages: id, en
+Canonical: https://flik.example.com/.well-known/security.txt
+Policy: https://flik.example.com/security/policy

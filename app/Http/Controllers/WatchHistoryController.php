@@ -23,15 +23,20 @@ class WatchHistoryController extends Controller
         $progress = min(100, round(($request->current_time / $request->duration) * 100));
         $completed = $progress >= 90;
 
-        $history = WatchHistory::updateOrCreate(
-            ['user_id' => $userId, 'movie_id' => $request->movie_id],
-            [
-                'current_time' => $request->current_time,
-                'duration' => $request->duration,
-                'completed' => $completed,
-                'last_watched_at' => now(),
-            ]
-        );
+        // SECURITY: `completed` is server-derived (mass-assignment audit,
+        // 2026-05-13) and intentionally NOT in WatchHistory::$fillable so a
+        // crafted AJAX payload can't farm completion XP/coins by lying.
+        // Use a manual upsert + forceFill so the server-trusted value lands.
+        $history = WatchHistory::firstOrNew(['user_id' => $userId, 'movie_id' => $request->movie_id]);
+        $isNew = ! $history->exists;
+        $history->forceFill([
+            'current_time'    => $request->current_time,
+            'duration'        => $request->duration,
+            'completed'       => $completed,
+            'last_watched_at' => now(),
+        ])->save();
+        // updateOrCreate semantics callers depend on:
+        $history->wasRecentlyCreated = $isNew;
 
         // Award XP when completing a movie for the first time
         if ($completed && $history->wasRecentlyCreated) {

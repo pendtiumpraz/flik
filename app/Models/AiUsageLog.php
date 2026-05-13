@@ -11,19 +11,15 @@ class AiUsageLog extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'ai_provider_id',
-        'task_type',
-        'subject_type',
-        'subject_id',
-        'input_tokens',
-        'output_tokens',
-        'cost_usd',
-        'latency_ms',
-        'cache_hit',
-        'success',
-        'error_message',
-    ];
+    /**
+     * SECURITY: ai_usage_logs is a system-only sink written exclusively by
+     * App\Services\Ai\UsageTracker after every AiClient::chat() call. End
+     * users never write here. Guarding everything closes off accidental
+     * mass-assignment routes (e.g. an admin endpoint bulk-import bug).
+     *
+     * @var array<int, string>
+     */
+    protected $guarded = ['*'];
 
     protected $casts = [
         'input_tokens'  => 'integer',

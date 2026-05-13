@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# ──────────────────────────────────────────────────────────────────────────
+# FLiK pre-commit secret scanner
+#
+# Rejects a commit if any STAGED file matches a known secret pattern. This
+# is the second line of defence after .gitignore — devs who manually `git
+# add .env` (or paste a key into a config file) get blocked here.
+#
+# To enable per-developer:
+#   git config core.hooksPath .githooks
+#
+# To bypass for one commit (use sparingly, requires justification in PR):
+#   git commit --no-verify
+#
+# Patterns covered:
+#   - OpenAI / OpenRouter style keys: sk-...
+#   - Stripe live + test keys: sk_live_..., pk_live_..., sk_test_...
+#   - Google API keys: AIza[35 chars]
+#   - GitHub personal access tokens: ghp_[36 chars]
+#   - Slack tokens: xoxb- / xoxp- / xoxa- / xoxr- / xoxs-
+#   - JSON Web Tokens: eyJ[base64].eyJ[base64].[base64]
+#   - Generic password=... or api_key=... assignments with non-empty values
+#   - Any file literally named .env (committing the .env file at all)
+# ──────────────────────────────────────────────────────────────────────────
+
+set -u
+
+RED=$'\033[0;31m'
+YELLOW=$'\033[0;33m'
+RESET=$'\033[0m'
+
+fail=0
+report() {
+    if [ "$fail" -eq 0 ]; then
+        printf "%spre-commit: secret scan FAILED%s\n" "$RED" "$RESET" >&2
+        printf "%scommit blocked. Remove the offending lines or unstage the file.%s\n\n" "$YELLOW" "$RESET" >&2
+    fi
+    fail=1
+    printf "  - %s\n" "$1" >&2
+}
+
+# 1) Reject any staged .env-flavoured file (allow .env.example only).
+while IFS= read -r path; do
+    [ -z "$path" ] && continue
+    case "$path" in
+        .env.example|*/.env.example) ;;
+        .env|.env.*|*/.env|*/.env.*)
+            report "Refusing to commit env file: $path"
+            ;;
+    esac
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+# 2) Pattern-match staged content (added lines only) for likely secrets.
+#    `git diff --cached -U0` shows just the new/changed lines.
+secret_patterns='sk-[A-Za-z0-9_-]{20,}|sk_live_[A-Za-z0-9]{20,}|sk_test_[A-Za-z0-9]{20,}|pk_live_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{35}|ghp_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
+
+# Only inspect newly-added lines (lines beginning with `+` but NOT `+++`).
+while IFS= read -r line; do
+    case "$line" in
+        +++*) continue ;;
+        +*)
+            stripped=${line#+}
+            if printf '%s' "$stripped" | grep -Eq "$secret_patterns"; then
+                report "Possible API key / token in staged change: $(printf '%s' "$stripped" | cut -c1-80)"
+            fi
+            # Generic "password=..." / "api_key=..." with >= 8 char value
+            # (skip empty assignments and the literal string "null").
+            if printf '%s' "$stripped" | grep -Eiq "(password|api[_-]?key|secret)[[:space:]]*=[[:space:]]*['\"]?[A-Za-z0-9/_+=-]{8,}['\"]?"; then
+                # Whitelist obvious config defaults so we don't false-positive
+                # `MAIL_PASSWORD=null` or `DB_PASSWORD=` template lines.
+                if ! printf '%s' "$stripped" | grep -Eiq "(=[[:space:]]*$|=[[:space:]]*['\"]?(null|secret|password|changeme|example|YOUR_[A-Z_]+|<[^>]+>)['\"]?$)"; then
+                    report "Possible plaintext secret assignment: $(printf '%s' "$stripped" | cut -c1-80)"
+                fi
+            fi
+            ;;
+    esac
+done < <(git diff --cached -U0 --no-color)
+
+if [ "$fail" -ne 0 ]; then
+    printf "\n%sIf this is a false positive, run %sgit commit --no-verify%s and explain in the PR.%s\n" \
+        "$YELLOW" "$RED" "$YELLOW" "$RESET" >&2
+    exit 1
+fi
+
+exit 0

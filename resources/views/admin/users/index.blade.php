@@ -45,12 +45,16 @@
                     <td style="color:#666;font-size:13px">{{ $user->created_at ? $user->created_at->format('d M Y') : '-' }}</td>
                     <td>
                         @if($user->id !== auth()->id())
-                            <div style="display:flex;gap:6px">
+                            <div style="display:flex;gap:6px;flex-wrap:wrap">
                                 <form method="POST" action="{{ route('admin.users.toggleAdmin', $user) }}">
                                     @csrf @method('PUT')
                                     <button type="submit" class="btn btn-ghost btn-sm">
                                         {{ $user->is_admin ? '👤 Remove Admin' : '⭐ Make Admin' }}
                                     </button>
+                                </form>
+                                <form method="POST" action="{{ route('admin.users.unlock-login', $user) }}" title="Clear failed login attempts (brute-force lockout)">
+                                    @csrf
+                                    <button type="submit" class="btn btn-ghost btn-sm">🔓 Unlock</button>
                                 </form>
                                 <form method="POST" action="{{ route('admin.users.destroy', $user) }}" onsubmit="return confirm('Delete user {{ addslashes($user->name) }}? This cannot be undone.')">
                                     @csrf @method('DELETE')

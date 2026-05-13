@@ -69,4 +69,20 @@ return [
         'stream_library_id' => env('BUNNY_STREAM_LIBRARY_ID'),
         'stream_api_key' => env('BUNNY_STREAM_API_KEY'),
     ],
+
+    'security_alerts' => [
+        'enabled' => env('SECURITY_ALERTS_ENABLED', false),
+        'slack_webhook' => env('SECURITY_ALERTS_SLACK_WEBHOOK'),
+        'discord_webhook' => env('SECURITY_ALERTS_DISCORD_WEBHOOK'),
+        'min_severity' => env('SECURITY_ALERTS_MIN_SEVERITY', 'high'),
+    ],
+
+    // Cloudflare Turnstile CAPTCHA. Both keys must be set for the integration
+    // to engage; absent keys make TurnstileVerifier::enabled() return false
+    // and the CaptchaPassed rule plus <x-captcha-turnstile> component become
+    // graceful no-ops (FLiK's standard env-gating pattern).
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY'),
+        'secret_key' => env('TURNSTILE_SECRET_KEY'),
+    ],
 ];

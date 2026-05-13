@@ -5,6 +5,7 @@
 
     <form method="POST" action="/newsletter" class="text-sm lg:flex">
         @csrf
+        <x-honeypot />
 
         <div class="flex items-center lg:py-4 lg:px-12">
             <label for="email" class="hidden lg:inline-block">

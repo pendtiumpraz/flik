@@ -21,6 +21,11 @@ class UserFactory extends Factory
     /**
      * Define the model's default state.
      *
+     * NOTE: `email_verified_at` and `remember_token` are intentionally NOT
+     * in User::$fillable (mass-assignment audit, 2026-05-13). Factories
+     * persist them through the configure() afterMaking hook below so
+     * tests still get verified users out of the box.
+     *
      * @return array
      */
     public function definition()
@@ -28,10 +33,24 @@ class UserFactory extends Factory
         return [
             'name' => $this->faker->name,
             'email' => $this->faker->unique()->safeEmail,
-            'email_verified_at' => now(),
             'password' => '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
-            'remember_token' => Str::random(10),
         ];
+    }
+
+    /**
+     * Stamp guarded fields (verification + remember_token) via forceFill so
+     * the User::$fillable allowlist can stay tight without breaking tests.
+     */
+    public function configure()
+    {
+        return $this->afterMaking(function (User $user): void {
+            if ($user->email_verified_at === null && ! array_key_exists('email_verified_at', $user->getAttributes())) {
+                $user->forceFill(['email_verified_at' => now()]);
+            }
+            if (empty($user->remember_token)) {
+                $user->forceFill(['remember_token' => Str::random(10)]);
+            }
+        });
     }
 
     /**
@@ -41,10 +60,8 @@ class UserFactory extends Factory
      */
     public function unverified()
     {
-        return $this->state(function (array $attributes) {
-            return [
-                'email_verified_at' => null,
-            ];
+        return $this->afterMaking(function (User $user): void {
+            $user->forceFill(['email_verified_at' => null]);
         });
     }
 }

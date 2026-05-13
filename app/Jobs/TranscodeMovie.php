@@ -73,7 +73,9 @@ class TranscodeMovie implements ShouldQueue
             ->first();
 
         if (!$job) {
-            $job = EncodingJob::create([
+            // EncodingJob uses $guarded = ['*'] (mass-assignment audit,
+            // 2026-05-13). Pipeline is a trusted internal writer.
+            $job = EncodingJob::forceCreate([
                 'movie_id' => $movie->id,
                 'status' => EncodingJob::STATUS_QUEUED,
                 'progress_percent' => 0,

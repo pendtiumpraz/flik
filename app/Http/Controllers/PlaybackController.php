@@ -6,15 +6,18 @@ namespace App\Http\Controllers;
 
 use App\Models\DrmSession;
 use App\Models\Movie;
+use App\Services\Audit\AuditLogger;
 use App\Services\Drm\ConcurrentStreamLimiter;
 use App\Services\Drm\DeviceFingerprinter;
 use App\Services\Drm\DrmKeyService;
 use App\Services\Drm\DrmTokenService;
 use App\Services\Drm\PlaybackManifestGenerator;
+use App\Support\SecurityEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 /**
  * HTTP entrypoints for the encrypted-playback flow.
@@ -39,6 +42,7 @@ class PlaybackController extends Controller
         protected ConcurrentStreamLimiter $streams,
         protected DeviceFingerprinter $fingerprinter,
         protected PlaybackManifestGenerator $manifests,
+        protected AuditLogger $audit,
     ) {
     }
 
@@ -178,23 +182,23 @@ class PlaybackController extends Controller
         $jwt = (string) $request->query('token', '');
 
         if ($jwt === '') {
-            return response('Missing key token.', 403);
+            return $this->denyKey('missing_token', $sessionToken, $keyId);
         }
 
         $payload = $this->tokens->validateKeyRequestToken($jwt);
 
         if ($payload === null) {
-            return response('Invalid key token.', 403);
+            return $this->denyKey('invalid_token', $sessionToken, $keyId);
         }
 
         // Tie the JWT claims to the URL params — prevents key URL replay
         // with a token issued for a different session/key.
         if (($payload['session_id'] ?? null) !== $sessionToken) {
-            return response('Token / session mismatch.', 403);
+            return $this->denyKey('session_mismatch', $sessionToken, $keyId);
         }
 
         if (($payload['kid'] ?? null) !== $keyId) {
-            return response('Token / key mismatch.', 403);
+            return $this->denyKey('key_mismatch', $sessionToken, $keyId);
         }
 
         $session = DrmSession::query()
@@ -203,7 +207,7 @@ class PlaybackController extends Controller
             ->first();
 
         if ($session === null || ! $session->isActive()) {
-            return response('Session expired.', 403);
+            return $this->denyKey('session_expired', $sessionToken, $keyId, $session?->user_id);
         }
 
         // Geo gate. movies.geo_allow holds an array of ISO-3166 alpha-2
@@ -211,14 +215,22 @@ class PlaybackController extends Controller
         $movie = $session->movie;
 
         if ($movie !== null && $this->geoBlocked($movie, $request)) {
-            return response('Geo-restricted.', 451);
+            return $this->denyKey('geo_restricted', $sessionToken, $keyId, $session->user_id, $movie);
         }
 
         $key = $this->keys->getKey($sessionToken);
 
         if ($key === null) {
-            return response('Key unavailable.', 403);
+            return $this->denyKey('key_unavailable', $sessionToken, $keyId, $session->user_id, $movie);
         }
+
+        // Successful key handout — audit at low severity for usage analytics.
+        $this->safeAudit(SecurityEvents::DRM_KEY_REQUEST, $movie, [
+            'session_token' => $sessionToken,
+            'key_id'        => $keyId,
+            'movie_id'      => $movie?->id,
+            'user_id'       => $session->user_id,
+        ]);
 
         // Raw 16-byte binary. NO base64 — Shaka's clear-key flow expects raw.
         return response($key, 200, [
@@ -228,6 +240,49 @@ class PlaybackController extends Controller
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
         ]);
+    }
+
+    /**
+     * Build a 403 response AND emit a DRM_KEY_DENIED security audit. The
+     * outward-facing message stays generic so an attacker can't probe
+     * which check failed; the structured reason lives in the audit row.
+     */
+    private function denyKey(
+        string $reason,
+        string $sessionToken,
+        string $keyId,
+        ?int $userId = null,
+        ?Movie $movie = null,
+    ): Response {
+        $this->safeAudit(SecurityEvents::DRM_KEY_DENIED, $movie, [
+            'reason'        => $reason,
+            'session_token' => $sessionToken,
+            'key_id'        => $keyId,
+            'user_id'       => $userId,
+            'movie_id'      => $movie?->id,
+        ]);
+
+        // Generic message — every failure path collapses to a single body
+        // so the endpoint can't be probed for token introspection.
+        return response($reason === 'geo_restricted' ? 'Geo-restricted.' : 'Key request denied.', $reason === 'geo_restricted' ? 451 : 403);
+    }
+
+    /**
+     * Best-effort audit write — DRM key delivery must never break on a
+     * downstream audit / Slack outage.
+     *
+     * @param  array<string,mixed>  $meta
+     */
+    private function safeAudit(string $event, ?Movie $subject, array $meta = []): void
+    {
+        try {
+            $this->audit->security($event, $subject, $meta);
+        } catch (Throwable $e) {
+            \Log::warning('PlaybackController: audit write failed', [
+                'event' => $event,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

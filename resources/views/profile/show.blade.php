@@ -126,6 +126,25 @@
             </div>
             @endif
 
+            <!-- Security & Sessions -->
+            <div class="mt-8 rounded-xl overflow-hidden" style="background:#1a1a1a;border:1px solid #2a2a2a">
+                <div class="p-4 flex items-center justify-between gap-4" style="border-bottom:1px solid #2a2a2a">
+                    <h3 class="font-heading font-semibold text-white">Security</h3>
+                </div>
+                <div class="p-6 flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+                    <div>
+                        <p class="text-sm font-semibold text-white">Active Sessions</p>
+                        <p class="text-xs text-gray-500 mt-1">Lihat & cabut device yang saat ini login ke akun Anda.</p>
+                    </div>
+                    <a href="{{ route('profile.sessions.index') }}"
+                       class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-black whitespace-nowrap"
+                       style="background:#C5A55A">
+                        <x-icon name="server" :size="16" />
+                        Manage Sessions
+                    </a>
+                </div>
+            </div>
+
             <!-- Edit Profile -->
             <div class="mt-8 rounded-xl overflow-hidden" style="background:#1a1a1a;border:1px solid #2a2a2a">
                 <div class="p-4" style="border-bottom:1px solid #2a2a2a">

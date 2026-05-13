@@ -2,16 +2,24 @@
 
 namespace App\Services\Ai;
 
+use App\Exceptions\SsrfException;
+use App\Services\Security\SafeHttp;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Free web search — Wikipedia (reliable for film/people entities) + DuckDuckGo fallback.
  * No API keys needed. Used as "tool" by DeepSeek's agentic function calling.
+ *
+ * All outbound HTTP is routed through {@see SafeHttp} → {@see \App\Services\Security\SsrfGuard}
+ * so user-influenced search queries can't be coerced into private-network probes.
  */
 class WebSearchService
 {
+    public function __construct(protected SafeHttp $http)
+    {
+    }
+
     /**
      * Search the web. Returns array of ['title', 'snippet', 'url'].
      * Cached 1 hour per query.
@@ -55,16 +63,25 @@ class WebSearchService
      */
     protected function wikipedia(string $query, int $maxResults = 3): array
     {
+        $headers = ['User-Agent' => 'FLiK Assistant/1.0 (https://flik.id)'];
+
         // Step 1: search for matching pages
-        $searchResp = Http::timeout(6)
-            ->withHeaders(['User-Agent' => 'FLiK Assistant/1.0 (https://flik.id)'])
-            ->get('https://en.wikipedia.org/w/api.php', [
-                'action' => 'query',
-                'list' => 'search',
-                'srsearch' => $query,
-                'srlimit' => $maxResults,
-                'format' => 'json',
-            ]);
+        try {
+            $searchResp = $this->http->get(
+                'https://en.wikipedia.org/w/api.php',
+                [
+                    'action'   => 'query',
+                    'list'     => 'search',
+                    'srsearch' => $query,
+                    'srlimit'  => $maxResults,
+                    'format'   => 'json',
+                ],
+                ['timeout' => 6, 'headers' => $headers],
+            );
+        } catch (SsrfException $e) {
+            Log::warning('Wikipedia: SSRF guard blocked search request', ['err' => $e->getMessage()]);
+            return [];
+        }
 
         if (!$searchResp->successful()) return [];
 
@@ -73,17 +90,25 @@ class WebSearchService
 
         // Step 2: get extracts (intro paragraphs) for top hits
         $titles = collect($hits)->pluck('title')->take($maxResults)->implode('|');
-        $extractResp = Http::timeout(6)
-            ->withHeaders(['User-Agent' => 'FLiK Assistant/1.0'])
-            ->get('https://en.wikipedia.org/w/api.php', [
-                'action' => 'query',
-                'prop' => 'extracts|info',
-                'exintro' => 1,
-                'explaintext' => 1,
-                'inprop' => 'url',
-                'titles' => $titles,
-                'format' => 'json',
-            ]);
+
+        try {
+            $extractResp = $this->http->get(
+                'https://en.wikipedia.org/w/api.php',
+                [
+                    'action'      => 'query',
+                    'prop'        => 'extracts|info',
+                    'exintro'     => 1,
+                    'explaintext' => 1,
+                    'inprop'      => 'url',
+                    'titles'      => $titles,
+                    'format'      => 'json',
+                ],
+                ['timeout' => 6, 'headers' => $headers],
+            );
+        } catch (SsrfException $e) {
+            Log::warning('Wikipedia: SSRF guard blocked extract request', ['err' => $e->getMessage()]);
+            return [];
+        }
 
         if (!$extractResp->successful()) return [];
 
@@ -106,15 +131,22 @@ class WebSearchService
      */
     protected function duckduckgo(string $query, int $maxResults = 3): array
     {
-        $resp = Http::timeout(6)
-            ->withHeaders(['User-Agent' => 'FLiK Assistant/1.0'])
-            ->get('https://api.duckduckgo.com/', [
-                'q' => $query,
-                'format' => 'json',
-                'no_html' => 1,
-                'skip_disambig' => 1,
-                't' => 'flik-ai',
-            ]);
+        try {
+            $resp = $this->http->get(
+                'https://api.duckduckgo.com/',
+                [
+                    'q'             => $query,
+                    'format'        => 'json',
+                    'no_html'       => 1,
+                    'skip_disambig' => 1,
+                    't'             => 'flik-ai',
+                ],
+                ['timeout' => 6, 'headers' => ['User-Agent' => 'FLiK Assistant/1.0']],
+            );
+        } catch (SsrfException $e) {
+            Log::warning('DuckDuckGo: SSRF guard blocked request', ['err' => $e->getMessage()]);
+            return [];
+        }
 
         if (!$resp->successful()) return [];
 

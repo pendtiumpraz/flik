@@ -14,31 +14,32 @@ class DatabaseSeeder extends Seeder
      * NOTE: pass plain-text password — User::setPasswordAttribute mutator
      * will bcrypt automatically. Don't pre-hash with Hash::make() or it
      * double-bcrypts and login breaks.
+     *
+     * SECURITY: `is_admin`, `role`, and `email_verified_at` are NOT in
+     * User::$fillable (mass-assignment audit, 2026-05-13). Set them via
+     * forceFill() so the seeder still bootstraps the admin account
+     * without re-introducing privilege-escalation surface.
      */
     public function run()
     {
         // ── Default users (idempotent) ──────────────────────────
-        User::updateOrCreate(
-            ['email' => 'user@gmail.com'],
-            [
-                'name' => 'user',
-                'password' => 'password',
-                'role' => User::ROLE_USER,
-                'is_admin' => false,
-                'email_verified_at' => now(),
-            ]
-        );
+        $regular = User::firstOrNew(['email' => 'user@gmail.com']);
+        $regular->name = 'user';
+        $regular->password = 'password';
+        $regular->forceFill([
+            'role' => User::ROLE_USER,
+            'is_admin' => false,
+            'email_verified_at' => now(),
+        ])->save();
 
-        User::updateOrCreate(
-            ['email' => 'admin@gmail.com'],
-            [
-                'name' => 'admin',
-                'password' => 'password',
-                'role' => User::ROLE_SUPER_ADMIN,
-                'is_admin' => true,
-                'email_verified_at' => now(),
-            ]
-        );
+        $admin = User::firstOrNew(['email' => 'admin@gmail.com']);
+        $admin->name = 'admin';
+        $admin->password = 'password';
+        $admin->forceFill([
+            'role' => User::ROLE_SUPER_ADMIN,
+            'is_admin' => true,
+            'email_verified_at' => now(),
+        ])->save();
 
         // ── Catalog & system data ──────────────────────────────
         $this->call([

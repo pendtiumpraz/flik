@@ -107,7 +107,8 @@ class ScheduleController extends Controller
      */
     public function destroy(MovieSchedule $schedule): RedirectResponse
     {
-        $this->authorizeOwnership($schedule);
+        // MovieSchedulePolicy::delete() — owner only, admin override via Gate::before.
+        $this->authorize('delete', $schedule);
 
         $title = $schedule->movie?->title ?? 'film';
         $schedule->delete();
@@ -123,7 +124,9 @@ class ScheduleController extends Controller
      */
     public function ics(MovieSchedule $schedule): Response
     {
-        $this->authorizeOwnership($schedule);
+        // MovieSchedulePolicy::view() — .ics download leaks scheduled
+        // viewing time + private notes; gate it as a read of the model.
+        $this->authorize('view', $schedule);
 
         $schedule->loadMissing('movie.genres');
         $movie = $schedule->movie;
@@ -193,16 +196,6 @@ class ScheduleController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
             'Cache-Control'       => 'no-store, max-age=0',
         ]);
-    }
-
-    /**
-     * Abort with 403 if the authenticated user doesn't own the schedule.
-     */
-    protected function authorizeOwnership(MovieSchedule $schedule): void
-    {
-        if ((int) $schedule->user_id !== (int) Auth::id()) {
-            abort(403, 'Bukan jadwal kamu.');
-        }
     }
 
     /**

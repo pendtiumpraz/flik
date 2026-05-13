@@ -48,8 +48,20 @@
                     </div>
                 @endif
 
+                {{-- Brute-force lockout / IP throttle / RateLimiter exhaustion. --}}
+                {{-- Renders the friendly Indonesian message from SessionsController. --}}
+                @error('throttle')
+                    <div class="mt-4 p-3 rounded-lg text-sm flex items-start gap-2"
+                         style="background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.3);color:#f87171"
+                         role="alert">
+                        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span>{{ $message }}</span>
+                    </div>
+                @enderror
+
                 <form method="post" action="/login" class="mt-8 space-y-5">
                     @csrf
+                    <x-honeypot />
 
                     <!-- Email -->
                     <div>
@@ -71,7 +83,7 @@
                     <div>
                         <div class="flex items-center justify-between mb-1.5">
                             <label for="password" class="text-sm font-medium text-gray-400">Password</label>
-                            <a href="#" class="text-xs hover:underline" style="color:#C5A55A">Lupa password?</a>
+                            <a href="{{ route('password.request') }}" class="text-xs hover:underline" style="color:#C5A55A">Lupa password?</a>
                         </div>
                         <input class="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-gray-600 transition-all focus:outline-none focus:ring-2"
                             style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1)"
@@ -90,6 +102,9 @@
                         <input type="checkbox" name="remember" id="remember" class="rounded" style="accent-color:#C5A55A">
                         <label for="remember" class="text-sm text-gray-400">Ingat saya</label>
                     </div>
+
+                    {{-- Cloudflare Turnstile CAPTCHA (no-op when env keys absent). --}}
+                    <x-captcha-turnstile action="login" theme="dark" />
 
                     <!-- Submit -->
                     <button type="submit"

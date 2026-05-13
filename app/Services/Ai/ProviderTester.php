@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Ai;
 
+use App\Exceptions\SsrfException;
 use App\Models\AiProvider;
+use App\Services\Security\SsrfGuard;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -27,6 +29,10 @@ class ProviderTester
 
     /** Test request HTTP timeout (seconds). Shorter than AiClient's 30s — admin is waiting. */
     private const TIMEOUT_SECONDS = 15;
+
+    public function __construct(private readonly SsrfGuard $ssrfGuard = new SsrfGuard())
+    {
+    }
 
     /**
      * Run a connection test against a single provider.
@@ -77,8 +83,25 @@ class ProviderTester
             $payload = $this->buildPayload($provider, $messages);
             $headers = $this->buildHeaders($provider);
 
+            // SSRF guard — refuse to "test" a base_url that resolves to a
+            // private IP / cloud-metadata host. The test endpoint is the
+            // most attractive SSRF surface in admin (arbitrary URL input).
+            try {
+                $this->ssrfGuard->assertUrlAllowed($endpoint);
+            } catch (SsrfException $e) {
+                throw new \RuntimeException('Base URL rejected by SSRF guard: ' . $e->getMessage());
+            }
+
             $response = Http::timeout(self::TIMEOUT_SECONDS)
+                ->connectTimeout(5)
                 ->withHeaders($headers)
+                ->withOptions([
+                    'allow_redirects' => [
+                        'max'       => 3,
+                        'protocols' => ['http', 'https'],
+                        'strict'    => true,
+                    ],
+                ])
                 ->post($endpoint, $payload);
 
             if (!$response->successful()) {

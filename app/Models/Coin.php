@@ -9,7 +9,16 @@ class Coin extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'amount', 'type', 'description'];
+    /**
+     * SECURITY: this is a write-only ledger. End users never POST `amount`
+     * or `type` directly — coin grants and spends ALWAYS flow through the
+     * static earn() / spend() helpers below (or admin tools). Guarding
+     * everything closes the door on a request body sneaking a fat amount
+     * into a controller that reaches Coin::create($request->only(...)).
+     *
+     * @var array<int, string>
+     */
+    protected $guarded = ['*'];
 
     public function user()
     {
@@ -18,7 +27,7 @@ class Coin extends Model
 
     public static function earn(int $userId, int $amount, string $type, string $description = null): self
     {
-        return static::create([
+        return static::forceCreate([
             'user_id' => $userId,
             'amount' => abs($amount),
             'type' => $type,
@@ -28,7 +37,7 @@ class Coin extends Model
 
     public static function spend(int $userId, int $amount, string $type, string $description = null): self
     {
-        return static::create([
+        return static::forceCreate([
             'user_id' => $userId,
             'amount' => -abs($amount),
             'type' => $type,

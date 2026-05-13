@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Security\HtmlSanitizer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -16,6 +17,22 @@ class Comment extends Model
         'spoiler_confidence' => 'float',
         'spoiler_checked_at' => 'datetime',
     ];
+
+    /**
+     * Sanitize comment body on assignment. Storing pre-sanitized HTML
+     * means downstream consumers (admin moderation queue, sentiment
+     * dashboard, AI spoiler detector) all see the same trusted output
+     * — and even if a future Blade template forgets to escape, there's
+     * no script tag in the database to leak in the first place.
+     *
+     * The sanitizer preserves legitimate inline formatting like
+     * <strong>, <em>, and validated <a href> while stripping every
+     * dangerous tag/attribute. See {@see HtmlSanitizer}.
+     */
+    public function setBodyAttribute(?string $value): void
+    {
+        $this->attributes['body'] = app(HtmlSanitizer::class)->sanitize($value);
+    }
 
     public function user()
     {
