@@ -102,7 +102,16 @@ class AiProvider extends Model
 
     public function getMaskedApiKeyAttribute(): string
     {
-        $key = $this->api_key;
+        // Wrap decrypt in try/catch — if APP_KEY rotated or the row was
+        // written under a different key, the encrypted cast throws and
+        // 500s the admin page. Surface a recoverable marker instead so the
+        // operator can edit/re-enter the key.
+        try {
+            $key = $this->api_key;
+        } catch (\Throwable $e) {
+            return '⚠ DECRYPT FAILED — re-enter key';
+        }
+
         if (!$key || strlen($key) < 10) {
             return str_repeat('•', 8);
         }

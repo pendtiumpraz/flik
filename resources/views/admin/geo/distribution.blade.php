@@ -2,9 +2,11 @@
     $rp = static fn (float|int|null $v): string => 'Rp ' . number_format((float) ($v ?? 0), 0, ',', '.');
 
     // Largest user-count is the denominator for the inline bars.
-    $maxUsers   = max(array_column($countries, 'users'), 1);
-    $maxWatches = max(array_column($topByWatches, 'watches'), 1);
-    $maxRevenue = max(array_column($topByRevenue, 'revenue'), 1);
+    // Append [1] so max() never sees an empty array (which in PHP 8 returns
+    // the array itself, not the scalar fallback — causing div-by-array later).
+    $maxUsers   = max(array_merge(array_column($countries, 'users'), [1]));
+    $maxWatches = max(array_merge(array_column($topByWatches, 'watches'), [1]));
+    $maxRevenue = max(array_merge(array_column($topByRevenue, 'revenue'), [1]));
 @endphp
 
 <x-admin.layout title="Geo Distribution">
