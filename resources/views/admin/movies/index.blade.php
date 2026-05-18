@@ -1,5 +1,28 @@
 <x-admin.layout title="Movies">
 
+    <style>
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            font-size: 13px;
+            color: #ddd;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background .12s, color .12s;
+            white-space: nowrap;
+        }
+        .dropdown-item:hover {
+            background: #252525;
+            color: #fff;
+        }
+        .btn.is-active {
+            background: #252525;
+            color: #C5A55A;
+        }
+    </style>
+
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px">
         <!-- Search -->
         <form method="GET" action="{{ route('admin.movies.index') }}" style="display:flex;gap:8px">
@@ -25,7 +48,7 @@
                     <th>Rating</th>
                     <th>Year</th>
                     <th>Flags</th>
-                    <th style="width:120px">Actions</th>
+                    <th style="width:160px">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -56,39 +79,61 @@
                         @if($movie->is_trending) <span class="badge badge-green">Trend</span> @endif
                     </td>
                     <td>
-                        <div style="display:flex;flex-direction:column;gap:6px">
-                            <div style="display:flex;gap:6px;flex-wrap:wrap">
-                                <a href="{{ route('admin.movies.edit', $movie) }}" class="btn btn-ghost btn-sm">Edit</a>
-                                <a href="{{ route('admin.movies.subtitles.index', $movie) }}" class="btn btn-ghost btn-sm" title="Manage Subtitles">CC</a>
-                                <form method="POST" action="{{ route('admin.movies.destroy', $movie) }}" onsubmit="return confirm('Delete {{ addslashes($movie->title) }}?')">
-                                    @csrf @method('DELETE')
-                                    <button type="submit" class="btn btn-danger btn-sm">Del</button>
-                                </form>
-                            </div>
-                            <div style="display:flex;gap:4px;flex-wrap:wrap">
-                                @if (\Illuminate\Support\Facades\Route::has('highlight.show'))
-                                    <a href="{{ route('highlight.show', $movie) }}" class="btn btn-ghost btn-sm" title="Highlight Reel" style="font-size:11px;padding:4px 8px">Highlight</a>
-                                @elseif (\Illuminate\Support\Facades\Route::has('admin.movies.encoding-status'))
-                                    <a href="{{ route('admin.movies.encoding-status', $movie) }}" class="btn btn-ghost btn-sm" title="Encoding Status" style="font-size:11px;padding:4px 8px">Highlight</a>
-                                @endif
-                                @if (\Illuminate\Support\Facades\Route::has('admin.movies.marketing-ops.tiktok-clips'))
-                                    <a href="{{ route('admin.movies.marketing-ops.tiktok-clips', $movie) }}" class="btn btn-ghost btn-sm" title="TikTok Clips" style="font-size:11px;padding:4px 8px">TikTok</a>
-                                @endif
-                                @if (\Illuminate\Support\Facades\Route::has('admin.movies.marketing-ops.title-alternatives'))
-                                    <a href="{{ route('admin.movies.marketing-ops.title-alternatives', $movie) }}" class="btn btn-ghost btn-sm" title="Title A/B Alternatives" style="font-size:11px;padding:4px 8px">Title A/B</a>
-                                @endif
-                                @if (\Illuminate\Support\Facades\Route::has('admin.movies.upload-master'))
-                                    <form method="POST" action="{{ route('admin.movies.upload-master', $movie) }}" enctype="multipart/form-data" style="display:inline-flex;gap:4px;align-items:center" onsubmit="return this.querySelector('input[type=file]').files.length > 0 || (alert('Pick a master file first'), false)">
-                                        @csrf
-                                        <label class="btn btn-ghost btn-sm" title="Upload Master Video" style="font-size:11px;padding:4px 8px;cursor:pointer;margin:0">
-                                            <input type="file" name="master" accept="video/*" style="display:none" onchange="this.form.requestSubmit()">
-                                            Upload Master
-                                        </label>
-                                    </form>
-                                @endif
-                                @if (\Illuminate\Support\Facades\Route::has('admin.movies.encoding-status'))
-                                    <a href="{{ route('admin.movies.encoding-status', $movie) }}" class="btn btn-ghost btn-sm" title="View Behind-the-scenes (run via console: php artisan flik:behind-scenes:generate {{ $movie->id }})" style="font-size:11px;padding:4px 8px">BTS</a>
-                                @endif
+                        <div style="display:flex;gap:6px;align-items:center" x-data="{ open: false }" @click.outside="open = false">
+                            <a href="{{ route('admin.movies.edit', $movie) }}" class="btn btn-ghost btn-sm" title="Edit">Edit</a>
+
+                            <form method="POST" action="{{ route('admin.movies.destroy', $movie) }}" onsubmit="return confirm('Delete {{ addslashes($movie->title) }}?')" style="margin:0">
+                                @csrf @method('DELETE')
+                                <button type="submit" class="btn btn-danger btn-sm" title="Delete">Del</button>
+                            </form>
+
+                            {{-- More dropdown — collapses the long action tail --}}
+                            <div style="position:relative">
+                                <button type="button" @click="open = !open" class="btn btn-ghost btn-sm" :class="{ 'is-active': open }" style="display:inline-flex;align-items:center;gap:4px" title="More actions">
+                                    More
+                                    <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="open ? 'transform:rotate(180deg)' : ''" style="transition:transform .15s"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
+                                </button>
+                                <div x-show="open" x-cloak x-transition.opacity style="position:absolute;right:0;top:calc(100% + 4px);min-width:200px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);z-index:50;padding:6px;display:flex;flex-direction:column;gap:2px">
+                                    <a href="{{ route('admin.movies.subtitles.index', $movie) }}" class="dropdown-item" title="Manage Subtitles">
+                                        <span style="color:#C5A55A;width:18px;display:inline-block">CC</span> Subtitles
+                                    </a>
+
+                                    @if (\Illuminate\Support\Facades\Route::has('admin.movies.encoding-status'))
+                                        <a href="{{ route('admin.movies.encoding-status', $movie) }}" class="dropdown-item" title="Encoding Status">
+                                            <span style="width:18px;display:inline-block">⚙</span> Encoding Status
+                                        </a>
+                                    @endif
+
+                                    @if (\Illuminate\Support\Facades\Route::has('admin.movies.upload-master'))
+                                        <form method="POST" action="{{ route('admin.movies.upload-master', $movie) }}" enctype="multipart/form-data" style="margin:0" onsubmit="return this.querySelector('input[type=file]').files.length > 0 || (alert('Pick a master file first'), false)">
+                                            @csrf
+                                            <label class="dropdown-item" title="Upload Master Video" style="cursor:pointer;display:flex">
+                                                <input type="file" name="master" accept="video/*" style="display:none" onchange="this.form.requestSubmit()">
+                                                <span style="width:18px;display:inline-block">⬆</span> Upload Master
+                                            </label>
+                                        </form>
+                                    @endif
+
+                                    @if (\Illuminate\Support\Facades\Route::has('highlight.show'))
+                                        <a href="{{ route('highlight.show', $movie) }}" class="dropdown-item" title="Highlight Reel">
+                                            <span style="width:18px;display:inline-block">✦</span> Highlight Reel
+                                        </a>
+                                    @endif
+
+                                    <div style="height:1px;background:#2a2a2a;margin:4px 6px"></div>
+                                    <div style="font-size:10px;text-transform:uppercase;color:#555;padding:4px 10px;letter-spacing:0.5px">Marketing</div>
+
+                                    @if (\Illuminate\Support\Facades\Route::has('admin.movies.marketing-ops.tiktok-clips'))
+                                        <a href="{{ route('admin.movies.marketing-ops.tiktok-clips', $movie) }}" class="dropdown-item" title="TikTok Clips">
+                                            <span style="width:18px;display:inline-block">▶</span> TikTok Clips
+                                        </a>
+                                    @endif
+                                    @if (\Illuminate\Support\Facades\Route::has('admin.movies.marketing-ops.title-alternatives'))
+                                        <a href="{{ route('admin.movies.marketing-ops.title-alternatives', $movie) }}" class="dropdown-item" title="Title A/B Alternatives">
+                                            <span style="width:18px;display:inline-block">A/B</span> Title Alternatives
+                                        </a>
+                                    @endif
+                                </div>
                             </div>
                         </div>
                     </td>
