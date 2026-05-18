@@ -17,9 +17,10 @@
                     <th style="width:50px">#</th>
                     <th>User</th>
                     <th>Email</th>
-                    <th>Role</th>
+                    <th>Admin</th>
+                    <th>Roles</th>
                     <th>Joined</th>
-                    <th style="width:180px">Actions</th>
+                    <th style="width:240px">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -42,10 +43,34 @@
                             <span class="badge" style="background:rgba(100,100,100,0.2);color:#888">User</span>
                         @endif
                     </td>
+                    <td>
+                        {{-- Roles column. `relationLoaded('roles')` guards against an N+1 storm
+                             if the controller forgot to eager-load; falls back to "—" when the
+                             RBAC tables/relation haven't been wired yet by peer ROLE #1. --}}
+                        @php
+                            $userRoles = method_exists($user, 'roles') && $user->relationLoaded('roles')
+                                ? $user->roles
+                                : (method_exists($user, 'roles') ? $user->roles()->get() : collect());
+                        @endphp
+                        @if($userRoles->isEmpty())
+                            <span style="font-size:12px;color:#555">—</span>
+                        @else
+                            <div style="display:flex;gap:4px;flex-wrap:wrap;max-width:220px">
+                                @foreach($userRoles as $role)
+                                    <span class="badge" style="background:rgba(197,165,90,0.15);color:#C5A55A" title="{{ $role->name ?? '' }}">
+                                        {{ $role->display_name ?? $role->name ?? 'role#'.$role->id }}
+                                    </span>
+                                @endforeach
+                            </div>
+                        @endif
+                    </td>
                     <td style="color:#666;font-size:13px">{{ $user->created_at ? $user->created_at->format('d M Y') : '-' }}</td>
                     <td>
                         @if($user->id !== auth()->id())
                             <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                @if(\Illuminate\Support\Facades\Route::has('admin.users.roles.edit'))
+                                    <a href="{{ route('admin.users.roles.edit', $user) }}" class="btn btn-ghost btn-sm" title="Assign roles">Manage Roles</a>
+                                @endif
                                 <form method="POST" action="{{ route('admin.users.toggleAdmin', $user) }}">
                                     @csrf @method('PUT')
                                     <button type="submit" class="btn btn-ghost btn-sm">
@@ -68,7 +93,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="6" style="text-align:center;color:#555;padding:32px">No users found</td>
+                    <td colspan="7" style="text-align:center;color:#555;padding:32px">No users found</td>
                 </tr>
                 @endforelse
             </tbody>

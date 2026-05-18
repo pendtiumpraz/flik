@@ -298,9 +298,94 @@ class AdminController extends Controller
 
     public function users()
     {
-        $users = User::orderBy('created_at', 'desc')->paginate(20);
+        // Eager-load `roles` so the index view can render the per-user role
+        // badges without an N+1 query storm. `method_exists` is the seam
+        // for the RBAC rollout: when peer ROLE #1's Role model and pivot
+        // relation are in place, this loads them; before that, the view
+        // still renders (the relation simply isn't there).
+        $query = User::query()->orderBy('created_at', 'desc');
+        if (method_exists(User::class, 'roles')) {
+            $query->with('roles:id,name,display_name');
+        }
+        $users = $query->paginate(20);
 
         return view('admin.users.index', compact('users'));
+    }
+
+    // ── USER ↔ ROLE ASSIGNMENT ────────────────────────────────
+    // These two methods power the per-user "Manage Roles" page. They
+    // intentionally live on AdminController (rather than a dedicated
+    // UserRoleController) to match the spec and keep all user-related
+    // admin actions in one place. Role CRUD lives in
+    // App\Http\Controllers\Admin\RoleController.
+
+    /**
+     * Render the role-assignment view for a specific user.
+     *
+     * Authorisation: `users.assign_roles` ability is owned by peer
+     * ROLE #3 (gate registration). Super-admins bypass via AuthService
+     * Provider's Gate::before short-circuit.
+     */
+    public function editRoles(User $user)
+    {
+        $this->authorize('users.assign_roles');
+
+        $roles = \App\Models\Role::query()
+            ->withCount('permissions')
+            ->orderBy('priority')
+            ->orderBy('name')
+            ->get();
+
+        $assignedRoleIds = $user->roles()->pluck('roles.id')->all();
+
+        return view('admin.users.roles', compact('user', 'roles', 'assignedRoleIds'));
+    }
+
+    /**
+     * Persist a role-assignment change for a specific user.
+     *
+     * `exists:roles,id` is enforced per-row to prevent a tampered form
+     * from silently attaching non-existent role IDs (which would then
+     * pollute the pivot with dangling rows once an FK check ran).
+     */
+    public function updateRoles(Request $request, User $user)
+    {
+        $this->authorize('users.assign_roles');
+
+        $validated = $request->validate([
+            'roles' => 'array',
+            'roles.*' => 'integer|exists:roles,id',
+        ]);
+
+        $before = $user->roles()->pluck('roles.id')->all();
+        $after = $validated['roles'] ?? [];
+
+        $user->roles()->sync($after);
+
+        // SecurityEvent: route through ::security() so the change shows
+        // up in the audit-logs "Security only" filter alongside other
+        // privilege-affecting actions.
+        try {
+            app(AuditLogger::class)->security(
+                event: 'admin.user.roles_updated',
+                subject: $user,
+                meta: [
+                    'roles' => $after,
+                    'before' => $before,
+                    'added' => array_values(array_diff($after, $before)),
+                    'removed' => array_values(array_diff($before, $after)),
+                ],
+            );
+        } catch (\Throwable $e) {
+            \Log::warning('AdminController: audit write failed for user roles update', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return redirect()
+            ->route('admin.users.index')
+            ->with('success', "Roles for \"{$user->name}\" updated.");
     }
 
     public function toggleAdmin(User $user)

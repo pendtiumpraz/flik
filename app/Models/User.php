@@ -6,9 +6,12 @@ use App\Notifications\Auth\ResetPasswordNotification;
 use App\Notifications\Auth\VerifyEmailNotification;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Schema;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -105,27 +108,340 @@ class User extends Authenticatable implements MustVerifyEmail
         self::ROLE_USER => 'User',
     ];
 
-    public function hasRole(string|array $role): bool
+    /**
+     * Cache of `roles.permissions` for the lifetime of this model instance.
+     * Populated lazily by `hasPermission()` / `permissions()` so we issue
+     * at most ONE eager-load query per request, regardless of how many
+     * gate checks fire downstream.
+     *
+     * Null means "not yet loaded"; an empty collection means "loaded, no
+     * roles assigned" — the difference matters for cache invalidation.
+     *
+     * @var \Illuminate\Support\Collection<int, \App\Models\Permission>|null
+     */
+    private ?Collection $cachedPermissions = null;
+
+    /**
+     * Pivot relation to roles. Each assignment carries the actor (admin
+     * who granted it) and a precise `assigned_at` stamp so we can build
+     * an immutable audit trail even when roles get re-synced.
+     */
+    public function roles(): BelongsToMany
     {
-        if (is_array($role)) {
-            return in_array($this->role, $role, true);
-        }
-        return $this->role === $role;
+        return $this->belongsToMany(
+            \App\Models\Role::class,
+            'role_user',
+            'user_id',
+            'role_id',
+        )
+            ->withPivot('assigned_by_user_id', 'assigned_at')
+            ->withTimestamps();
     }
 
+    /**
+     * Does the user have ANY of the given role names?
+     *
+     * Accepts a single string OR an array of strings. We check BOTH the
+     * pivot-based roles table AND the legacy `role` column so the helper
+     * keeps working before/during/after the role backfill migration.
+     *
+     * @param  string|array<int, string>  $names
+     */
+    public function hasRole(string|array $names): bool
+    {
+        $needles = is_array($names) ? $names : [$names];
+
+        // Legacy single-column role — keep working for users whose pivot
+        // rows have not been backfilled yet.
+        if ($this->role !== null && in_array($this->role, $needles, true)) {
+            return true;
+        }
+
+        // Pivot-based roles. Defensive: if the table or model class is
+        // missing (fresh install before peer migrations land), skip the
+        // query rather than blow up the auth flow.
+        if (!class_exists(\App\Models\Role::class) || !Schema::hasTable('role_user')) {
+            return false;
+        }
+
+        return $this->roles()
+            ->whereIn('name', $needles)
+            ->exists();
+    }
+
+    /**
+     * Does the user have ALL of the given role names? Useful for views
+     * that require, e.g., both "finance" AND "auditor".
+     *
+     * @param  array<int, string>  $names
+     */
+    public function hasAllRoles(array $names): bool
+    {
+        if ($names === []) {
+            return true;
+        }
+
+        if (!class_exists(\App\Models\Role::class) || !Schema::hasTable('role_user')) {
+            // Legacy single-column can only satisfy one role at a time.
+            return count($names) === 1 && $this->role === $names[0];
+        }
+
+        $assigned = $this->roles()->whereIn('name', $names)->pluck('name')->all();
+
+        // Compare as sets — order does not matter, duplicates are squashed
+        // by the underlying SELECT DISTINCT semantics of the pivot.
+        return count(array_intersect($names, $assigned)) === count(array_unique($names));
+    }
+
+    /**
+     * Assign a role to the user. Idempotent: re-assigning the same role
+     * refreshes the `assigned_at` stamp + actor without creating a
+     * duplicate pivot row.
+     *
+     * @param  \App\Models\Role|string  $role
+     */
+    public function assignRole($role, ?int $assignedBy = null): self
+    {
+        if (!class_exists(\App\Models\Role::class)) {
+            return $this;
+        }
+
+        $roleModel = $role instanceof \App\Models\Role
+            ? $role
+            : \App\Models\Role::query()->where('name', (string) $role)->first();
+
+        if ($roleModel === null) {
+            return $this;
+        }
+
+        $this->roles()->syncWithoutDetaching([
+            $roleModel->id => [
+                'assigned_by_user_id' => $assignedBy,
+                'assigned_at' => now(),
+            ],
+        ]);
+
+        $this->forgetPermissionCache();
+
+        return $this;
+    }
+
+    /**
+     * Remove a single role from the user. No-op if not assigned.
+     *
+     * @param  \App\Models\Role|string  $role
+     */
+    public function removeRole($role): self
+    {
+        if (!class_exists(\App\Models\Role::class)) {
+            return $this;
+        }
+
+        $roleModel = $role instanceof \App\Models\Role
+            ? $role
+            : \App\Models\Role::query()->where('name', (string) $role)->first();
+
+        if ($roleModel === null) {
+            return $this;
+        }
+
+        $this->roles()->detach($roleModel->id);
+        $this->forgetPermissionCache();
+
+        return $this;
+    }
+
+    /**
+     * Replace ALL of this user's roles with the given set, atomically.
+     * Unknown role names are silently skipped (so the caller does not
+     * have to pre-validate against a constantly-growing taxonomy).
+     *
+     * @param  array<int, string>  $roleNames
+     */
+    public function syncRoles(array $roleNames): self
+    {
+        if (!class_exists(\App\Models\Role::class)) {
+            return $this;
+        }
+
+        $ids = \App\Models\Role::query()
+            ->whereIn('name', $roleNames)
+            ->pluck('id')
+            ->all();
+
+        // Build the pivot payload so each assignment gets a fresh stamp.
+        $payload = [];
+        foreach ($ids as $id) {
+            $payload[$id] = [
+                'assigned_by_user_id' => null,
+                'assigned_at' => now(),
+            ];
+        }
+
+        $this->roles()->sync($payload);
+        $this->forgetPermissionCache();
+
+        return $this;
+    }
+
+    /**
+     * Does the user have the given permission?
+     *
+     * Resolution order:
+     *   1. Super-admin (legacy column OR `super_admin` role) → always true.
+     *   2. Any of the user's roles has a matching permission name.
+     *
+     * Eager-loads `roles.permissions` on first call and caches in an
+     * instance property so subsequent gate checks within the same
+     * request cost zero queries.
+     */
+    public function hasPermission(string $name): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->loadPermissionCache()
+            ->contains(fn ($perm) => $perm->name === $name);
+    }
+
+    /**
+     * Flat, deduplicated collection of every permission granted to this
+     * user across all of their roles. Backed by the same cache as
+     * `hasPermission()`.
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Models\Permission>
+     */
+    public function permissions(): Collection
+    {
+        return $this->loadPermissionCache();
+    }
+
+    /**
+     * Lazily resolve + memoize this user's effective permissions.
+     */
+    private function loadPermissionCache(): Collection
+    {
+        if ($this->cachedPermissions !== null) {
+            return $this->cachedPermissions;
+        }
+
+        // Fresh install / missing peer migrations → empty cache instead of crash.
+        if (!class_exists(\App\Models\Role::class)
+            || !class_exists(\App\Models\Permission::class)
+            || !Schema::hasTable('role_user')
+            || !Schema::hasTable('permission_role')) {
+            return $this->cachedPermissions = collect();
+        }
+
+        // Single eager-load with the pivot — N+1 safe.
+        if (!$this->relationLoaded('roles')) {
+            $this->load('roles.permissions');
+        } elseif ($this->roles->isNotEmpty() && !$this->roles->first()->relationLoaded('permissions')) {
+            $this->roles->loadMissing('permissions');
+        }
+
+        $this->cachedPermissions = $this->roles
+            ->flatMap(fn ($role) => $role->permissions ?? collect())
+            ->unique('name')
+            ->values();
+
+        return $this->cachedPermissions;
+    }
+
+    /**
+     * Drop the in-memory permission cache so the next gate check
+     * re-queries. Called automatically after assign/remove/sync.
+     */
+    public function forgetPermissionCache(): self
+    {
+        $this->cachedPermissions = null;
+        $this->unsetRelation('roles');
+
+        return $this;
+    }
+
+    /**
+     * Super-admin check honours BOTH the legacy `role === 'super_admin'`
+     * column AND the modern pivot role of the same name AND the older
+     * boolean `is_admin` so existing routes never lose access during a
+     * migration.
+     */
     public function isSuperAdmin(): bool
     {
-        return $this->role === self::ROLE_SUPER_ADMIN || $this->is_admin;
+        if ($this->role === self::ROLE_SUPER_ADMIN) {
+            return true;
+        }
+
+        // Read the RAW `is_admin` column — NOT `$this->is_admin` — so we
+        // don't trigger the accessor (which would itself query the pivot
+        // table and cause us to do the same work twice).
+        if ((bool) ($this->attributes['is_admin'] ?? false) === true) {
+            return true;
+        }
+
+        // Pivot lookup — gated on Schema so fresh installs do not crash.
+        if (class_exists(\App\Models\Role::class) && Schema::hasTable('role_user')) {
+            // Use the already-loaded relation when present to keep the
+            // super-admin fast path O(0) queries inside the request.
+            if ($this->relationLoaded('roles')) {
+                return $this->roles->contains(fn ($r) => $r->name === self::ROLE_SUPER_ADMIN);
+            }
+
+            return $this->roles()->where('name', self::ROLE_SUPER_ADMIN)->exists();
+        }
+
+        return false;
     }
 
     public function isStaff(): bool
     {
-        return in_array($this->role, [
+        $staffRoles = [
             self::ROLE_SUPER_ADMIN,
             self::ROLE_CONTENT_MANAGER,
             self::ROLE_CUSTOMER_SUPPORT,
             self::ROLE_FINANCE,
-        ], true);
+        ];
+
+        // Legacy single-column path.
+        if (in_array($this->role, $staffRoles, true)) {
+            return true;
+        }
+
+        // Pivot path — same defensive guards as the role helpers.
+        return $this->hasRole($staffRoles);
+    }
+
+    /**
+     * Legacy boolean — true when the user has admin OR super_admin role
+     * (pivot or legacy column) OR the older `is_admin` flag was set.
+     *
+     * Kept so existing `@can('admin')` directives, `can:admin` route
+     * middleware, and `$user->is_admin` checks in older controllers all
+     * continue to resolve correctly through the new role system.
+     */
+    public function getIsAdminAttribute($value): bool
+    {
+        // Honour the raw DB column first so legacy installs that flipped
+        // the boolean directly keep working without touching roles.
+        if ((bool) $value === true) {
+            return true;
+        }
+
+        if ($this->role === self::ROLE_SUPER_ADMIN || $this->role === 'admin') {
+            return true;
+        }
+
+        // Pivot lookup — same fresh-install guard pattern.
+        if (class_exists(\App\Models\Role::class) && Schema::hasTable('role_user')) {
+            if ($this->relationLoaded('roles')) {
+                return $this->roles->contains(fn ($r) => in_array($r->name, ['admin', self::ROLE_SUPER_ADMIN], true));
+            }
+
+            return $this->roles()->whereIn('name', ['admin', self::ROLE_SUPER_ADMIN])->exists();
+        }
+
+        return false;
     }
 
     public function getRoleLabelAttribute(): string

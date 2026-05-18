@@ -143,6 +143,20 @@
                         Manage Sessions
                     </a>
                 </div>
+
+                {{-- "View My Permissions" — self-service role + permission audit --}}
+                <div class="p-6 flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between" style="border-top:1px solid #2a2a2a">
+                    <div>
+                        <p class="text-sm font-semibold text-white">My Roles &amp; Permissions</p>
+                        <p class="text-xs text-gray-500 mt-1">Lihat semua role + permission yang melekat ke akun Anda.</p>
+                    </div>
+                    <a href="{{ route('profile.permissions') }}"
+                       class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"
+                       style="background:transparent;border:1px solid #C5A55A;color:#C5A55A">
+                        <x-icon name="shield" :size="16" />
+                        View My Permissions
+                    </a>
+                </div>
             </div>
 
             <!-- Edit Profile -->

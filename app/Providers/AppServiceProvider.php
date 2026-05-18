@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Contracts\Ai\AiClientContract;
 use App\Contracts\Storage\CdnStorageContract;
 use App\Models\User;
+use App\Observers\UserObserver;
 use App\Services\Ai\AiClient;
 use App\Services\Security\HtmlSanitizer;
 use App\Services\Storage\BunnyStorageService;
@@ -80,8 +81,51 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
 
-        Gate::define('admin', function (User $user) {
-            return $user->username === 'admin';
+        // Register model observers. UserObserver assigns the default
+        // 'user' role on registration so every new account lands with a
+        // sane permission baseline (vs. the previous behaviour of zero
+        // roles → effectively guest-level access until manually granted).
+        User::observe(UserObserver::class);
+
+        // NOTE: the `admin` gate is now owned by AuthServiceProvider where
+        // it routes through the new RBAC system (super_admin OR has 'admin'
+        // role). The legacy `$user->username === 'admin'` check here was a
+        // dev-only fallback that incorrectly granted access to anyone who
+        // happened to register that username — removed in the role wiring
+        // pass.
+
+        // @role('admin') / @role('admin', 'content_manager')
+        // Truthy when an authenticated user holds ANY of the listed roles.
+        // Variadic so views can write `@role('admin', 'finance')` directly.
+        Blade::if('role', function (...$roles) {
+            if (!auth()->check()) {
+                return false;
+            }
+            $flat = [];
+            foreach ($roles as $r) {
+                if (is_array($r)) {
+                    $flat = array_merge($flat, $r);
+                } else {
+                    $flat[] = (string) $r;
+                }
+            }
+            return auth()->user()->hasRole($flat);
+        });
+
+        // @hasperm('movies.create')
+        // Permission-level check — routes through Gate::allows so the
+        // super-admin Gate::before bypass still applies. Falls back to
+        // the User::hasPermission helper when the gate is not registered
+        // (e.g. permissions table not yet seeded on a fresh install).
+        Blade::if('hasperm', function (string $name) {
+            if (!auth()->check()) {
+                return false;
+            }
+            $user = auth()->user();
+            if (Gate::has($name)) {
+                return Gate::allows($name);
+            }
+            return $user->hasPermission($name);
         });
 
         // @safe($html) — render-time HTML sanitization for cases where

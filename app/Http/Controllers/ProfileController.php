@@ -60,6 +60,94 @@ class ProfileController extends Controller
     }
 
     /**
+     * Self-service "View My Permissions" page.
+     *
+     * Renders the authenticated user's effective roles + the flat permission
+     * set those roles grant. Intentionally defensive: if the Permission/Role
+     * tables haven't been migrated yet (fresh install, peer migrations in
+     * flight) the view simply renders empty collections instead of throwing.
+     *
+     * Super-admins get a sentinel banner because their effective permission
+     * set is "every permission" via `Gate::before`, not via the pivot — so a
+     * naive `$user->permissions()` would under-report their actual access.
+     */
+    public function permissions()
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        // Roles (with priority + assignment metadata) and the flat permission
+        // collection — both relations are memoized inside User so the second
+        // call is free.
+        $roles = $this->safeLoadRoles($user);
+        $permissions = $this->safeLoadPermissions($user);
+
+        // Group permissions by category so the view can render collapsible
+        // sections instead of one long flat list. Falls back to "other" when
+        // a permission has no category (custom-seeded perms from the admin
+        // UI, hand-inserted rows, etc.).
+        $grouped = $permissions
+            ->groupBy(fn ($perm) => $perm->category ?? 'other')
+            ->sortKeys();
+
+        return view('profile.permissions', [
+            'user'                  => $user,
+            'roles'                 => $roles,
+            'permissions'           => $permissions,
+            'groupedPermissions'    => $grouped,
+            'isSuperAdmin'          => $user->isSuperAdmin(),
+            'totalPermissionsCount' => $permissions->count(),
+        ]);
+    }
+
+    /**
+     * Resolve the user's role collection in a way that never crashes the
+     * profile page — if the pivot table is missing (pre-migration) we
+     * surface an empty collection and let the view say "no roles yet".
+     */
+    private function safeLoadRoles(User $user): \Illuminate\Support\Collection
+    {
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasTable('role_user')
+                || ! class_exists(\App\Models\Role::class)) {
+                return collect();
+            }
+
+            return $user->roles()->orderBy('priority')->get();
+        } catch (\Throwable $e) {
+            // Schema mismatch, missing column, DB unavailable — log + degrade.
+            \Illuminate\Support\Facades\Log::warning('profile.permissions: failed to load roles', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
+
+            return collect();
+        }
+    }
+
+    /**
+     * Same defensive wrapper for the flat permission set.
+     */
+    private function safeLoadPermissions(User $user): \Illuminate\Support\Collection
+    {
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasTable('permission_role')
+                || ! class_exists(\App\Models\Permission::class)) {
+                return collect();
+            }
+
+            return $user->permissions();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('profile.permissions: failed to load permissions', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
+
+            return collect();
+        }
+    }
+
+    /**
      * Change the authenticated user's password.
      *
      * Requires the current password (defence against session-hijack abuse) and

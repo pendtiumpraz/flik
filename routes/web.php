@@ -151,6 +151,13 @@ Route::middleware('auth')->group(function () {
     Route::put('/profile', [\App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/password', [\App\Http\Controllers\ProfileController::class, 'updatePassword'])->name('profile.password.update');
 
+    // Self-service "View My Permissions" — lists the authenticated user's
+    // assigned roles + the effective permission set those roles grant.
+    // Read-only; no security/audit value beyond letting users see what
+    // they can/can't do, but it dramatically reduces support tickets.
+    Route::get('/profile/permissions', [\App\Http\Controllers\ProfileController::class, 'permissions'])
+        ->name('profile.permissions');
+
     // Profile — active session management
     Route::get('/profile/sessions', [\App\Http\Controllers\Profile\SessionController::class, 'index'])->name('profile.sessions.index');
     Route::delete('/profile/sessions/{id}', [\App\Http\Controllers\Profile\SessionController::class, 'destroy'])->name('profile.sessions.destroy');
@@ -288,165 +295,275 @@ Route::controller(LoginController::class)->group(function () {
     Route::get('login/google/callback', 'handleProviderCallback');
 });
 
+// ━━━ Admin panel (per-permission gating) ━━━
+//
+// Outer middleware stack: `auth` + `can:admin` is the COARSE gate.
+// Anyone holding any admin-flavoured role (super_admin, content_manager,
+// finance, customer_support, etc.) passes this check and reaches the
+// prefix. Per-route fine-grained authorization is layered on each
+// Route::<verb>() via `->middleware('can:<permission_name>')`, where
+// the permission names follow the dotted-namespace taxonomy seeded by
+// `RolePermissionSeeder` (see docs/security/roles-permissions.md).
+//
+// Defensive design: if the Permission table is missing or the seed
+// never ran, `AuthServiceProvider` installs a `Gate::before` fallback
+// that lets users with the legacy `is_admin` boolean through ANY
+// dotted permission check — so this group never 500s on a fresh
+// install or stale seed. Once peer ROLE #2's dynamic `Gate::define`
+// loop registers the real gates, those take over and the legacy
+// fallback becomes a redundant safety net (`Gate::has($ability)`
+// short-circuits the before-hook).
+//
+// Routes without a more specific permission (the dashboard landing
+// page + pitch deck reader) stay on the bare `can:admin` gate.
 Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [\App\Http\Controllers\AdminController::class, 'dashboard'])->name('dashboard');
 
-    // Movies
-    Route::get('/movies', [\App\Http\Controllers\AdminController::class, 'movies'])->name('movies.index');
-    Route::get('/movies/create', [\App\Http\Controllers\AdminController::class, 'createMovie'])->name('movies.create');
-    Route::post('/movies', [\App\Http\Controllers\AdminController::class, 'storeMovie'])->name('movies.store');
-    Route::get('/movies/{movie}/edit', [\App\Http\Controllers\AdminController::class, 'editMovie'])->name('movies.edit');
-    Route::put('/movies/{movie}', [\App\Http\Controllers\AdminController::class, 'updateMovie'])->name('movies.update');
-    Route::delete('/movies/{movie}', [\App\Http\Controllers\AdminController::class, 'destroyMovie'])->name('movies.destroy');
+    // ─── Movies CRUD ─────────────────────────────────────────────
+    Route::get('/movies', [\App\Http\Controllers\AdminController::class, 'movies'])
+        ->middleware('can:movies.view')->name('movies.index');
+    Route::get('/movies/create', [\App\Http\Controllers\AdminController::class, 'createMovie'])
+        ->middleware('can:movies.create')->name('movies.create');
+    Route::post('/movies', [\App\Http\Controllers\AdminController::class, 'storeMovie'])
+        ->middleware('can:movies.create')->name('movies.store');
+    Route::get('/movies/{movie}/edit', [\App\Http\Controllers\AdminController::class, 'editMovie'])
+        ->middleware('can:movies.update')->name('movies.edit');
+    Route::put('/movies/{movie}', [\App\Http\Controllers\AdminController::class, 'updateMovie'])
+        ->middleware('can:movies.update')->name('movies.update');
+    Route::delete('/movies/{movie}', [\App\Http\Controllers\AdminController::class, 'destroyMovie'])
+        ->middleware('can:movies.delete')->name('movies.destroy');
 
-    // Genres
-    Route::get('/genres', [\App\Http\Controllers\AdminController::class, 'genres'])->name('genres.index');
-    Route::post('/genres', [\App\Http\Controllers\AdminController::class, 'storeGenre'])->name('genres.store');
-    Route::delete('/genres/{genre}', [\App\Http\Controllers\AdminController::class, 'destroyGenre'])->name('genres.destroy');
+    // ─── Genres / Casts (bundled under movies.update — taxonomy ops) ──
+    Route::get('/genres', [\App\Http\Controllers\AdminController::class, 'genres'])
+        ->middleware('can:movies.update')->name('genres.index');
+    Route::post('/genres', [\App\Http\Controllers\AdminController::class, 'storeGenre'])
+        ->middleware('can:movies.update')->name('genres.store');
+    Route::delete('/genres/{genre}', [\App\Http\Controllers\AdminController::class, 'destroyGenre'])
+        ->middleware('can:movies.update')->name('genres.destroy');
 
-    // Casts
-    Route::get('/casts', [\App\Http\Controllers\AdminController::class, 'casts'])->name('casts.index');
-    Route::post('/casts', [\App\Http\Controllers\AdminController::class, 'storeCast'])->name('casts.store');
-    Route::delete('/casts/{cast}', [\App\Http\Controllers\AdminController::class, 'destroyCast'])->name('casts.destroy');
+    Route::get('/casts', [\App\Http\Controllers\AdminController::class, 'casts'])
+        ->middleware('can:movies.update')->name('casts.index');
+    Route::post('/casts', [\App\Http\Controllers\AdminController::class, 'storeCast'])
+        ->middleware('can:movies.update')->name('casts.store');
+    Route::delete('/casts/{cast}', [\App\Http\Controllers\AdminController::class, 'destroyCast'])
+        ->middleware('can:movies.update')->name('casts.destroy');
 
-    // Users
-    Route::get('/users', [\App\Http\Controllers\AdminController::class, 'users'])->name('users.index');
-    Route::put('/users/{user}/toggle-admin', [\App\Http\Controllers\AdminController::class, 'toggleAdmin'])->name('users.toggleAdmin');
-    Route::delete('/users/{user}', [\App\Http\Controllers\AdminController::class, 'destroyUser'])->name('users.destroy');
+    // ─── Users ───────────────────────────────────────────────────
+    Route::get('/users', [\App\Http\Controllers\AdminController::class, 'users'])
+        ->middleware('can:users.view')->name('users.index');
+    Route::put('/users/{user}/toggle-admin', [\App\Http\Controllers\AdminController::class, 'toggleAdmin'])
+        ->middleware('can:users.update')->name('users.toggleAdmin');
+    Route::delete('/users/{user}', [\App\Http\Controllers\AdminController::class, 'destroyUser'])
+        ->middleware('can:users.delete')->name('users.destroy');
     // Brute-force protection — unlock a locked-out account (clears
     // failed login_attempts rows + writes audit_logs entry).
-    Route::post('/users/{user}/unlock-login', [\App\Http\Controllers\AdminController::class, 'unlockLogin'])->name('users.unlock-login');
+    Route::post('/users/{user}/unlock-login', [\App\Http\Controllers\AdminController::class, 'unlockLogin'])
+        ->middleware('can:users.update')->name('users.unlock-login');
 
-    // Banners
-    Route::get('/banners', [\App\Http\Controllers\AdminController::class, 'banners'])->name('banners.index');
-    Route::post('/banners', [\App\Http\Controllers\AdminController::class, 'storeBanner'])->name('banners.store');
-    Route::put('/banners/{banner}/toggle', [\App\Http\Controllers\AdminController::class, 'toggleBanner'])->name('banners.toggle');
-    Route::delete('/banners/{banner}', [\App\Http\Controllers\AdminController::class, 'destroyBanner'])->name('banners.destroy');
+    // ━━━ RBAC: Role CRUD + per-user role assignment ━━━
+    // Role/Permission models + pivots are owned by peer ROLE #1.
+    // User::roles() pivot + hasRole/hasPermission helpers are owned by
+    // peer ROLE #2. The `roles.manage` and `users.assign_roles` gates
+    // are owned by peer ROLE #3. This block wires the admin UI.
+    // Per-route can: guards are layered defensively here — even if the
+    // RoleController is mounted, every action still demands `roles.manage`
+    // so a Content Manager can't drop a custom role via a crafted POST.
+    Route::resource('/roles', \App\Http\Controllers\Admin\RoleController::class)
+        ->except(['show'])
+        ->middleware('can:roles.manage');
+    Route::get('/users/{user}/roles', [\App\Http\Controllers\AdminController::class, 'editRoles'])
+        ->middleware('can:users.assign_roles')->name('users.roles.edit');
+    Route::post('/users/{user}/roles', [\App\Http\Controllers\AdminController::class, 'updateRoles'])
+        ->middleware('can:users.assign_roles')->name('users.roles.update');
 
-    // Movie Subtitles (per-movie manager)
-    Route::get('/movies/{movie}/subtitles', [\App\Http\Controllers\Admin\SubtitleController::class, 'index'])->name('movies.subtitles.index');
-    Route::post('/movies/{movie}/subtitles/generate', [\App\Http\Controllers\Admin\SubtitleController::class, 'generate'])->name('movies.subtitles.generate');
-    Route::post('/movies/{movie}/subtitles/translate', [\App\Http\Controllers\Admin\SubtitleController::class, 'translate'])->name('movies.subtitles.translate');
-    Route::delete('/movies/{movie}/subtitles/{subtitle}', [\App\Http\Controllers\Admin\SubtitleController::class, 'destroy'])->name('movies.subtitles.destroy');
-    Route::post('/movies/{movie}/subtitles/{subtitle}/default', [\App\Http\Controllers\Admin\SubtitleController::class, 'setDefault'])->name('movies.subtitles.default');
+    // ─── Banners (catalog taxonomy → movies.update) ──────────────
+    Route::get('/banners', [\App\Http\Controllers\AdminController::class, 'banners'])
+        ->middleware('can:movies.update')->name('banners.index');
+    Route::post('/banners', [\App\Http\Controllers\AdminController::class, 'storeBanner'])
+        ->middleware('can:movies.update')->name('banners.store');
+    Route::put('/banners/{banner}/toggle', [\App\Http\Controllers\AdminController::class, 'toggleBanner'])
+        ->middleware('can:movies.update')->name('banners.toggle');
+    Route::delete('/banners/{banner}', [\App\Http\Controllers\AdminController::class, 'destroyBanner'])
+        ->middleware('can:movies.update')->name('banners.destroy');
 
-    // AI Providers
-    Route::get('/ai-settings', [\App\Http\Controllers\AdminController::class, 'aiSettings'])->name('ai.index');
-    Route::post('/ai-settings', [\App\Http\Controllers\AdminController::class, 'storeAiProvider'])->name('ai.store');
-    Route::put('/ai-settings/{aiProvider}', [\App\Http\Controllers\AdminController::class, 'updateAiProvider'])->name('ai.update');
-    Route::put('/ai-settings/{aiProvider}/toggle', [\App\Http\Controllers\AdminController::class, 'toggleAiProvider'])->name('ai.toggle');
-    Route::delete('/ai-settings/{aiProvider}', [\App\Http\Controllers\AdminController::class, 'destroyAiProvider'])->name('ai.destroy');
+    // ─── Movie Subtitles (per-movie manager) ─────────────────────
+    Route::get('/movies/{movie}/subtitles', [\App\Http\Controllers\Admin\SubtitleController::class, 'index'])
+        ->middleware('can:subtitles.generate')->name('movies.subtitles.index');
+    Route::post('/movies/{movie}/subtitles/generate', [\App\Http\Controllers\Admin\SubtitleController::class, 'generate'])
+        ->middleware('can:subtitles.generate')->name('movies.subtitles.generate');
+    Route::post('/movies/{movie}/subtitles/translate', [\App\Http\Controllers\Admin\SubtitleController::class, 'translate'])
+        ->middleware('can:subtitles.translate')->name('movies.subtitles.translate');
+    Route::delete('/movies/{movie}/subtitles/{subtitle}', [\App\Http\Controllers\Admin\SubtitleController::class, 'destroy'])
+        ->middleware('can:subtitles.generate')->name('movies.subtitles.destroy');
+    Route::post('/movies/{movie}/subtitles/{subtitle}/default', [\App\Http\Controllers\Admin\SubtitleController::class, 'setDefault'])
+        ->middleware('can:subtitles.generate')->name('movies.subtitles.default');
 
-    // Pitch Deck
+    // ─── AI Providers ────────────────────────────────────────────
+    Route::get('/ai-settings', [\App\Http\Controllers\AdminController::class, 'aiSettings'])
+        ->middleware('can:ai.providers.configure')->name('ai.index');
+    Route::post('/ai-settings', [\App\Http\Controllers\AdminController::class, 'storeAiProvider'])
+        ->middleware('can:ai.providers.configure')->name('ai.store');
+    Route::put('/ai-settings/{aiProvider}', [\App\Http\Controllers\AdminController::class, 'updateAiProvider'])
+        ->middleware('can:ai.providers.configure')->name('ai.update');
+    Route::put('/ai-settings/{aiProvider}/toggle', [\App\Http\Controllers\AdminController::class, 'toggleAiProvider'])
+        ->middleware('can:ai.providers.configure')->name('ai.toggle');
+    Route::delete('/ai-settings/{aiProvider}', [\App\Http\Controllers\AdminController::class, 'destroyAiProvider'])
+        ->middleware('can:ai.providers.configure')->name('ai.destroy');
+
+    // ─── Pitch Deck (no extra permission — bare `can:admin` only) ──
     Route::get('/pitch-deck', [\App\Http\Controllers\AdminController::class, 'pitchDeck'])->name('pitch-deck');
     Route::get('/pitch-deck.md', [\App\Http\Controllers\AdminController::class, 'pitchDeckMarkdown'])->name('pitch-deck.md');
 
     // ━━━ SWARM AI FEATURES INTEGRATION ━━━
 
     // AI Usage Dashboard
-    Route::get('/ai-usage', [\App\Http\Controllers\Admin\AiUsageController::class, 'index'])->name('ai.usage');
+    Route::get('/ai-usage', [\App\Http\Controllers\Admin\AiUsageController::class, 'index'])
+        ->middleware('can:ai.usage.view')->name('ai.usage');
 
     // AI Provider connection tester
-    Route::post('/ai-settings/{aiProvider}/test', [\App\Http\Controllers\Admin\AiProviderTestController::class, 'test'])->name('ai.test');
+    Route::post('/ai-settings/{aiProvider}/test', [\App\Http\Controllers\Admin\AiProviderTestController::class, 'test'])
+        ->middleware('can:ai.providers.configure')->name('ai.test');
 
     // Audit Logs
-    Route::get('/audit-logs', [\App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
+    Route::get('/audit-logs', [\App\Http\Controllers\Admin\AuditLogController::class, 'index'])
+        ->middleware('can:security.audit_logs')->name('audit-logs.index');
+
+    // ━━━ Menu Matrix — visual audit of sidebar visibility per role ━━━
+    // Source-of-truth for the table is config/admin_menu.php (same file the
+    // sidebar component renders from). Gated on `roles.manage` so only
+    // peers with role-admin authority can view the visibility audit.
+    Route::get('/menu-matrix', [\App\Http\Controllers\Admin\MenuMatrixController::class, 'index'])
+        ->middleware('can:roles.manage')->name('menu-matrix.index');
 
     // ━━━ Security: WAF-lite banned IP manager ━━━
-    // Lists IPs currently in the WAF temp-ban list (cache key
-    // `waf:ip:ban:{ip}`) and offers a one-click unban. Read-only entry
-    // also includes the most recent block events for diagnostic
-    // purposes — see docs/security/waf-lite.md.
     Route::get('/security/waf-banned-ips', [\App\Http\Controllers\Admin\WafController::class, 'index'])
-        ->name('security.waf.banned-ips');
+        ->middleware('can:security.waf')->name('security.waf.banned-ips');
     Route::post('/security/waf-banned-ips/unban', [\App\Http\Controllers\Admin\WafController::class, 'unban'])
-        ->name('security.waf.unban');
+        ->middleware('can:security.waf')->name('security.waf.unban');
 
     // Sentiment Dashboard
-    Route::get('/sentiment/{movie?}', [\App\Http\Controllers\Admin\SentimentDashboardController::class, 'index'])->name('sentiment.index');
+    Route::get('/sentiment/{movie?}', [\App\Http\Controllers\Admin\SentimentDashboardController::class, 'index'])
+        ->middleware('can:comments.moderate')->name('sentiment.index');
 
     // AI Movie Reviews (multi-perspective)
-    Route::get('/movies/{movie}/ai-reviews', [\App\Http\Controllers\Admin\AiReviewController::class, 'index'])->name('movies.ai-reviews.index');
-    Route::post('/movies/{movie}/ai-reviews/generate', [\App\Http\Controllers\Admin\AiReviewController::class, 'generate'])->name('movies.ai-reviews.generate');
+    Route::get('/movies/{movie}/ai-reviews', [\App\Http\Controllers\Admin\AiReviewController::class, 'index'])
+        ->middleware('can:ai.tasks.run')->name('movies.ai-reviews.index');
+    Route::post('/movies/{movie}/ai-reviews/generate', [\App\Http\Controllers\Admin\AiReviewController::class, 'generate'])
+        ->middleware('can:ai.tasks.run')->name('movies.ai-reviews.generate');
 
     // Marketing AI (banner + social media)
-    Route::get('/movies/{movie}/marketing-ai/banner', [\App\Http\Controllers\Admin\MarketingAiController::class, 'bannerForm'])->name('movies.marketing-ai.banner');
-    Route::post('/movies/{movie}/marketing-ai/banner', [\App\Http\Controllers\Admin\MarketingAiController::class, 'generateBanner'])->name('movies.marketing-ai.banner.generate');
-    Route::get('/movies/{movie}/marketing-ai/social', [\App\Http\Controllers\Admin\MarketingAiController::class, 'socialForm'])->name('movies.marketing-ai.social');
-    Route::post('/movies/{movie}/marketing-ai/social', [\App\Http\Controllers\Admin\MarketingAiController::class, 'generateSocial'])->name('movies.marketing-ai.social.generate');
+    Route::get('/movies/{movie}/marketing-ai/banner', [\App\Http\Controllers\Admin\MarketingAiController::class, 'bannerForm'])
+        ->middleware('can:marketing.banner')->name('movies.marketing-ai.banner');
+    Route::post('/movies/{movie}/marketing-ai/banner', [\App\Http\Controllers\Admin\MarketingAiController::class, 'generateBanner'])
+        ->middleware('can:marketing.banner')->name('movies.marketing-ai.banner.generate');
+    Route::get('/movies/{movie}/marketing-ai/social', [\App\Http\Controllers\Admin\MarketingAiController::class, 'socialForm'])
+        ->middleware('can:marketing.social')->name('movies.marketing-ai.social');
+    Route::post('/movies/{movie}/marketing-ai/social', [\App\Http\Controllers\Admin\MarketingAiController::class, 'generateSocial'])
+        ->middleware('can:marketing.social')->name('movies.marketing-ai.social.generate');
 
     // Comment Moderation Queue
-    Route::get('/comments/queue', [\App\Http\Controllers\Admin\CommentModerationController::class, 'queue'])->name('comments.queue');
-    Route::patch('/comments/{comment}/approve', [\App\Http\Controllers\Admin\CommentModerationController::class, 'approve'])->name('comments.approve');
-    Route::patch('/comments/{comment}/reject', [\App\Http\Controllers\Admin\CommentModerationController::class, 'reject'])->name('comments.reject');
-    Route::post('/comments/{comment}/rerun', [\App\Http\Controllers\Admin\CommentModerationController::class, 'rerun'])->name('comments.rerun');
+    Route::get('/comments/queue', [\App\Http\Controllers\Admin\CommentModerationController::class, 'queue'])
+        ->middleware('can:comments.moderate')->name('comments.queue');
+    Route::patch('/comments/{comment}/approve', [\App\Http\Controllers\Admin\CommentModerationController::class, 'approve'])
+        ->middleware('can:comments.moderate')->name('comments.approve');
+    Route::patch('/comments/{comment}/reject', [\App\Http\Controllers\Admin\CommentModerationController::class, 'reject'])
+        ->middleware('can:comments.moderate')->name('comments.reject');
+    Route::post('/comments/{comment}/rerun', [\App\Http\Controllers\Admin\CommentModerationController::class, 'rerun'])
+        ->middleware('can:comments.moderate')->name('comments.rerun');
 
     // ━━━ SWARM 25 ROUTES ━━━
 
     // Movie video upload + transcoding control
-    Route::post('/movies/{movie}/upload-master', [\App\Http\Controllers\Admin\MovieUploadController::class, 'uploadMaster'])->name('movies.upload-master');
-    Route::post('/movies/{movie}/start-transcode', [\App\Http\Controllers\Admin\MovieUploadController::class, 'startTranscode'])->name('movies.start-transcode');
-    Route::get('/movies/{movie}/encoding-status', [\App\Http\Controllers\Admin\MovieUploadController::class, 'encodingStatus'])->name('movies.encoding-status');
+    Route::post('/movies/{movie}/upload-master', [\App\Http\Controllers\Admin\MovieUploadController::class, 'uploadMaster'])
+        ->middleware('can:movies.upload_master')->name('movies.upload-master');
+    Route::post('/movies/{movie}/start-transcode', [\App\Http\Controllers\Admin\MovieUploadController::class, 'startTranscode'])
+        ->middleware('can:movies.upload_master')->name('movies.start-transcode');
+    Route::get('/movies/{movie}/encoding-status', [\App\Http\Controllers\Admin\MovieUploadController::class, 'encodingStatus'])
+        ->middleware('can:movies.encoding_status')->name('movies.encoding-status');
 
     // Subtitle variants (dialect / kid-safe / speaker tags)
-    Route::post('/movies/{movie}/subtitles/dialect', [\App\Http\Controllers\Admin\SubtitleController::class, 'translateDialect'])->name('movies.subtitles.dialect');
-    Route::post('/movies/{movie}/subtitles/kid-safe', [\App\Http\Controllers\Admin\SubtitleController::class, 'kidSafeFilter'])->name('movies.subtitles.kid-safe');
-    Route::post('/movies/{movie}/subtitles/speaker-tags', [\App\Http\Controllers\Admin\SubtitleController::class, 'addSpeakerTags'])->name('movies.subtitles.speaker-tags');
+    Route::post('/movies/{movie}/subtitles/dialect', [\App\Http\Controllers\Admin\SubtitleController::class, 'translateDialect'])
+        ->middleware('can:subtitles.translate')->name('movies.subtitles.dialect');
+    Route::post('/movies/{movie}/subtitles/kid-safe', [\App\Http\Controllers\Admin\SubtitleController::class, 'kidSafeFilter'])
+        ->middleware('can:subtitles.translate')->name('movies.subtitles.kid-safe');
+    Route::post('/movies/{movie}/subtitles/speaker-tags', [\App\Http\Controllers\Admin\SubtitleController::class, 'addSpeakerTags'])
+        ->middleware('can:subtitles.translate')->name('movies.subtitles.speaker-tags');
 
     // Director Auteur Analysis
-    Route::get('/director-analyses', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'index'])->name('director-analyses.index');
-    Route::post('/director-analyses', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'analyze'])->name('director-analyses.analyze');
-    Route::get('/director-analyses/{directorSlug}', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'show'])->name('director-analyses.show');
-    Route::post('/director-analyses/{directorSlug}/refresh', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'refresh'])->name('director-analyses.refresh');
-    Route::delete('/director-analyses/{directorSlug}', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'destroy'])->name('director-analyses.destroy');
+    Route::get('/director-analyses', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'index'])
+        ->middleware('can:ai.tasks.run')->name('director-analyses.index');
+    Route::post('/director-analyses', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'analyze'])
+        ->middleware('can:ai.tasks.run')->name('director-analyses.analyze');
+    Route::get('/director-analyses/{directorSlug}', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'show'])
+        ->middleware('can:ai.tasks.run')->name('director-analyses.show');
+    Route::post('/director-analyses/{directorSlug}/refresh', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'refresh'])
+        ->middleware('can:ai.tasks.run')->name('director-analyses.refresh');
+    Route::delete('/director-analyses/{directorSlug}', [\App\Http\Controllers\Admin\DirectorAnalysisController::class, 'destroy'])
+        ->middleware('can:ai.tasks.run')->name('director-analyses.destroy');
 
     // Churn Risk Dashboard
-    Route::get('/churn', [\App\Http\Controllers\Admin\ChurnDashboardController::class, 'index'])->name('churn.dashboard');
+    Route::get('/churn', [\App\Http\Controllers\Admin\ChurnDashboardController::class, 'index'])
+        ->middleware('can:analytics.churn')->name('churn.dashboard');
 
     // AI Insights (content gap + pricing)
-    Route::get('/insights/content-gap', [\App\Http\Controllers\Admin\AiInsightsController::class, 'contentGap'])->name('insights.content-gap');
-    Route::get('/insights/pricing', [\App\Http\Controllers\Admin\AiInsightsController::class, 'pricing'])->name('insights.pricing');
+    Route::get('/insights/content-gap', [\App\Http\Controllers\Admin\AiInsightsController::class, 'contentGap'])
+        ->middleware('can:analytics.insights')->name('insights.content-gap');
+    Route::get('/insights/pricing', [\App\Http\Controllers\Admin\AiInsightsController::class, 'pricing'])
+        ->middleware('can:analytics.insights')->name('insights.pricing');
 
     // Revenue + Geo + Cohort + Funnel + A/B (D1/D14/D2/D3/D6)
-    Route::get('/revenue', [\App\Http\Controllers\Admin\RevenueDashboardController::class, 'index'])->name('revenue.dashboard');
-    Route::get('/geo', [\App\Http\Controllers\Admin\GeoDistributionController::class, 'index'])->name('geo.distribution');
-    Route::get('/cohorts', [\App\Http\Controllers\Admin\CohortDashboardController::class, 'index'])->name('cohorts.index');
-    Route::get('/cohorts/export.csv', [\App\Http\Controllers\Admin\CohortDashboardController::class, 'export'])->name('cohorts.export');
-    Route::get('/funnel', [\App\Http\Controllers\Admin\FunnelDashboardController::class, 'index'])->name('funnel.index');
-    Route::get('/ab-tests', [\App\Http\Controllers\Admin\AbTestController::class, 'index'])->name('ab-tests.index');
-    Route::get('/ab-tests/create', [\App\Http\Controllers\Admin\AbTestController::class, 'create'])->name('ab-tests.create');
-    Route::post('/ab-tests', [\App\Http\Controllers\Admin\AbTestController::class, 'store'])->name('ab-tests.store');
-    Route::get('/ab-tests/{experiment}', [\App\Http\Controllers\Admin\AbTestController::class, 'show'])->name('ab-tests.show');
-    Route::post('/ab-tests/{experiment}/{action}', [\App\Http\Controllers\Admin\AbTestController::class, 'act'])->name('ab-tests.act');
-
-    // Performance Dashboard (P1)
-    Route::get('/performance', [\App\Http\Controllers\Admin\PerformanceDashboardController::class, 'index'])->name('performance.index');
-
-    // Marketing Ops (TikTok clips, title alternatives, email A/B, CS reply)
-    Route::get('/movies/{movie}/marketing-ops/tiktok-clips', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'tikTokClipsForm'])->name('movies.marketing-ops.tiktok-clips');
-    Route::post('/movies/{movie}/marketing-ops/tiktok-clips', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateTikTokClips'])->name('movies.marketing-ops.tiktok-clips.generate');
-    Route::get('/movies/{movie}/marketing-ops/title-alternatives', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'titleAlternativesForm'])->name('movies.marketing-ops.title-alternatives');
-    Route::post('/movies/{movie}/marketing-ops/title-alternatives', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateTitleAlternatives'])->name('movies.marketing-ops.title-alternatives.generate');
-    Route::get('/marketing-ops/email-subjects', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'emailSubjectsForm'])->name('marketing-ops.email-subjects');
-    Route::post('/marketing-ops/email-subjects', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateEmailSubjects'])->name('marketing-ops.email-subjects.generate');
-    Route::get('/marketing-ops/cs-reply', fn () => view('admin.marketing-ops.cs-reply-drafter'))->name('marketing-ops.cs-reply');
-    Route::post('/marketing-ops/cs-reply', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'csReplyDraft'])->name('marketing-ops.cs-reply.generate');
+    Route::get('/revenue', [\App\Http\Controllers\Admin\RevenueDashboardController::class, 'index'])
+        ->middleware('can:analytics.revenue')->name('revenue.dashboard');
+    Route::get('/geo', [\App\Http\Controllers\Admin\GeoDistributionController::class, 'index'])
+        ->middleware('can:analytics.geo')->name('geo.distribution');
+    Route::get('/cohorts', [\App\Http\Controllers\Admin\CohortDashboardController::class, 'index'])
+        ->middleware('can:analytics.cohort')->name('cohorts.index');
+    Route::get('/cohorts/export.csv', [\App\Http\Controllers\Admin\CohortDashboardController::class, 'export'])
+        ->middleware('can:analytics.cohort')->name('cohorts.export');
+    Route::get('/funnel', [\App\Http\Controllers\Admin\FunnelDashboardController::class, 'index'])
+        ->middleware('can:analytics.funnel')->name('funnel.index');
+    Route::get('/ab-tests', [\App\Http\Controllers\Admin\AbTestController::class, 'index'])
+        ->middleware('can:analytics.funnel')->name('ab-tests.index');
+    Route::get('/ab-tests/create', [\App\Http\Controllers\Admin\AbTestController::class, 'create'])
+        ->middleware('can:analytics.funnel')->name('ab-tests.create');
+    Route::post('/ab-tests', [\App\Http\Controllers\Admin\AbTestController::class, 'store'])
+        ->middleware('can:analytics.funnel')->name('ab-tests.store');
+    Route::get('/ab-tests/{experiment}', [\App\Http\Controllers\Admin\AbTestController::class, 'show'])
+        ->middleware('can:analytics.funnel')->name('ab-tests.show');
+    Route::post('/ab-tests/{experiment}/{action}', [\App\Http\Controllers\Admin\AbTestController::class, 'act'])
+        ->middleware('can:analytics.funnel')->name('ab-tests.act');
 
     // Performance Dashboard (P1) — AI latency, queue lag, cache + DB stats, slow queries
-    Route::get('/performance', [\App\Http\Controllers\Admin\PerformanceDashboardController::class, 'index'])->name('performance.index');
+    Route::get('/performance', [\App\Http\Controllers\Admin\PerformanceDashboardController::class, 'index'])
+        ->middleware('can:analytics.performance')->name('performance.index');
 
-    // Revenue Dashboard (D1) — MRR/ARR, churn, per-plan donut, 30-day trend
-    Route::get('/revenue', [\App\Http\Controllers\Admin\RevenueDashboardController::class, 'index'])->name('revenue.dashboard');
-
-    // Geo Distribution Dashboard (D14) — users / watches / revenue per country
-    Route::get('/geo', [\App\Http\Controllers\Admin\GeoDistributionController::class, 'index'])->name('geo.distribution');
+    // Marketing Ops (TikTok clips, title alternatives, email A/B, CS reply)
+    Route::get('/movies/{movie}/marketing-ops/tiktok-clips', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'tikTokClipsForm'])
+        ->middleware('can:marketing.tiktok')->name('movies.marketing-ops.tiktok-clips');
+    Route::post('/movies/{movie}/marketing-ops/tiktok-clips', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateTikTokClips'])
+        ->middleware('can:marketing.tiktok')->name('movies.marketing-ops.tiktok-clips.generate');
+    Route::get('/movies/{movie}/marketing-ops/title-alternatives', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'titleAlternativesForm'])
+        ->middleware('can:marketing.social')->name('movies.marketing-ops.title-alternatives');
+    Route::post('/movies/{movie}/marketing-ops/title-alternatives', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateTitleAlternatives'])
+        ->middleware('can:marketing.social')->name('movies.marketing-ops.title-alternatives.generate');
+    Route::get('/marketing-ops/email-subjects', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'emailSubjectsForm'])
+        ->middleware('can:marketing.email_ab')->name('marketing-ops.email-subjects');
+    Route::post('/marketing-ops/email-subjects', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'generateEmailSubjects'])
+        ->middleware('can:marketing.email_ab')->name('marketing-ops.email-subjects.generate');
+    Route::get('/marketing-ops/cs-reply', fn () => view('admin.marketing-ops.cs-reply-drafter'))
+        ->middleware('can:marketing.cs_reply')->name('marketing-ops.cs-reply');
+    Route::post('/marketing-ops/cs-reply', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'csReplyDraft'])
+        ->middleware('can:marketing.cs_reply')->name('marketing-ops.cs-reply.generate');
 
     // ━━━ API Keys (service-to-service auth) ━━━
     // Plaintext keys are shown ONCE in a flash modal after creation.
     // Revoke is soft (sets revoked_at) so audit_logs entries remain joinable.
-    Route::get('/api-keys', [\App\Http\Controllers\Admin\ApiKeyController::class, 'index'])->name('api-keys.index');
-    Route::post('/api-keys', [\App\Http\Controllers\Admin\ApiKeyController::class, 'store'])->name('api-keys.store');
+    Route::get('/api-keys', [\App\Http\Controllers\Admin\ApiKeyController::class, 'index'])
+        ->middleware('can:security.api_keys')->name('api-keys.index');
+    Route::post('/api-keys', [\App\Http\Controllers\Admin\ApiKeyController::class, 'store'])
+        ->middleware('can:security.api_keys')->name('api-keys.store');
     Route::delete('/api-keys/{apiKey}', [\App\Http\Controllers\Admin\ApiKeyController::class, 'destroy'])
+        ->middleware('can:security.api_keys')
         ->whereNumber('apiKey')->name('api-keys.destroy');
 });
 

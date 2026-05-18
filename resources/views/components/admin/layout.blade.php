@@ -126,141 +126,89 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
+    @php
+        // ── Permission-aware sidebar rendering ─────────────────────
+        // Drives the entire nav off config/admin_menu.php so the Menu Matrix
+        // audit page mirrors what users actually see.
+        //
+        // GRACEFUL DEGRADATION CONTRACT — three layers of fallback so this
+        // works even if peer ROLE swarms #1 (Permission model + seeds) and
+        // #2 (User::hasPermission + Gate::define) have not landed yet:
+        //
+        //   1. permission === null            → always visible.
+        //   2. permissions table missing      → fall back to the existing
+        //                                       `admin` gate so admins still
+        //                                       see everything they used to.
+        //   3. Gate has no definition for the → same fall back to `admin`,
+        //      named permission yet              so we don't silently hide
+        //                                        a brand-new nav entry just
+        //                                        because the matching Gate
+        //                                        line hasn't been written.
+        //
+        // Once ROLE #1/#2 ship, swap the body of the closure for a plain
+        // `auth()->user()?->can($perm)` — but keep the null-permission
+        // shortcut and the unknown-Gate fallback for safety.
+        $user = auth()->user();
+
+        $permissionsTableExists = \Illuminate\Support\Facades\Schema::hasTable('permissions');
+
+        $canSeeMenuItem = function (?string $perm) use ($user, $permissionsTableExists): bool {
+            if ($perm === null) {
+                return true;
+            }
+            if ($user === null) {
+                return false;
+            }
+            // No permissions infrastructure yet → keep legacy "admin sees all" behaviour.
+            if (! $permissionsTableExists || ! \Illuminate\Support\Facades\Gate::has($perm)) {
+                return \Illuminate\Support\Facades\Gate::allows('admin');
+            }
+            return $user->can($perm);
+        };
+
+        $routeExists = fn (?string $name): bool => $name !== null && \Illuminate\Support\Facades\Route::has($name);
+
+        $sections = config('admin_menu.sections', []);
+    @endphp
+
     <!-- Sidebar -->
     <aside class="admin-sidebar" id="sidebar">
         <div class="logo">
             FLIK <span>Admin Panel</span>
         </div>
         <nav>
-            <div class="nav-label">Menu</div>
-            <a href="{{ route('admin.dashboard') }}" class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
-                Dashboard
-            </a>
-
-            <div class="nav-label" style="margin-top:16px">Content</div>
-            <a href="{{ route('admin.movies.index') }}" class="nav-link {{ request()->routeIs('admin.movies.*') ? 'active' : '' }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"/></svg>
-                Movies
-            </a>
-            <a href="{{ route('admin.genres.index') }}" class="nav-link {{ request()->routeIs('admin.genres.*') ? 'active' : '' }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-                Genres
-            </a>
-            <a href="{{ route('admin.casts.index') }}" class="nav-link {{ request()->routeIs('admin.casts.*') ? 'active' : '' }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                Cast
-            </a>
-
-            <div class="nav-label" style="margin-top:16px">System</div>
-            <a href="{{ route('admin.users.index') }}" class="nav-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                Users
-            </a>
-            <a href="{{ route('admin.banners.index') }}" class="nav-link {{ request()->routeIs('admin.banners.*') ? 'active' : '' }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                Banners
-            </a>
-            @if (\Illuminate\Support\Facades\Route::has('admin.api-keys.index'))
-                <a href="{{ route('admin.api-keys.index') }}" class="nav-link {{ request()->routeIs('admin.api-keys.*') ? 'active' : '' }}">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-                    API Keys
-                </a>
-            @endif
-
-            <div class="nav-label" style="margin-top:16px">Intelligence</div>
-            <a href="{{ route('admin.ai.index') }}" class="nav-link {{ request()->routeIs('admin.ai.index') || request()->routeIs('admin.ai.store') || request()->routeIs('admin.ai.update') || request()->routeIs('admin.ai.toggle') || request()->routeIs('admin.ai.destroy') || request()->routeIs('admin.ai.test') ? 'active' : '' }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-                AI Providers
-            </a>
-            <a href="{{ route('admin.ai.usage') }}" class="nav-link {{ request()->routeIs('admin.ai.usage') ? 'active' : '' }}">
-                <x-icon name="lightning" :size="18" />
-                AI Usage
-            </a>
-            <a href="{{ route('admin.audit-logs.index') }}" class="nav-link {{ request()->routeIs('admin.audit-logs.*') ? 'active' : '' }}">
-                <x-icon name="info" :size="18" />
-                Audit Logs
-            </a>
-            <a href="{{ route('admin.sentiment.index') }}" class="nav-link {{ request()->routeIs('admin.sentiment.*') ? 'active' : '' }}">
-                <x-icon name="star" :size="18" />
-                Sentiment Dashboard
-            </a>
-            <a href="{{ route('admin.comments.queue') }}" class="nav-link {{ request()->routeIs('admin.comments.*') ? 'active' : '' }}">
-                <x-icon name="trophy" :size="18" />
-                Comment Queue
-            </a>
-            @if (\Illuminate\Support\Facades\Route::has('admin.churn.dashboard'))
-                <a href="{{ route('admin.churn.dashboard') }}" class="nav-link {{ request()->routeIs('admin.churn.*') ? 'active' : '' }}">
-                    <x-icon name="fire" :size="18" />
-                    Churn Risk
-                </a>
-            @endif
-            @if (\Illuminate\Support\Facades\Route::has('admin.director-analyses.index'))
-                <a href="{{ route('admin.director-analyses.index') }}" class="nav-link {{ request()->routeIs('admin.director-analyses.*') ? 'active' : '' }}">
-                    <x-icon name="user-circle" :size="18" />
-                    Director Analyses
-                </a>
-            @endif
-            <a href="{{ route('admin.pitch-deck') }}" class="nav-link {{ request()->routeIs('admin.pitch-deck') ? 'active' : '' }}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                Pitch Deck
-            </a>
-
-            @if (\Illuminate\Support\Facades\Route::has('admin.movies.encoding-status') || \Illuminate\Support\Facades\Route::has('admin.movies.index'))
-                <div class="nav-label" style="margin-top:16px">Distribution</div>
-                <a href="{{ route('admin.movies.index') }}" class="nav-link {{ request()->routeIs('admin.movies.encoding-status') || request()->routeIs('admin.movies.upload-master') ? 'active' : '' }}">
-                    <x-icon name="server" :size="18" />
-                    Encoding Jobs
-                </a>
-            @endif
-
-            @if (\Illuminate\Support\Facades\Route::has('admin.insights.content-gap')
-                 || \Illuminate\Support\Facades\Route::has('admin.insights.pricing')
-                 || \Illuminate\Support\Facades\Route::has('admin.marketing-ops.email-subjects')
-                 || \Illuminate\Support\Facades\Route::has('admin.marketing-ops.cs-reply'))
-                <div class="nav-label" style="margin-top:16px">Marketing</div>
-                @if (\Illuminate\Support\Facades\Route::has('admin.insights.content-gap'))
-                    <a href="{{ route('admin.insights.content-gap') }}" class="nav-link {{ request()->routeIs('admin.insights.content-gap') ? 'active' : '' }}">
-                        <x-icon name="sparkles" :size="18" />
-                        Content Gap Analysis
-                    </a>
+            @foreach($sections as $sectionKey => $section)
+                @php
+                    // Build the list of items the current user is allowed to see
+                    // AND whose route is registered. A section with zero visible
+                    // items hides its header entirely (no orphaned labels).
+                    $visibleItems = collect($section['items'] ?? [])
+                        ->filter(fn ($item) => $routeExists($item['route'] ?? null)
+                            && $canSeeMenuItem($item['permission'] ?? null))
+                        ->values();
+                @endphp
+                @if($visibleItems->isNotEmpty())
+                    <div class="nav-label" @if(! $loop->first) style="margin-top:16px" @endif>
+                        {{ $section['label'] ?? ucfirst($sectionKey) }}
+                    </div>
+                    @foreach($visibleItems as $item)
+                        @php
+                            // Active-state heuristic: highlight on any sub-route of
+                            // the item's named route (e.g. admin.movies.* covers
+                            // index/create/edit/destroy). Falls back to exact match.
+                            $routeName = $item['route'];
+                            $base = preg_replace('/\.[^.]+$/', '', $routeName);
+                            $isActive = request()->routeIs($routeName)
+                                || ($base !== $routeName && request()->routeIs($base . '.*'));
+                        @endphp
+                        <a href="{{ route($item['route']) }}"
+                           class="nav-link {{ $isActive ? 'active' : '' }}">
+                            <x-icon :name="$item['icon'] ?? 'cog'" :size="18" />
+                            {{ $item['label'] }}
+                        </a>
+                    @endforeach
                 @endif
-                @if (\Illuminate\Support\Facades\Route::has('admin.insights.pricing'))
-                    <a href="{{ route('admin.insights.pricing') }}" class="nav-link {{ request()->routeIs('admin.insights.pricing') ? 'active' : '' }}">
-                        <x-icon name="cog" :size="18" />
-                        Pricing Optimization
-                    </a>
-                @endif
-                @if (\Illuminate\Support\Facades\Route::has('admin.marketing-ops.email-subjects'))
-                    <a href="{{ route('admin.marketing-ops.email-subjects') }}" class="nav-link {{ request()->routeIs('admin.marketing-ops.email-subjects*') ? 'active' : '' }}">
-                        <x-icon name="lightning" :size="18" />
-                        Email A/B Subjects
-                    </a>
-                @endif
-                @if (\Illuminate\Support\Facades\Route::has('admin.marketing-ops.cs-reply'))
-                    <a href="{{ route('admin.marketing-ops.cs-reply') }}" class="nav-link {{ request()->routeIs('admin.marketing-ops.cs-reply*') ? 'active' : '' }}">
-                        <x-icon name="chat" :size="18" />
-                        CS Reply Drafter
-                    </a>
-                @endif
-            @endif
-
-            @if (\Illuminate\Support\Facades\Route::has('admin.revenue.dashboard')
-                 || \Illuminate\Support\Facades\Route::has('admin.geo.distribution'))
-                <div class="nav-label" style="margin-top:16px">Business</div>
-                @if (\Illuminate\Support\Facades\Route::has('admin.revenue.dashboard'))
-                    <a href="{{ route('admin.revenue.dashboard') }}" class="nav-link {{ request()->routeIs('admin.revenue.*') ? 'active' : '' }}">
-                        <x-icon name="coin" :size="18" />
-                        Revenue Dashboard
-                    </a>
-                @endif
-                @if (\Illuminate\Support\Facades\Route::has('admin.geo.distribution'))
-                    <a href="{{ route('admin.geo.distribution') }}" class="nav-link {{ request()->routeIs('admin.geo.*') ? 'active' : '' }}">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3.6 9h16.8M3.6 15h16.8M11.5 3a16.5 16.5 0 000 18M12.5 3a16.5 16.5 0 010 18M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        Geo Distribution
-                    </a>
-                @endif
-            @endif
+            @endforeach
         </nav>
 
         <div class="nav-footer">

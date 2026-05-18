@@ -2,8 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class DatabaseSeeder extends Seeder
 {
@@ -22,6 +24,12 @@ class DatabaseSeeder extends Seeder
      */
     public function run()
     {
+        // ── Roles & permissions (run FIRST so default users below can
+        //    be attached to roles immediately) ─────────────────────
+        $this->call([
+            RolePermissionSeeder::class,
+        ]);
+
         // ── Default users (idempotent) ──────────────────────────
         $regular = User::firstOrNew(['email' => 'user@gmail.com']);
         $regular->name = 'user';
@@ -41,6 +49,13 @@ class DatabaseSeeder extends Seeder
             'email_verified_at' => now(),
         ])->save();
 
+        // ── Attach seeded users to the new role/permission system ──
+        // RolePermissionSeeder's backfill ran BEFORE these users existed,
+        // so we explicitly attach them here. insertOrIgnore keeps this
+        // safe across re-seeds (composite PK on role_user).
+        $this->attachSeedRoles($regular, ['user']);
+        $this->attachSeedRoles($admin,   ['super_admin', 'user']);
+
         // ── Catalog & system data ──────────────────────────────
         $this->call([
             GenreSeeder::class,
@@ -48,5 +63,35 @@ class DatabaseSeeder extends Seeder
             SubscriptionPlanSeeder::class,
             AchievementSeeder::class,
         ]);
+    }
+
+    /**
+     * Idempotently link a user to one or more roles by slug.
+     * Silently skips slugs that don't resolve (e.g. if a custom rollout
+     * hasn't seeded a particular role yet).
+     *
+     * @param  array<int, string>  $roleNames
+     */
+    private function attachSeedRoles(User $user, array $roleNames): void
+    {
+        $roleIds = Role::query()
+            ->whereIn('name', $roleNames)
+            ->pluck('id');
+
+        if ($roleIds->isEmpty()) {
+            return;
+        }
+
+        $now = now();
+        $rows = $roleIds->map(fn ($rid) => [
+            'role_id'             => (int) $rid,
+            'user_id'             => (int) $user->id,
+            'assigned_by_user_id' => null,
+            'assigned_at'         => $now,
+            'created_at'          => $now,
+            'updated_at'          => $now,
+        ])->all();
+
+        DB::table('role_user')->insertOrIgnore($rows);
     }
 }
