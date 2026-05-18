@@ -22,15 +22,15 @@
     "require-dev": {
         "barryvdh/laravel-debugbar": "^3.13",
         "fakerphp/faker": "^1.23",
-        "larastan/larastan": "^3.0",
+        "larastan/larastan": "^2.9",
         "laravel/pint": "^1.18",
         "laravel/sail": "^1.37",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.5",
-        "phpstan/phpstan": "^2.0",
+        "phpstan/phpstan": "^1.11",
         "phpunit/phpunit": "^11.0",
-        "psalm/plugin-laravel": "^3.0",
-        "vimeo/psalm": "^6.0"
+        "psalm/plugin-laravel": "^2.11",
+        "vimeo/psalm": "^5.26"
     },
     "autoload": {
         "psr-4": {
@@ -70,6 +70,9 @@
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
+        "platform": {
+            "php": "8.2.12"
+        },
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "dealerdirect/phpcodesniffer-composer-installer": true

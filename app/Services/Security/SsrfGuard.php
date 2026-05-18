@@ -39,6 +39,15 @@ use App\Exceptions\SsrfException;
 class SsrfGuard
 {
     /**
+     * Internal IP-family discriminators. Decoupled from PHP's self::FAMILY_INET / self::FAMILY_INET6
+     * (which require the sockets extension — not always loaded on Windows).
+     * The numeric value doesn't matter, only that ::PRIVATE_RANGES and the
+     * runtime ip-classification helpers agree.
+     */
+    private const FAMILY_INET = 4;
+    private const FAMILY_INET6 = 6;
+
+    /**
      * Cloud / cluster metadata hostnames that should NEVER be reachable from
      * user-influenced URLs. Compared case-insensitively against the URL host.
      *
@@ -70,32 +79,32 @@ class SsrfGuard
      */
     private const PRIVATE_RANGES = [
         // IPv4 — RFC 1918 + reserved
-        ['network' => '0.0.0.0',         'bits' => 8,  'family' => AF_INET],   // "this network"
-        ['network' => '10.0.0.0',        'bits' => 8,  'family' => AF_INET],   // RFC 1918
-        ['network' => '100.64.0.0',      'bits' => 10, 'family' => AF_INET],   // CGNAT
-        ['network' => '127.0.0.0',       'bits' => 8,  'family' => AF_INET],   // loopback
-        ['network' => '169.254.0.0',     'bits' => 16, 'family' => AF_INET],   // link-local + AWS metadata
-        ['network' => '172.16.0.0',      'bits' => 12, 'family' => AF_INET],   // RFC 1918
-        ['network' => '192.0.0.0',       'bits' => 24, 'family' => AF_INET],   // IETF
-        ['network' => '192.0.2.0',       'bits' => 24, 'family' => AF_INET],   // TEST-NET-1
-        ['network' => '192.168.0.0',     'bits' => 16, 'family' => AF_INET],   // RFC 1918
-        ['network' => '198.18.0.0',      'bits' => 15, 'family' => AF_INET],   // benchmark
-        ['network' => '198.51.100.0',    'bits' => 24, 'family' => AF_INET],   // TEST-NET-2
-        ['network' => '203.0.113.0',     'bits' => 24, 'family' => AF_INET],   // TEST-NET-3
-        ['network' => '224.0.0.0',       'bits' => 4,  'family' => AF_INET],   // multicast
-        ['network' => '240.0.0.0',       'bits' => 4,  'family' => AF_INET],   // reserved
-        ['network' => '255.255.255.255', 'bits' => 32, 'family' => AF_INET],   // broadcast
+        ['network' => '0.0.0.0',         'bits' => 8,  'family' => self::FAMILY_INET],   // "this network"
+        ['network' => '10.0.0.0',        'bits' => 8,  'family' => self::FAMILY_INET],   // RFC 1918
+        ['network' => '100.64.0.0',      'bits' => 10, 'family' => self::FAMILY_INET],   // CGNAT
+        ['network' => '127.0.0.0',       'bits' => 8,  'family' => self::FAMILY_INET],   // loopback
+        ['network' => '169.254.0.0',     'bits' => 16, 'family' => self::FAMILY_INET],   // link-local + AWS metadata
+        ['network' => '172.16.0.0',      'bits' => 12, 'family' => self::FAMILY_INET],   // RFC 1918
+        ['network' => '192.0.0.0',       'bits' => 24, 'family' => self::FAMILY_INET],   // IETF
+        ['network' => '192.0.2.0',       'bits' => 24, 'family' => self::FAMILY_INET],   // TEST-NET-1
+        ['network' => '192.168.0.0',     'bits' => 16, 'family' => self::FAMILY_INET],   // RFC 1918
+        ['network' => '198.18.0.0',      'bits' => 15, 'family' => self::FAMILY_INET],   // benchmark
+        ['network' => '198.51.100.0',    'bits' => 24, 'family' => self::FAMILY_INET],   // TEST-NET-2
+        ['network' => '203.0.113.0',     'bits' => 24, 'family' => self::FAMILY_INET],   // TEST-NET-3
+        ['network' => '224.0.0.0',       'bits' => 4,  'family' => self::FAMILY_INET],   // multicast
+        ['network' => '240.0.0.0',       'bits' => 4,  'family' => self::FAMILY_INET],   // reserved
+        ['network' => '255.255.255.255', 'bits' => 32, 'family' => self::FAMILY_INET],   // broadcast
 
         // IPv6
-        ['network' => '::',              'bits' => 128, 'family' => AF_INET6], // unspecified
-        ['network' => '::1',             'bits' => 128, 'family' => AF_INET6], // loopback
-        ['network' => '::ffff:0:0',      'bits' => 96,  'family' => AF_INET6], // IPv4-mapped (handled extra below)
-        ['network' => '64:ff9b::',       'bits' => 96,  'family' => AF_INET6], // NAT64
-        ['network' => '100::',           'bits' => 64,  'family' => AF_INET6], // discard
-        ['network' => '2001:db8::',      'bits' => 32,  'family' => AF_INET6], // documentation
-        ['network' => 'fc00::',          'bits' => 7,   'family' => AF_INET6], // ULA
-        ['network' => 'fe80::',          'bits' => 10,  'family' => AF_INET6], // link-local
-        ['network' => 'ff00::',          'bits' => 8,   'family' => AF_INET6], // multicast
+        ['network' => '::',              'bits' => 128, 'family' => self::FAMILY_INET6], // unspecified
+        ['network' => '::1',             'bits' => 128, 'family' => self::FAMILY_INET6], // loopback
+        ['network' => '::ffff:0:0',      'bits' => 96,  'family' => self::FAMILY_INET6], // IPv4-mapped (handled extra below)
+        ['network' => '64:ff9b::',       'bits' => 96,  'family' => self::FAMILY_INET6], // NAT64
+        ['network' => '100::',           'bits' => 64,  'family' => self::FAMILY_INET6], // discard
+        ['network' => '2001:db8::',      'bits' => 32,  'family' => self::FAMILY_INET6], // documentation
+        ['network' => 'fc00::',          'bits' => 7,   'family' => self::FAMILY_INET6], // ULA
+        ['network' => 'fe80::',          'bits' => 10,  'family' => self::FAMILY_INET6], // link-local
+        ['network' => 'ff00::',          'bits' => 8,   'family' => self::FAMILY_INET6], // multicast
     ];
 
     /**
@@ -261,7 +270,7 @@ class SsrfGuard
             }
         }
 
-        $family = str_contains($ip, ':') ? AF_INET6 : AF_INET;
+        $family = str_contains($ip, ':') ? self::FAMILY_INET6 : self::FAMILY_INET;
         $packed = @inet_pton($ip);
         if ($packed === false) {
             return true;
@@ -269,7 +278,7 @@ class SsrfGuard
 
         // Built-in PHP filter handles the well-known v4 ranges; useful as
         // a belt-and-braces check before our custom CIDR sweep.
-        if ($family === AF_INET) {
+        if ($family === self::FAMILY_INET) {
             $longCheck = filter_var(
                 $ip,
                 FILTER_VALIDATE_IP,
@@ -302,7 +311,7 @@ class SsrfGuard
             return false;
         }
 
-        $byteLen = $family === AF_INET ? 4 : 16;
+        $byteLen = $family === self::FAMILY_INET ? 4 : 16;
         if (strlen($packedIp) !== $byteLen || strlen($packedNet) !== $byteLen) {
             return false;
         }
