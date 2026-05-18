@@ -102,20 +102,24 @@
 
     {{-- Charts row ------------------------------------------------- --}}
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:24px">
-        <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:20px 24px;min-height:340px">
+        <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:20px 24px;height:340px;display:flex;flex-direction:column">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                 <h3 style="font-size:15px;font-weight:600">New Paid Subscriptions — Last 30 Days</h3>
                 <span style="font-size:11px;color:#666">Count + Revenue</span>
             </div>
-            <canvas id="trendChart" height="120"></canvas>
+            <div style="position:relative;flex:1;min-height:0">
+                <canvas id="trendChart"></canvas>
+            </div>
         </div>
 
-        <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:20px 24px;min-height:340px">
+        <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:20px 24px;height:340px;display:flex;flex-direction:column">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
                 <h3 style="font-size:15px;font-weight:600">MRR by Plan</h3>
                 <span style="font-size:11px;color:#666">{{ number_format($stats['paid_plans_count']) }} paid plans</span>
             </div>
-            <canvas id="planDonut" height="220"></canvas>
+            <div style="position:relative;flex:1;min-height:0">
+                <canvas id="planDonut"></canvas>
+            </div>
         </div>
     </div>
 
