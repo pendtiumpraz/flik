@@ -1,11 +1,35 @@
 <x-admin.layout title="Movies">
 
     <style>
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border-radius: 6px;
+            background: transparent;
+            border: 1px solid #2a2a2a;
+            color: #bbb;
+            cursor: pointer;
+            transition: all .12s;
+        }
+        .icon-btn:hover {
+            background: #252525;
+            color: #fff;
+            border-color: #3a3a3a;
+        }
+        .icon-btn.icon-gold:hover { color: #C5A55A; border-color: #C5A55A; }
+        .icon-btn.icon-danger:hover { color: #ef4444; border-color: #ef4444; }
+        .icon-btn svg { width: 15px; height: 15px; }
+        .icon-btn.is-active { background: #252525; color: #C5A55A; border-color: #C5A55A; }
+
         .dropdown-item {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 7px 10px;
+            gap: 10px;
+            padding: 8px 10px;
             font-size: 13px;
             color: #ddd;
             text-decoration: none;
@@ -13,14 +37,9 @@
             transition: background .12s, color .12s;
             white-space: nowrap;
         }
-        .dropdown-item:hover {
-            background: #252525;
-            color: #fff;
-        }
-        .btn.is-active {
-            background: #252525;
-            color: #C5A55A;
-        }
+        .dropdown-item:hover { background: #252525; color: #fff; }
+        .dropdown-item svg { width: 14px; height: 14px; color: #888; flex-shrink: 0; }
+        .dropdown-item:hover svg { color: #C5A55A; }
     </style>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px">
@@ -48,7 +67,7 @@
                     <th>Rating</th>
                     <th>Year</th>
                     <th>Flags</th>
-                    <th style="width:160px">Actions</th>
+                    <th style="width:140px;text-align:right;padding-right:20px">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -78,45 +97,54 @@
                         @if($movie->is_popular) <span class="badge badge-gold" style="margin-right:2px">Pop</span> @endif
                         @if($movie->is_trending) <span class="badge badge-green">Trend</span> @endif
                     </td>
-                    <td>
-                        <div style="display:flex;gap:6px;align-items:center" x-data="{ open: false }" @click.outside="open = false">
-                            <a href="{{ route('admin.movies.edit', $movie) }}" class="btn btn-ghost btn-sm" title="Edit">Edit</a>
+                    <td style="text-align:right;padding-right:20px">
+                        <div style="display:inline-flex;gap:4px;align-items:center" x-data="{ open: false }" @click.outside="open = false">
+                            {{-- Edit (pencil) --}}
+                            <a href="{{ route('admin.movies.edit', $movie) }}" class="icon-btn icon-gold" title="Edit movie">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                            </a>
 
+                            {{-- Delete (trash) --}}
                             <form method="POST" action="{{ route('admin.movies.destroy', $movie) }}" onsubmit="return confirm('Delete {{ addslashes($movie->title) }}?')" style="margin:0">
                                 @csrf @method('DELETE')
-                                <button type="submit" class="btn btn-danger btn-sm" title="Delete">Del</button>
+                                <button type="submit" class="icon-btn icon-danger" title="Delete movie">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg>
+                                </button>
                             </form>
 
-                            {{-- More dropdown — collapses the long action tail --}}
+                            {{-- More dropdown (dots-vertical) --}}
                             <div style="position:relative">
-                                <button type="button" @click="open = !open" class="btn btn-ghost btn-sm" :class="{ 'is-active': open }" style="display:inline-flex;align-items:center;gap:4px" title="More actions">
-                                    More
-                                    <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="open ? 'transform:rotate(180deg)' : ''" style="transition:transform .15s"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
+                                <button type="button" @click="open = !open" class="icon-btn" :class="{ 'is-active': open }" title="More actions">
+                                    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
                                 </button>
-                                <div x-show="open" x-cloak x-transition.opacity style="position:absolute;right:0;top:calc(100% + 4px);min-width:200px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);z-index:50;padding:6px;display:flex;flex-direction:column;gap:2px">
-                                    <a href="{{ route('admin.movies.subtitles.index', $movie) }}" class="dropdown-item" title="Manage Subtitles">
-                                        <span style="color:#C5A55A;width:18px;display:inline-block">CC</span> Subtitles
+                                <div x-show="open" x-cloak x-transition.opacity style="position:absolute;right:0;top:calc(100% + 6px);min-width:220px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);z-index:50;padding:6px;display:flex;flex-direction:column;gap:2px;text-align:left">
+                                    <a href="{{ route('admin.movies.subtitles.index', $movie) }}" class="dropdown-item">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
+                                        Subtitles
                                     </a>
 
                                     @if (\Illuminate\Support\Facades\Route::has('admin.movies.encoding-status'))
-                                        <a href="{{ route('admin.movies.encoding-status', $movie) }}" class="dropdown-item" title="Encoding Status">
-                                            <span style="width:18px;display:inline-block">⚙</span> Encoding Status
+                                        <a href="{{ route('admin.movies.encoding-status', $movie) }}" class="dropdown-item">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                            Encoding Status
                                         </a>
                                     @endif
 
                                     @if (\Illuminate\Support\Facades\Route::has('admin.movies.upload-master'))
                                         <form method="POST" action="{{ route('admin.movies.upload-master', $movie) }}" enctype="multipart/form-data" style="margin:0" onsubmit="return this.querySelector('input[type=file]').files.length > 0 || (alert('Pick a master file first'), false)">
                                             @csrf
-                                            <label class="dropdown-item" title="Upload Master Video" style="cursor:pointer;display:flex">
+                                            <label class="dropdown-item" style="cursor:pointer">
                                                 <input type="file" name="master" accept="video/*" style="display:none" onchange="this.form.requestSubmit()">
-                                                <span style="width:18px;display:inline-block">⬆</span> Upload Master
+                                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                                                Upload Master Video
                                             </label>
                                         </form>
                                     @endif
 
                                     @if (\Illuminate\Support\Facades\Route::has('highlight.show'))
-                                        <a href="{{ route('highlight.show', $movie) }}" class="dropdown-item" title="Highlight Reel">
-                                            <span style="width:18px;display:inline-block">✦</span> Highlight Reel
+                                        <a href="{{ route('highlight.show', $movie) }}" class="dropdown-item">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+                                            Highlight Reel
                                         </a>
                                     @endif
 
@@ -124,13 +152,15 @@
                                     <div style="font-size:10px;text-transform:uppercase;color:#555;padding:4px 10px;letter-spacing:0.5px">Marketing</div>
 
                                     @if (\Illuminate\Support\Facades\Route::has('admin.movies.marketing-ops.tiktok-clips'))
-                                        <a href="{{ route('admin.movies.marketing-ops.tiktok-clips', $movie) }}" class="dropdown-item" title="TikTok Clips">
-                                            <span style="width:18px;display:inline-block">▶</span> TikTok Clips
+                                        <a href="{{ route('admin.movies.marketing-ops.tiktok-clips', $movie) }}" class="dropdown-item">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            TikTok Clips
                                         </a>
                                     @endif
                                     @if (\Illuminate\Support\Facades\Route::has('admin.movies.marketing-ops.title-alternatives'))
-                                        <a href="{{ route('admin.movies.marketing-ops.title-alternatives', $movie) }}" class="dropdown-item" title="Title A/B Alternatives">
-                                            <span style="width:18px;display:inline-block">A/B</span> Title Alternatives
+                                        <a href="{{ route('admin.movies.marketing-ops.title-alternatives', $movie) }}" class="dropdown-item">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+                                            Title A/B Alternatives
                                         </a>
                                     @endif
                                 </div>
