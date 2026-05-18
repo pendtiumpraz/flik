@@ -437,8 +437,12 @@ final class RequestFirewall
         }
 
         // Match by route name first (preferred — it survives URL changes).
+        // Route is null when WAF runs before route resolution (global stack) —
+        // fall back to path-only matching in that case.
         $route = $request->route();
-        $routeName = method_exists($route, 'getName') ? $route?->getName() : null;
+        $routeName = ($route !== null && method_exists($route, 'getName'))
+            ? $route->getName()
+            : null;
 
         foreach ($patterns as $pattern) {
             if (! is_string($pattern) || $pattern === '') {
