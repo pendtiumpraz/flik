@@ -134,11 +134,43 @@ class PaymentController extends Controller
                     // Award XP
                     $level = $subscription->user->getOrCreateLevel();
                     $level->addXp(50);
+
+                    // Admin bell — finance team gets pinged on successful
+                    // payments. Queued (default queue, $tries=2) so a notif
+                    // hiccup never delays Midtrans' webhook ack.
+                    $this->notifyAdminPayment('success', $subscription, [
+                        'status' => $status,
+                        'fraud_status' => $fraudStatus,
+                    ]);
                 }
             } elseif (in_array($status, ['deny', 'cancel', 'expire'])) {
                 $subscription->forceFill(['status' => 'cancelled'])->save();
+
+                // Admin bell — finance gets a warning on failed/expired txns.
+                $failureMessage = match ($status) {
+                    'deny' => 'Payment denied by issuer.',
+                    'cancel' => 'Customer cancelled the payment.',
+                    'expire' => 'Payment window expired before completion.',
+                    default => 'Payment failed: ' . $status,
+                };
+                $this->notifyAdminPayment('failed', $subscription, [
+                    'status' => $status,
+                    'fraud_status' => $fraudStatus,
+                    'failure_message' => $failureMessage,
+                ]);
             } elseif ($status == 'pending') {
                 $subscription->forceFill(['status' => 'pending'])->save();
+            }
+
+            // Chargebacks travel as `fraud_status === 'challenge'` or
+            // `chargeback` on Midtrans' newer schema. Either signal
+            // promotes to a critical alert that wakes super-admin too.
+            if (in_array(strtolower((string) $fraudStatus), ['challenge', 'chargeback'], true)
+                || strtolower((string) $status) === 'chargeback') {
+                $this->notifyAdminPayment('chargeback', $subscription, [
+                    'status' => $status,
+                    'fraud_status' => $fraudStatus,
+                ]);
             }
 
             return response()->json(['status' => 'ok']);
@@ -154,6 +186,35 @@ class PaymentController extends Controller
     {
         return redirect()->route('profile.show')
             ->with('success', '🎉 Pembayaran berhasil! Paket kamu sudah aktif.');
+    }
+
+    /**
+     * Fan out a payment-related event onto the admin bell.
+     *
+     * Wraps {@see \App\Listeners\Admin\PaymentEventListener} dispatch so a
+     * notification failure (queue unavailable, AdminNotifier not yet shipped,
+     * etc.) NEVER prevents us from acking Midtrans' webhook — Midtrans
+     * retries aggressively on slow callbacks, which would multiply the
+     * customer-facing side effects (duplicate XP awards, duplicate user
+     * notifications, etc.).
+     *
+     * @param  'success'|'failed'|'chargeback'  $kind
+     * @param  array<string,mixed>              $extra Status / fraud_status / failure_message etc.
+     */
+    private function notifyAdminPayment(string $kind, Subscription $subscription, array $extra = []): void
+    {
+        try {
+            \App\Listeners\Admin\PaymentEventListener::dispatch([
+                'kind' => $kind,
+                'subscription_id' => $subscription->id,
+            ] + $extra);
+        } catch (\Throwable $e) {
+            \Log::warning('PaymentController: admin notif dispatch failed', [
+                'kind' => $kind,
+                'subscription_id' => $subscription->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

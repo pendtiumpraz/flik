@@ -565,6 +565,22 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::delete('/api-keys/{apiKey}', [\App\Http\Controllers\Admin\ApiKeyController::class, 'destroy'])
         ->middleware('can:security.api_keys')
         ->whereNumber('apiKey')->name('api-keys.destroy');
+
+    // ━━━ Admin Notifications (peer NOTIF #1 — realtime staff alerts) ━━━
+    // Bare `can:admin` gate is intentional — the bell widget must reach every
+    // staff role. Per-notification audience checks happen inside the controller
+    // (see NotificationController::authorizeAudience). The /unread-count
+    // endpoint is the polling fallback when BROADCAST_DRIVER=null|log.
+    Route::get('/notifications', [\App\Http\Controllers\Admin\NotificationController::class, 'index'])
+        ->name('notifications.index');
+    Route::get('/notifications/unread-count', [\App\Http\Controllers\Admin\NotificationController::class, 'unreadCount'])
+        ->name('notifications.unread-count');
+    Route::get('/notifications/{adminNotification}', [\App\Http\Controllers\Admin\NotificationController::class, 'show'])
+        ->whereNumber('adminNotification')->name('notifications.show');
+    Route::post('/notifications/{adminNotification}/read', [\App\Http\Controllers\Admin\NotificationController::class, 'markRead'])
+        ->whereNumber('adminNotification')->name('notifications.read');
+    Route::post('/notifications/read-all', [\App\Http\Controllers\Admin\NotificationController::class, 'markAllRead'])
+        ->name('notifications.read-all');
 });
 
 // ━━━ User-facing AI Features ━━━

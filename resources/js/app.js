@@ -21,3 +21,15 @@ window.initXrayOverlay = initXrayOverlay;
 // `flik:cookies-updated` after persisted prefs load). Must load eagerly
 // so analytics/marketing scripts can gate themselves before they fire. ━━━
 import './cookie-consent';
+
+// ━━━ Laravel Echo (Pusher) bootstrap — initialises `window.Echo` only when
+// `window.PUSHER_KEY` is exposed by the admin layout. Gracefully no-ops in
+// production environments where broadcasting is not configured (consumers
+// like the admin notification bell fall back to polling). ━━━
+import './echo';
+
+// ━━━ Admin notification bell Alpine factory — registers
+// `window.adminNotifBell()` used by <x-admin.notification-bell />.
+// Safe to import on every page; the Alpine component only runs when the
+// bell blade is actually rendered. ━━━
+import './admin-notifications';

@@ -4,7 +4,11 @@ namespace App\Providers;
 
 use App\Contracts\Ai\AiClientContract;
 use App\Contracts\Storage\CdnStorageContract;
+use App\Models\EncodingJob;
+use App\Models\Subscription;
 use App\Models\User;
+use App\Observers\EncodingJobAdminNotifyObserver;
+use App\Observers\SubscriptionAdminNotifyObserver;
 use App\Observers\UserObserver;
 use App\Services\Ai\AiClient;
 use App\Services\Security\HtmlSanitizer;
@@ -86,6 +90,13 @@ class AppServiceProvider extends ServiceProvider
         // sane permission baseline (vs. the previous behaviour of zero
         // roles → effectively guest-level access until manually granted).
         User::observe(UserObserver::class);
+
+        // Admin bell — fan model state-transitions onto the in-app admin
+        // notification feed. Each observer only emits on a genuine
+        // transition (status field actually changed) so re-saves don't
+        // duplicate notifications.
+        Subscription::observe(SubscriptionAdminNotifyObserver::class);
+        EncodingJob::observe(EncodingJobAdminNotifyObserver::class);
 
         // NOTE: the `admin` gate is now owned by AuthServiceProvider where
         // it routes through the new RBAC system (super_admin OR has 'admin'

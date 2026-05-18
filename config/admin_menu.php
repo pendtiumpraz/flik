@@ -42,6 +42,17 @@ return [
                     'permission' => null, // anyone with admin gate sees this
                     'icon' => 'home',
                 ],
+                [
+                    // Owned by NOTIF #1 (this swarm). The bell-only widget
+                    // entry is delegated to NOTIF #2 — they may add a
+                    // second item or replace this one. The route resolves
+                    // to the full inbox; sidebar component degrades silently
+                    // if it's not yet registered.
+                    'label' => 'Notifications',
+                    'route' => 'admin.notifications.index',
+                    'permission' => null, // bell must reach every staff role
+                    'icon' => 'sparkles',
+                ],
             ],
         ],
 

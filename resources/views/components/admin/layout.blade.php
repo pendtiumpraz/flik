@@ -124,6 +124,38 @@
         [x-cloak] { display: none !important; }
     </style>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    {{-- Vite bundle (Echo + Pusher + admin notification bell) — loaded so the
+         bell component can subscribe to realtime channels. Wrapped in @vite
+         which no-ops gracefully if the manifest is missing in dev. --}}
+    @vite(['resources/js/app.js'])
+
+    {{-- Expose Pusher + role context to JS so the bell can subscribe to the
+         right private channels. Falls back to polling when PUSHER_KEY is null. --}}
+    @auth
+        @php
+            // Graceful role lookup — if the `roles` relation method is missing
+            // (e.g. peer ROLE swarm #1 hasn't shipped yet) we still expose an
+            // empty array so the bell falls back to subscribing only to the
+            // `all-admins` channel rather than throwing.
+            $authRoles = [];
+            try {
+                $u = auth()->user();
+                if ($u && method_exists($u, 'roles')) {
+                    $authRoles = $u->roles()->pluck('name')->all();
+                }
+            } catch (\Throwable $e) {
+                $authRoles = [];
+            }
+        @endphp
+        <script>
+            window.PUSHER_KEY      = @json(config('broadcasting.connections.pusher.key'));
+            window.PUSHER_CLUSTER  = @json(config('broadcasting.connections.pusher.options.cluster'));
+            window.AUTH_USER_ROLES = @json($authRoles);
+        </script>
+    @endauth
+
+    @stack('styles')
 </head>
 <body>
     @php
@@ -229,6 +261,9 @@
                 <h1>{{ $title ?? 'Dashboard' }}</h1>
             </div>
             <div style="display:flex;align-items:center;gap:12px">
+                {{-- Realtime notification bell (Pusher when configured, polling fallback) --}}
+                <x-admin.notification-bell />
+
                 <span style="font-size:13px;color:#777">{{ auth()->user()->name }}</span>
                 <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#C5A55A,#E8D5A3);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#000">
                     {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
@@ -254,5 +289,7 @@
             }
         });
     </script>
+
+    @stack('scripts')
 </body>
 </html>
