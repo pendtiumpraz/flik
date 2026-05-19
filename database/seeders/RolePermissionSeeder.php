@@ -53,6 +53,8 @@ class RolePermissionSeeder extends Seeder
             ['marketing.email_ab',  'Manage Email A/B Tests',      'Create and manage marketing email A/B experiments.'],
             ['marketing.tiktok',    'TikTok Marketing',            'Publish/manage TikTok marketing assets.'],
             ['marketing.cs_reply',  'CS Auto-Reply',               'Manage AI customer-support auto-reply templates.'],
+            ['push.send',           'Send Push Notifications',     'Compose and broadcast Web Push notifications to subscribers.'],
+            ['promo.manage',        'Manage Promo Codes',          'Create, edit, and bulk-generate subscription discount codes.'],
         ],
         'moderation' => [
             ['comments.moderate', 'Moderate Comments', 'Approve, reject, and re-run AI moderation on comments.'],
@@ -91,6 +93,9 @@ class RolePermissionSeeder extends Seeder
             ['movies.upload_master',   'Upload Master Files',     'Upload master video files for transcoding.'],
             ['movies.encoding_status', 'View Encoding Status',    'Inspect the transcoding/encoding pipeline status.'],
         ],
+        'system' => [
+            ['system.queues', 'Manage Queues', 'View the queue dashboard, retry/delete failed jobs, flush the failed queue.'],
+        ],
     ];
 
     /**
@@ -124,7 +129,8 @@ class RolePermissionSeeder extends Seeder
                 'ai.providers.configure', 'ai.usage.view', 'ai.tasks.run',
                 // `marketing`
                 'marketing.banner', 'marketing.social', 'marketing.email_ab',
-                'marketing.tiktok', 'marketing.cs_reply',
+                'marketing.tiktok', 'marketing.cs_reply', 'push.send',
+                'promo.manage',
                 // `moderation`
                 'comments.moderate', 'sentiment.view',
                 // `analytics`
@@ -139,6 +145,8 @@ class RolePermissionSeeder extends Seeder
                 'subscriptions.view',
                 // `distribution`
                 'movies.upload_master', 'movies.encoding_status',
+                // `system` (operational, not destructive at the role-management level)
+                'system.queues',
             ],
         ],
         [

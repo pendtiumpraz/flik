@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Follows;
 use App\Notifications\Auth\ResetPasswordNotification;
 use App\Notifications\Auth\VerifyEmailNotification;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -12,10 +13,11 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
-    use HasFactory, Notifiable;
+    use Follows, HasFactory, Notifiable;
 
     /**
      * Mass-assignable attributes for end-user controlled writes (registration,
@@ -33,6 +35,11 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     protected $fillable = [
         'name', 'email', 'username', 'password',
+        // Public-profile columns (peer SOCIAL #1). Avatar/cover paths
+        // are persisted by ProfileController::updatePublic AFTER the
+        // FileUploadValidator has re-encoded + sanitised the upload
+        // — see the controller for the trust boundary.
+        'bio', 'avatar_path', 'cover_path', 'is_public', 'allow_dm',
     ];
 
     /**
@@ -41,7 +48,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function sendEmailVerificationNotification(): void
     {
-        $this->notify(new VerifyEmailNotification());
+        $this->notify(new VerifyEmailNotification);
     }
 
     /**
@@ -78,9 +85,14 @@ class User extends Authenticatable implements MustVerifyEmail
         // (`where('email', ...)`) and admin search would break otherwise.
         // For lookup-by-PII use a separate searchable hash column
         // (see `national_id_hash` + `findByNationalId`).
-        'phone'      => 'encrypted',
-        'address'    => 'encrypted',
+        'phone' => 'encrypted',
+        'address' => 'encrypted',
         'birth_date' => 'date', // plaintext on disk — used by age verification queries
+
+        // Public-profile flags — keep them booleans on the read side so
+        // Blade checks (@if($user->is_public)) work without surprises.
+        'is_public' => 'boolean',
+        'allow_dm' => 'boolean',
     ];
 
     /**
@@ -90,14 +102,18 @@ class User extends Authenticatable implements MustVerifyEmail
     public function hasTwoFactorEnabled(): bool
     {
         return $this->two_factor_confirmed_at !== null
-            && !empty($this->two_factor_secret);
+            && ! empty($this->two_factor_secret);
     }
 
     // ── Roles ─────────────────────────────────────────────────
     public const ROLE_SUPER_ADMIN = 'super_admin';
+
     public const ROLE_CONTENT_MANAGER = 'content_manager';
+
     public const ROLE_CUSTOMER_SUPPORT = 'customer_support';
+
     public const ROLE_FINANCE = 'finance';
+
     public const ROLE_USER = 'user';
 
     public const ROLES = [
@@ -160,7 +176,7 @@ class User extends Authenticatable implements MustVerifyEmail
         // Pivot-based roles. Defensive: if the table or model class is
         // missing (fresh install before peer migrations land), skip the
         // query rather than blow up the auth flow.
-        if (!class_exists(\App\Models\Role::class) || !Schema::hasTable('role_user')) {
+        if (! class_exists(\App\Models\Role::class) || ! Schema::hasTable('role_user')) {
             return false;
         }
 
@@ -181,7 +197,7 @@ class User extends Authenticatable implements MustVerifyEmail
             return true;
         }
 
-        if (!class_exists(\App\Models\Role::class) || !Schema::hasTable('role_user')) {
+        if (! class_exists(\App\Models\Role::class) || ! Schema::hasTable('role_user')) {
             // Legacy single-column can only satisfy one role at a time.
             return count($names) === 1 && $this->role === $names[0];
         }
@@ -202,7 +218,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function assignRole($role, ?int $assignedBy = null): self
     {
-        if (!class_exists(\App\Models\Role::class)) {
+        if (! class_exists(\App\Models\Role::class)) {
             return $this;
         }
 
@@ -233,7 +249,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function removeRole($role): self
     {
-        if (!class_exists(\App\Models\Role::class)) {
+        if (! class_exists(\App\Models\Role::class)) {
             return $this;
         }
 
@@ -260,7 +276,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function syncRoles(array $roleNames): self
     {
-        if (!class_exists(\App\Models\Role::class)) {
+        if (! class_exists(\App\Models\Role::class)) {
             return $this;
         }
 
@@ -327,17 +343,17 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         // Fresh install / missing peer migrations → empty cache instead of crash.
-        if (!class_exists(\App\Models\Role::class)
-            || !class_exists(\App\Models\Permission::class)
-            || !Schema::hasTable('role_user')
-            || !Schema::hasTable('permission_role')) {
+        if (! class_exists(\App\Models\Role::class)
+            || ! class_exists(\App\Models\Permission::class)
+            || ! Schema::hasTable('role_user')
+            || ! Schema::hasTable('permission_role')) {
             return $this->cachedPermissions = collect();
         }
 
         // Single eager-load with the pivot — N+1 safe.
-        if (!$this->relationLoaded('roles')) {
+        if (! $this->relationLoaded('roles')) {
             $this->load('roles.permissions');
-        } elseif ($this->roles->isNotEmpty() && !$this->roles->first()->relationLoaded('permissions')) {
+        } elseif ($this->roles->isNotEmpty() && ! $this->roles->first()->relationLoaded('permissions')) {
             $this->roles->loadMissing('permissions');
         }
 
@@ -519,7 +535,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
         $pepper = (string) (env('PII_PEPPER') ?: Config::get('app.key', ''));
 
-        return hash('sha256', $canonical . '|' . $pepper);
+        return hash('sha256', $canonical.'|'.$pepper);
     }
 
     // ── Relations ─────────────────────────────────────────────
@@ -624,6 +640,65 @@ class User extends Authenticatable implements MustVerifyEmail
     public function currentPlan(): ?SubscriptionPlan
     {
         $sub = $this->subscriptions()->active()->with('plan')->first();
+
         return $sub?->plan;
+    }
+
+    // ── Public Profile Helpers (peer SOCIAL #1) ───────────────
+
+    /**
+     * URL to the uploaded avatar, or null when the user hasn't uploaded
+     * one. Views fall back to the gold-gradient initial badge when this
+     * returns null.
+     *
+     * NOTE: this deliberately does NOT pull from OAuth provider avatars —
+     * those are an external dependency we don't control. The public
+     * profile page only renders user-uploaded content.
+     */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        $path = $this->attributes['avatar_path'] ?? null;
+        if ($path === null || $path === '') {
+            return null;
+        }
+
+        // Absolute URL already (legacy OAuth fallback or CDN-prefixed) →
+        // pass through verbatim so admins can still write a full URL.
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return Storage::disk('public')->url($path);
+    }
+
+    /**
+     * URL to the cover banner. Same accessor pattern as avatar.
+     */
+    public function getCoverUrlAttribute(): ?string
+    {
+        $path = $this->attributes['cover_path'] ?? null;
+        if ($path === null || $path === '') {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        return Storage::disk('public')->url($path);
+    }
+
+    /**
+     * Public profile URL for this user. Returns null when the user has no
+     * username (legacy rows / OAuth signups that never picked a handle) so
+     * the caller can fall back to /profile.
+     */
+    public function publicProfileUrl(): ?string
+    {
+        if (empty($this->username)) {
+            return null;
+        }
+
+        return url('/u/'.$this->username);
     }
 }

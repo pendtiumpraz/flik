@@ -62,6 +62,7 @@ class DatabaseSeeder extends Seeder
             MovieSeeder::class,
             SubscriptionPlanSeeder::class,
             AchievementSeeder::class,
+            PromoCodeSeeder::class,
         ]);
     }
 

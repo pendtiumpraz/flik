@@ -20,7 +20,7 @@ class WatchHistory extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'user_id', 'movie_id', 'progress_seconds',
+        'user_id', 'movie_id', 'episode_id', 'progress_seconds',
         'duration_seconds', 'last_watched_at',
     ];
 
@@ -37,6 +37,16 @@ class WatchHistory extends Model
     public function movie()
     {
         return $this->belongsTo(Movie::class);
+    }
+
+    /**
+     * Optional episode tie — populated only when the parent movie is a series.
+     * Set-null on delete so wiping an episode doesn't silently drop the
+     * user's history of having watched its parent series.
+     */
+    public function episode()
+    {
+        return $this->belongsTo(Episode::class);
     }
 
     public function getProgressPercentAttribute(): int

@@ -8,6 +8,14 @@ use App\Http\Controllers\VelflixController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'home');
+
+// ━━━ Trending engine (DEV #2) — public, auth-optional ━━━
+// Reads pre-aggregated trending_movies cache (rebuilt by the scheduler;
+// see App\Console\Kernel::schedule). Public so anonymous browsers can
+// discover what's hot before signing up.
+Route::get('/trending', [\App\Http\Controllers\TrendingController::class, 'index'])
+    ->name('trending.index');
+
 // Anonymous public endpoint — easy spam target. Hard cap via the named
 // 'newsletter' limiter (see RouteServiceProvider): 2/min/IP by default.
 // Honeypot trap field (`website_url`) + form-fill timer rejects naive bots
@@ -31,6 +39,15 @@ Route::get('/robots.txt', [\App\Http\Controllers\SeoController::class, 'robots']
 Route::get('/privacy-policy', [\App\Http\Controllers\LegalController::class, 'privacy'])->name('legal.privacy');
 Route::get('/terms', [\App\Http\Controllers\LegalController::class, 'terms'])->name('legal.terms');
 Route::get('/refund-policy', [\App\Http\Controllers\LegalController::class, 'refund'])->name('legal.refund');
+
+// ━━━ Locale switcher (public — anonymous visitors get session locale) ━━━
+// POST so the choice cannot be CSRF'd silently via a stray <a href="?lang=..">
+// link smuggled into UGC. The middleware (App\Http\Middleware\SetLocale)
+// still honours `?lang=` for share-friendly URLs, but the persistent
+// per-user write happens ONLY through this endpoint.
+Route::post('/locale/{code}', [\App\Http\Controllers\LocaleController::class, 'switch'])
+    ->where('code', '[A-Za-z-]{2,5}')
+    ->name('locale.switch');
 
 // ━━━ Security disclosure (RFC 9116 — public, no auth) ━━━
 // security.txt lives at /public/.well-known/security.txt and is served as a
@@ -151,6 +168,18 @@ Route::middleware('auth')->group(function () {
     Route::put('/profile', [\App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/password', [\App\Http\Controllers\ProfileController::class, 'updatePassword'])->name('profile.password.update');
 
+    // Public-profile editor (bio / avatar / cover / is_public / allow_dm).
+    // Multipart upload — hits FileUploadValidator (peer SEC #11) for EXIF
+    // strip + magic-byte sniff when available, falls back to Laravel rules
+    // otherwise. POST verb because the form is multipart/form-data.
+    Route::post('/profile/public', [\App\Http\Controllers\ProfileController::class, 'updatePublic'])
+        ->name('profile.public.update');
+
+    // Activity feed (peer SOCIAL #1 bonus) — 7-day window across the
+    // viewer's follow graph, capped at 50 items. Cheap enough to compute
+    // per-request; if it grows hot we'll materialise into a feed table.
+    Route::get('/feed', [\App\Http\Controllers\ActivityFeedController::class, 'index'])->name('feed.index');
+
     // Self-service "View My Permissions" — lists the authenticated user's
     // assigned roles + the effective permission set those roles grant.
     // Read-only; no security/audit value beyond letting users see what
@@ -190,11 +219,49 @@ Route::middleware('auth')->group(function () {
     Route::post('/watch/progress', [\App\Http\Controllers\WatchHistoryController::class, 'updateProgress'])->name('watch.progress');
     Route::get('/watch/resume', [\App\Http\Controllers\WatchHistoryController::class, 'getProgress'])->name('watch.resume');
 
+    // ━━━ Gamification: Streaks + Achievements + Leaderboards ━━━
+    // Achievement showcase (Hall of Fame) — auth so we can render unlocked state.
+    Route::get('/profile/achievements', [\App\Http\Controllers\ProfileController::class, 'achievements'])
+        ->name('profile.achievements');
+
+    // Streak freeze purchase (50 coins → +1 freeze credit). POST-only so a
+    // stray <a> can't drain a user's balance; CSRF protected by the web group.
+    Route::post('/streak/freeze', [\App\Http\Controllers\StreakController::class, 'freeze'])
+        ->name('streak.freeze');
+
+    // Leaderboards. Use the 'search' limiter (60/min/user) — these are read-
+    // only views and not particularly cheap (group-by counts), so the cap
+    // matches the same expectation as the autocomplete pages.
+    Route::get('/leaderboards/streaks', [\App\Http\Controllers\LeaderboardController::class, 'streaks'])
+        ->middleware('throttle:search')
+        ->name('leaderboards.streaks');
+    Route::get('/leaderboards/xp', [\App\Http\Controllers\LeaderboardController::class, 'xp'])
+        ->middleware('throttle:search')
+        ->name('leaderboards.xp');
+    Route::get('/leaderboards/watches', [\App\Http\Controllers\LeaderboardController::class, 'watches'])
+        ->middleware('throttle:search')
+        ->name('leaderboards.watches');
+
+    // ── Per-episode player (series support) ─────────────────────
+    // Standalone player view for a single episode of a series. Lives
+    // alongside /watch/progress so the player's heartbeat ajax post
+    // stays unchanged — the new request just adds `episode_id`.
+    Route::get('/watch/episode/{episode}', [\App\Http\Controllers\EpisodeWatchController::class, 'show'])
+        ->name('episodes.watch');
+
     // Payment — checkout requires a verified email so we can deliver receipts
     // and recovery codes. Browsing is intentionally NOT gated (see /movies).
     Route::middleware('verified')->group(function () {
         Route::get('/checkout/{plan}', [\App\Http\Controllers\PaymentController::class, 'checkout'])->name('payment.checkout');
         Route::get('/payment/success', [\App\Http\Controllers\PaymentController::class, 'success'])->name('payment.success');
+
+        // Live promo validation for the checkout UI. Alpine debounces the
+        // input change and POSTs here on each keystroke pause. Throttled
+        // hard ('search' limiter: 60/min/user) so a stuck keyboard can't
+        // hammer the promo gate. Returns JSON only — no view rendered.
+        Route::post('/checkout/validate-promo', [\App\Http\Controllers\PaymentController::class, 'validatePromo'])
+            ->middleware('throttle:search')
+            ->name('payment.validate-promo');
     });
 
     // Watch Party (synchronized playback rooms)
@@ -240,6 +307,18 @@ Route::middleware('auth')->group(function () {
     Route::get('/privacy/delete-account', [\App\Http\Controllers\Privacy\UserDataController::class, 'confirmDelete'])->name('privacy.delete.confirm');
     Route::delete('/privacy/delete-account', [\App\Http\Controllers\Privacy\UserDataController::class, 'delete'])->name('privacy.delete.execute');
 });
+
+// ━━━ Web Push subscribe / unsubscribe (auth optional — anonymous opt-in allowed) ━━━
+// The subscribe endpoint upserts by `endpoint`, so re-subscribing the same browser
+// just refreshes the row. When VAPID is not configured both endpoints return
+// HTTP 503 with `{success:false, reason:'not_configured'}` so the client-side
+// JS can fail gracefully without console spam.
+Route::post('/api/push/subscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'subscribe'])
+    ->middleware('throttle:60,1')
+    ->name('push.subscribe');
+Route::post('/api/push/unsubscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'unsubscribe'])
+    ->middleware('throttle:60,1')
+    ->name('push.unsubscribe');
 
 // Midtrans Webhook (no auth required) — gateway can fan out per state
 // change so the cap is generous (named 'webhook' limiter = 100/min/IP).
@@ -295,6 +374,25 @@ Route::controller(LoginController::class)->group(function () {
     Route::get('login/google/callback', 'handleProviderCallback');
 });
 
+// ━━━ Email tracking endpoints (public, no auth — hit by mail clients) ━━━
+// Open pixel + click redirect. tracking_id is the capability token; the
+// controller never returns a status that reveals whether the token is
+// valid (broken IDs get a transparent gif / redirect-to-home anyway), so
+// these can't be used for token enumeration. Throttled coarsely so a
+// botnet can't DoS the open counters.
+//
+// The {trackingId}.gif suffix is a cosmetic file extension to convince
+// strict mail clients that the URL is genuinely an image — the route
+// constraint pins the param to exactly the 32-char random alnum token.
+Route::get('/email/track/open/{trackingId}.gif', [\App\Http\Controllers\EmailTrackingController::class, 'open'])
+    ->where('trackingId', '[A-Za-z0-9]{32}')
+    ->middleware('throttle:1000,1')
+    ->name('email.track.open');
+Route::get('/email/track/click/{trackingId}', [\App\Http\Controllers\EmailTrackingController::class, 'click'])
+    ->where('trackingId', '[A-Za-z0-9]{32}')
+    ->middleware('throttle:1000,1')
+    ->name('email.track.click');
+
 // ━━━ Admin panel (per-permission gating) ━━━
 //
 // Outer middleware stack: `auth` + `can:admin` is the COARSE gate.
@@ -332,6 +430,14 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
         ->middleware('can:movies.update')->name('movies.update');
     Route::delete('/movies/{movie}', [\App\Http\Controllers\AdminController::class, 'destroyMovie'])
         ->middleware('can:movies.delete')->name('movies.destroy');
+
+    // ─── Movies bulk actions ─────────────────────────────────────
+    // Single endpoint that dispatches on the `action` field. Baseline
+    // gate is `movies.update`; sharper per-action abilities (e.g.
+    // `movies.delete` for `action=delete`) are re-checked inside the
+    // controller. See App\Http\Controllers\Admin\MovieBulkController.
+    Route::post('/movies/bulk', [\App\Http\Controllers\Admin\MovieBulkController::class, 'apply'])
+        ->middleware('can:movies.update')->name('movies.bulk');
 
     // ─── Genres / Casts (bundled under movies.update — taxonomy ops) ──
     Route::get('/genres', [\App\Http\Controllers\AdminController::class, 'genres'])
@@ -386,6 +492,24 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::delete('/banners/{banner}', [\App\Http\Controllers\AdminController::class, 'destroyBanner'])
         ->middleware('can:movies.update')->name('banners.destroy');
 
+    // ─── Series: Seasons + Episodes (nested under a movie) ──────
+    // Resource minus `show` — admin uses `index` listing instead. Episode
+    // routes are double-nested so the URL itself documents the hierarchy
+    // (admin/movies/{movie}/seasons/{season}/episodes/{episode}).
+    // scoped() ensures Laravel only resolves a Season that belongs to
+    // the URL's Movie (and an Episode that belongs to that Season), so
+    // a crafted URL with mismatched IDs returns 404, not a leak.
+    Route::resource('/movies/{movie}/seasons', \App\Http\Controllers\Admin\SeasonController::class)
+        ->except(['show'])
+        ->scoped()
+        ->middleware('can:movies.update')
+        ->names('movies.seasons');
+    Route::resource('/movies/{movie}/seasons/{season}/episodes', \App\Http\Controllers\Admin\EpisodeController::class)
+        ->except(['show'])
+        ->scoped()
+        ->middleware('can:movies.update')
+        ->names('movies.seasons.episodes');
+
     // ─── Movie Subtitles (per-movie manager) ─────────────────────
     Route::get('/movies/{movie}/subtitles', [\App\Http\Controllers\Admin\SubtitleController::class, 'index'])
         ->middleware('can:subtitles.generate')->name('movies.subtitles.index');
@@ -427,6 +551,13 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     // Audit Logs
     Route::get('/audit-logs', [\App\Http\Controllers\Admin\AuditLogController::class, 'index'])
         ->middleware('can:security.audit_logs')->name('audit-logs.index');
+
+    // ━━━ i18n — Translation coverage + AI cache stats ━━━
+    // Surfaces per-locale UI string coverage (diff of lang/<code>.json files)
+    // alongside translation_cache hit rate. Read-only; rerunning a translation
+    // happens via the user-facing path (clear cache rows manually if needed).
+    Route::get('/translations', [\App\Http\Controllers\Admin\TranslationDashboardController::class, 'index'])
+        ->name('translations.index');
 
     // ━━━ Menu Matrix — visual audit of sidebar visibility per role ━━━
     // Source-of-truth for the table is config/admin_menu.php (same file the
@@ -555,6 +686,33 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::post('/marketing-ops/cs-reply', [\App\Http\Controllers\Admin\MarketingOpsController::class, 'csReplyDraft'])
         ->middleware('can:marketing.cs_reply')->name('marketing-ops.cs-reply.generate');
 
+    // ━━━ Email Campaign Builder ━━━
+    // Admin composes a campaign, picks a segment, optionally calls AI to
+    // draft copy, previews audience, then `send` flips draft → sending and
+    // CampaignDispatcher fans out per-recipient SendCampaignEmail jobs on
+    // the `ai-batch` queue. Tracking endpoints (open pixel + click) live
+    // OUTSIDE the admin group — they're public, hit by mail clients.
+    //
+    // All actions share the seeded `marketing.email_ab` permission slug
+    // (the sidebar label is "Email Campaigns" / "marketing.email" — they
+    // map to the same authorisation gate).
+    //
+    // Helper POSTs (ai-draft, preview-audience) come BEFORE the resource
+    // declaration so Laravel doesn't try to route them through {id}.
+    Route::post('/email-campaigns/ai-draft', [\App\Http\Controllers\Admin\EmailCampaignController::class, 'aiDraft'])
+        ->middleware('can:marketing.email_ab')->name('email-campaigns.ai-draft');
+    Route::post('/email-campaigns/preview-audience', [\App\Http\Controllers\Admin\EmailCampaignController::class, 'previewAudience'])
+        ->middleware('can:marketing.email_ab')->name('email-campaigns.preview-audience');
+    Route::post('/email-campaigns/{emailCampaign}/send', [\App\Http\Controllers\Admin\EmailCampaignController::class, 'send'])
+        ->middleware('can:marketing.email_ab')->name('email-campaigns.send');
+    Route::post('/email-campaigns/{emailCampaign}/cancel', [\App\Http\Controllers\Admin\EmailCampaignController::class, 'cancel'])
+        ->middleware('can:marketing.email_ab')->name('email-campaigns.cancel');
+    Route::get('/email-campaigns/{emailCampaign}/report', [\App\Http\Controllers\Admin\EmailCampaignController::class, 'report'])
+        ->middleware('can:marketing.email_ab')->name('email-campaigns.report');
+    Route::resource('/email-campaigns', \App\Http\Controllers\Admin\EmailCampaignController::class)
+        ->parameters(['email-campaigns' => 'emailCampaign'])
+        ->middleware('can:marketing.email_ab');
+
     // ━━━ API Keys (service-to-service auth) ━━━
     // Plaintext keys are shown ONCE in a flash modal after creation.
     // Revoke is soft (sets revoked_at) so audit_logs entries remain joinable.
@@ -565,6 +723,59 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::delete('/api-keys/{apiKey}', [\App\Http\Controllers\Admin\ApiKeyController::class, 'destroy'])
         ->middleware('can:security.api_keys')
         ->whereNumber('apiKey')->name('api-keys.destroy');
+
+    // ━━━ Queue Dashboard (Horizon-lite) ━━━
+    // Gated by the operational `system.queues` permission. All seven
+    // endpoints share the same gate — retry/forget/flush are equally
+    // sensitive (they mutate worker state) and live counts leak nothing
+    // beyond what an operator with queue access already sees.
+    //
+    // `{id}` for retry/forget is the failed_jobs UUID, NOT the numeric
+    // PK — that's the canonical identifier `queue:retry` / `queue:forget`
+    // accept, and Laravel's default failed-job driver is `database-uuids`.
+    Route::prefix('queues')->name('queue-dashboard.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Admin\QueueDashboardController::class, 'index'])
+            ->middleware('can:system.queues')->name('index');
+        Route::get('/live', [\App\Http\Controllers\Admin\QueueDashboardController::class, 'liveCounts'])
+            ->middleware('can:system.queues')->name('live');
+        Route::get('/failed', [\App\Http\Controllers\Admin\QueueDashboardController::class, 'failed'])
+            ->middleware('can:system.queues')->name('failed');
+        Route::post('/retry/{id}', [\App\Http\Controllers\Admin\QueueDashboardController::class, 'retry'])
+            ->middleware('can:system.queues')->name('retry');
+        Route::post('/retry-all', [\App\Http\Controllers\Admin\QueueDashboardController::class, 'retryAll'])
+            ->middleware('can:system.queues')->name('retry-all');
+        Route::delete('/forget/{id}', [\App\Http\Controllers\Admin\QueueDashboardController::class, 'forget'])
+            ->middleware('can:system.queues')->name('forget');
+        Route::post('/flush', [\App\Http\Controllers\Admin\QueueDashboardController::class, 'flushFailed'])
+            ->middleware('can:system.queues')->name('flush');
+    });
+
+    // ━━━ Promo Codes (subscription discount tokens) ━━━
+    // Gated on `promo.manage` permission (added via RolePermissionSeeder
+    // marketing category). AuthServiceProvider's `Gate::before` fallback
+    // makes legacy `is_admin` users see these routes even before the seeder
+    // re-runs, so the UX never breaks on a stale seed.
+    // bulk-generate + report sit OUTSIDE Route::resource() so their URLs
+    // are discoverable (/admin/promo-codes/bulk-generate, /report). They
+    // are declared BEFORE the resource so the {promo_code} catch-all
+    // doesn't try to bind a model named "report" or "bulk-generate".
+    Route::post('/promo-codes/bulk-generate', [\App\Http\Controllers\Admin\PromoCodeController::class, 'bulkGenerate'])
+        ->middleware('can:promo.manage')->name('promo-codes.bulk-generate');
+    Route::get('/promo-codes/report', [\App\Http\Controllers\Admin\PromoCodeReportController::class, 'index'])
+        ->middleware('can:promo.manage')->name('promo-codes.report');
+    Route::resource('/promo-codes', \App\Http\Controllers\Admin\PromoCodeController::class)
+        ->except(['show'])
+        ->middleware('can:promo.manage');
+
+    // ━━━ Web Push Broadcasts (admin sender) ━━━
+    // `push.send` permission is seeded by RolePermissionSeeder. Until the
+    // seed runs the legacy `is_admin` Gate fallback still grants access.
+    Route::get('/push', [\App\Http\Controllers\Admin\PushBroadcastController::class, 'index'])
+        ->middleware('can:push.send')->name('push.index');
+    Route::get('/push/create', [\App\Http\Controllers\Admin\PushBroadcastController::class, 'create'])
+        ->middleware('can:push.send')->name('push.create');
+    Route::post('/push', [\App\Http\Controllers\Admin\PushBroadcastController::class, 'store'])
+        ->middleware('can:push.send')->name('push.store');
 
     // ━━━ Admin Notifications (peer NOTIF #1 — realtime staff alerts) ━━━
     // Bare `can:admin` gate is intentional — the bell widget must reach every
@@ -668,4 +879,36 @@ Route::middleware('auth')->group(function () {
     Route::get('/playback/{movie}/config', [\App\Http\Controllers\PlaybackController::class, 'config'])->name('playback.config');
     Route::get('/playback/{movie}/manifest.m3u8', [\App\Http\Controllers\PlaybackController::class, 'manifest'])->name('playback.manifest');
     Route::post('/playback/{movie}/heartbeat', [\App\Http\Controllers\PlaybackController::class, 'heartbeat'])->name('playback.heartbeat');
+});
+
+// ━━━ Public Profile + Social Layer (peer SOCIAL #1) ━━━
+//
+// Reads (show, followers list, following list) are intentionally GUEST-accessible:
+// the whole point of /u/{username} is to expose the user externally. Private
+// profiles (`is_public=false`) degrade to a minimal view server-side and the
+// list endpoints 404 the same way a missing user would, so we never leak the
+// existence of a hidden account via status-code differences.
+//
+// Writes (follow / unfollow) require auth and run their own self-action guard.
+// The route-model-bound `User` uses the default `id` key so /u/{username} hits
+// the controller's case-insensitive lookup but the action routes use the
+// numeric id (cheaper + immune to a half-rename of the handle mid-session).
+Route::get('/u/{username}', [\App\Http\Controllers\PublicProfileController::class, 'show'])
+    ->where('username', '[A-Za-z0-9_\.]+')
+    ->name('profile.public.show');
+
+Route::get('/u/{user}/followers', [\App\Http\Controllers\PublicProfileController::class, 'followers'])
+    ->whereNumber('user')
+    ->name('profile.public.followers');
+Route::get('/u/{user}/following', [\App\Http\Controllers\PublicProfileController::class, 'following'])
+    ->whereNumber('user')
+    ->name('profile.public.following');
+
+Route::middleware('auth')->group(function () {
+    Route::post('/u/{user}/follow', [\App\Http\Controllers\PublicProfileController::class, 'follow'])
+        ->whereNumber('user')
+        ->name('profile.public.follow');
+    Route::delete('/u/{user}/follow', [\App\Http\Controllers\PublicProfileController::class, 'unfollow'])
+        ->whereNumber('user')
+        ->name('profile.public.unfollow');
 });

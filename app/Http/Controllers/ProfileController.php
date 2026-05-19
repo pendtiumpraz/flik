@@ -2,12 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Achievement;
 use App\Models\User;
 use App\Rules\NotBreached;
 use App\Rules\StrongPassword;
+use App\Services\Security\FileUploadValidator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ProfileController extends Controller
 {
@@ -47,11 +52,64 @@ class ProfileController extends Controller
         return view('profile.show', compact('user', 'stats', 'level', 'achievements', 'recentWatchlist', 'recentRatings'));
     }
 
+    /**
+     * Achievement showcase — grid of every achievement with locked/unlocked
+     * state. Used as the standalone "Hall of Fame" page reached from the
+     * profile and the streak widget.
+     *
+     * We render even when the user has unlocked zero — the locked tiles
+     * double as a roadmap of what's available.
+     */
+    public function achievements(Request $request)
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $all = Achievement::query()
+            ->where('is_active', true)
+            ->orderBy('condition_type')
+            ->orderBy('condition_value')
+            ->get();
+
+        // Eager-load the user's pivot rows once and key by achievement_id so
+        // the view can render unlocked_at without an N+1.
+        $unlocked = $user->achievements()
+            ->get(['achievements.id'])
+            ->mapWithKeys(fn ($a) => [$a->id => $a->pivot->unlocked_at]);
+
+        // Filter — only applied when the column exists (the seeder doesn't
+        // populate a `category` column today, so this is forward-compatible).
+        $hasCategoryColumn = Schema::hasColumn('achievements', 'category');
+        $filter = (string) $request->query('category', '');
+        $categories = collect();
+
+        if ($hasCategoryColumn) {
+            $categories = $all->pluck('category')->filter()->unique()->values();
+            if ($filter !== '' && $categories->contains($filter)) {
+                $all = $all->where('category', $filter)->values();
+            }
+        }
+
+        $unlockedCount = $unlocked->count();
+        $totalCount = $all->count();
+
+        return view('profile.achievements', [
+            'user' => $user,
+            'achievements' => $all,
+            'unlockedMap' => $unlocked,
+            'unlockedCount' => $unlockedCount,
+            'totalCount' => $totalCount,
+            'hasCategoryColumn' => $hasCategoryColumn,
+            'categories' => $categories,
+            'activeCategory' => $filter,
+        ]);
+    }
+
     public function update(Request $request)
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . auth()->id(),
+            'email' => 'required|email|unique:users,email,'.auth()->id(),
         ]);
 
         auth()->user()->update($request->only('name', 'email'));
@@ -91,11 +149,11 @@ class ProfileController extends Controller
             ->sortKeys();
 
         return view('profile.permissions', [
-            'user'                  => $user,
-            'roles'                 => $roles,
-            'permissions'           => $permissions,
-            'groupedPermissions'    => $grouped,
-            'isSuperAdmin'          => $user->isSuperAdmin(),
+            'user' => $user,
+            'roles' => $roles,
+            'permissions' => $permissions,
+            'groupedPermissions' => $grouped,
+            'isSuperAdmin' => $user->isSuperAdmin(),
             'totalPermissionsCount' => $permissions->count(),
         ]);
     }
@@ -118,7 +176,7 @@ class ProfileController extends Controller
             // Schema mismatch, missing column, DB unavailable — log + degrade.
             \Illuminate\Support\Facades\Log::warning('profile.permissions: failed to load roles', [
                 'user_id' => $user->id,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
             return collect();
@@ -140,10 +198,145 @@ class ProfileController extends Controller
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('profile.permissions: failed to load permissions', [
                 'user_id' => $user->id,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
             return collect();
+        }
+    }
+
+    /**
+     * Update the public-profile fields (bio, avatar, cover, visibility, DM).
+     *
+     * Image uploads go through {@see FileUploadValidator} when available
+     * (peer SEC #11) — it re-encodes via GD/Imagick to strip EXIF and any
+     * embedded payload before we write to disk. When the validator is not
+     * present (early installs) we fall back to a strict Laravel `image`
+     * rule, which is weaker but still useful.
+     */
+    public function updatePublic(Request $request): RedirectResponse
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        $data = $request->validate([
+            'username' => [
+                'nullable', 'string', 'max:32',
+                'regex:/^[A-Za-z0-9_\.]+$/',
+                'unique:users,username,'.$user->id,
+            ],
+            'bio' => ['nullable', 'string', 'max:500'],
+            'avatar' => ['nullable', 'file', 'image', 'max:5000'],
+            'cover' => ['nullable', 'file', 'image', 'max:8000'],
+            'is_public' => ['nullable', 'boolean'],
+            'allow_dm' => ['nullable', 'boolean'],
+        ], [
+            'username.regex' => 'Username may only contain letters, digits, underscore, and period.',
+        ]);
+
+        $payload = [
+            'bio' => $data['bio'] ?? null,
+            'is_public' => (bool) ($request->boolean('is_public', $user->is_public ?? true)),
+            'allow_dm' => (bool) ($request->boolean('allow_dm', $user->allow_dm ?? true)),
+        ];
+
+        // Username is optional but unique — only write when supplied so
+        // we don't overwrite an existing handle with an empty input.
+        if (! empty($data['username'] ?? null)) {
+            $payload['username'] = Str::lower(trim((string) $data['username']));
+        }
+
+        // ── Avatar upload ──────────────────────────────────────
+        if ($request->hasFile('avatar')) {
+            $stored = $this->persistImage($request->file('avatar'), 'avatars', $user->avatar_path);
+            if ($stored !== null) {
+                $payload['avatar_path'] = $stored;
+            }
+        }
+
+        // ── Cover upload ───────────────────────────────────────
+        if ($request->hasFile('cover')) {
+            $stored = $this->persistImage($request->file('cover'), 'covers', $user->cover_path);
+            if ($stored !== null) {
+                $payload['cover_path'] = $stored;
+            }
+        }
+
+        $user->fill($payload)->save();
+
+        return back()->with('success', 'Public profile updated.');
+    }
+
+    /**
+     * Validate + persist an uploaded image, returning the storage-relative
+     * path (suitable for `avatar_path` / `cover_path`). Returns null when
+     * validation fails — the caller logs nothing and leaves the existing
+     * value alone, so a bad upload is a silent no-op for the field rather
+     * than wiping the user's prior image.
+     */
+    private function persistImage(\Illuminate\Http\UploadedFile $file, string $folder, ?string $oldPath): ?string
+    {
+        // Prefer the hardened validator (re-encode + EXIF strip).
+        if (class_exists(FileUploadValidator::class)) {
+            try {
+                /** @var FileUploadValidator $validator */
+                $validator = app(FileUploadValidator::class);
+                $result = $validator->validateImage($file);
+                if (! ($result['ok'] ?? false)) {
+                    return null;
+                }
+
+                $ext = $result['extension'] ?? $file->getClientOriginalExtension();
+                $name = $folder.'/'.auth()->id().'-'.Str::random(16).'.'.$ext;
+
+                // The safe_path is a server-local temp file containing the
+                // re-encoded copy — stream it into the public disk.
+                $contents = @file_get_contents((string) ($result['safe_path'] ?? $file->getRealPath()));
+                if ($contents === false) {
+                    return null;
+                }
+                Storage::disk('public')->put($name, $contents);
+
+                $this->maybeForgetOldPath($oldPath);
+
+                return $name;
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('profile.public: image upload failed', [
+                    'folder' => $folder,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return null;
+            }
+        }
+
+        // Fallback: vanilla Laravel storage with the validation we already ran.
+        $name = $folder.'/'.auth()->id().'-'.Str::random(16).'.'.$file->getClientOriginalExtension();
+        $stored = $file->storeAs(dirname($name), basename($name), ['disk' => 'public']);
+
+        $this->maybeForgetOldPath($oldPath);
+
+        return $stored ?: null;
+    }
+
+    /**
+     * Best-effort cleanup of the previous avatar/cover on the public disk.
+     * Errors here are swallowed — leaving a stale file is far less bad than
+     * 500-ing the profile update because of a filesystem quirk.
+     */
+    private function maybeForgetOldPath(?string $oldPath): void
+    {
+        if ($oldPath === null || $oldPath === '') {
+            return;
+        }
+        if (str_starts_with($oldPath, 'http://') || str_starts_with($oldPath, 'https://')) {
+            return; // never delete an external URL
+        }
+        try {
+            Storage::disk('public')->delete($oldPath);
+        } catch (\Throwable $e) {
+            // Intentional: orphaned files are an ops problem, not a user
+            // problem. The profile update succeeds either way.
         }
     }
 
@@ -167,7 +360,7 @@ class ProfileController extends Controller
                 'max:255',
                 'confirmed',
                 new StrongPassword($user),
-                new NotBreached(),
+                new NotBreached,
             ],
         ]);
 

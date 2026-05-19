@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Genre;
 use App\Models\Movie;
+use App\Services\Trending\ViewTracker;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class VelflixController extends Controller
@@ -244,9 +246,21 @@ class VelflixController extends Controller
      * @param  Movie  $watch  Resolved via slug (Movie::getRouteKeyName())
      * @return View|Factory
      */
-    public function show(Movie $watch): View|Factory
+    public function show(Movie $watch, Request $request, ViewTracker $viewTracker): View|Factory
     {
         $movie = $watch->loadMissing(['genres', 'castMembers']);
+
+        // Lower-weight trending signal: page-view-only. No duration
+        // (they haven't pressed play yet) — the higher-weight signal
+        // fires from WatchHistoryController::updateProgress when they
+        // actually start watching. ViewTracker dedups within 30 min
+        // so reloading the detail page doesn't spam counts.
+        $viewTracker->record(
+            movie: $movie,
+            user: auth()->user(),
+            request: $request,
+            durationSeconds: null,
+        );
 
         // ── AI-generated assets (lazy-loaded; sections render conditionally) ───
         $movie->load([
@@ -255,6 +269,30 @@ class VelflixController extends Controller
             'aiReviews',
             'behindScenes',
         ]);
+
+        // ── Series support ───────────────────────────────────────────────
+        // When this row represents a TV series, eager-load the full
+        // seasons → episodes tree so the picker can render without N+1.
+        // We also pull the current user's watch_histories filtered to
+        // this series' episode IDs so the per-episode progress bar +
+        // "first unwatched" CTA work off a single round-trip.
+        $episodeProgress = collect();
+        if ($movie->isSeries()) {
+            $movie->load(['seasons.episodes']);
+
+            $episodeIds = $movie->seasons
+                ->flatMap(fn ($s) => $s->episodes->pluck('id'))
+                ->all();
+
+            if (auth()->check() && ! empty($episodeIds)) {
+                $episodeProgress = \App\Models\WatchHistory::query()
+                    ->where('user_id', auth()->id())
+                    ->whereIn('episode_id', $episodeIds)
+                    ->get()
+                    // Keyed by episode_id so the Blade can do O(1) lookups.
+                    ->keyBy('episode_id');
+            }
+        }
 
         $playMovie = [
             'id' => $movie->id,
@@ -302,6 +340,9 @@ class VelflixController extends Controller
             'comments' => $comments,
             'avgRating' => $avgRating,
             'ratingsCount' => $ratingsCount,
+            // Series-only payload (empty collection for standalone movies
+            // so the view can render it unconditionally).
+            'episodeProgress' => $episodeProgress,
         ]);
     }
 }

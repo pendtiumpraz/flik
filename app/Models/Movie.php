@@ -44,6 +44,12 @@ class Movie extends Model
         'video_path',
         'video_disk',
         'youtube_key',
+        // ── Series-vs-movie discriminator (default 'movie' at the DB layer) ──
+        // total_seasons / total_episodes are derived counters maintained by
+        // SeasonController / EpisodeController on create/destroy.
+        'content_type',
+        'total_seasons',
+        'total_episodes',
     ];
 
     protected static function booted()
@@ -77,6 +83,8 @@ class Movie extends Model
         'ai_synopsis_generated_at' => 'datetime',
         'ai_short_summary_generated_at' => 'datetime',
         'seo_generated_at' => 'datetime',
+        'total_seasons' => 'integer',
+        'total_episodes' => 'integer',
     ];
 
     /**
@@ -348,6 +356,43 @@ class Movie extends Model
         return $this->ratings()->count();
     }
 
+    /**
+     * Project this movie's overview/synopsis into the given UI locale.
+     *
+     * Catalog content is authored in Indonesian (the source locale); when a
+     * viewer's UI locale is anything else we hand the synopsis to
+     * App\Services\Ai\Tasks\TextTranslator which caches the result in
+     * `translation_cache`. Subsequent calls cost zero AI tokens.
+     *
+     * Resolution order:
+     *   1. Empty overview → empty string (no AI cost, no cache row).
+     *   2. Target locale == source locale → return verbatim.
+     *   3. Else → translate (cached). Failures fall back to the original.
+     *
+     * Lazy on purpose — never resolve unless a view actually asks for it.
+     *
+     * Usage: `{{ $movie->synopsisForLocale(app()->getLocale()) }}`
+     */
+    public function synopsisForLocale(string $locale, string $sourceLocale = 'id'): string
+    {
+        $source = (string) ($this->overview ?? '');
+        if ($source === '') {
+            return '';
+        }
+        if ($locale === $sourceLocale) {
+            return $source;
+        }
+
+        try {
+            /** @var \App\Services\Ai\Tasks\TextTranslator $translator */
+            $translator = app(\App\Services\Ai\Tasks\TextTranslator::class);
+            return $translator->translate($source, $locale, $sourceLocale);
+        } catch (\Throwable) {
+            // Container resolution / missing provider — degrade silently.
+            return $source;
+        }
+    }
+
     // ── Swarm 25 relations (behind-the-scenes + highlight reels) ──────
 
     /**
@@ -373,5 +418,115 @@ class Movie extends Model
     public function cinematography()
     {
         return $this->hasOne(MovieCinematography::class);
+    }
+
+    // ── Series support (TV-show layer) ─────────────────────────────────
+    //
+    // A "Movie" row with content_type='series' acts as the parent for
+    // Season → Episode children. The seasons() and episodes() relations
+    // ALWAYS work (return empty collections for standalone movies) so
+    // call sites don't need to branch on content_type before eager-loading.
+
+    /**
+     * Seasons belonging to this (series) movie, ordered by season_number.
+     */
+    public function seasons(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Season::class)->orderBy('season_number');
+    }
+
+    /**
+     * All episodes across all seasons. Sorted by season_number then
+     * episode_number so a single eager-load yields "watch order".
+     */
+    public function episodes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Episode::class)
+            ->orderBy('episode_number');
+    }
+
+    /**
+     * True if this row represents a TV series rather than a standalone film.
+     * Defaults conservatively to false for legacy rows missing the column.
+     */
+    public function isSeries(): bool
+    {
+        return ($this->content_type ?? 'movie') === 'series';
+    }
+
+    /**
+     * Convenience accessor for Blade: `$movie->is_series`.
+     */
+    public function getIsSeriesAttribute(): bool
+    {
+        return $this->isSeries();
+    }
+
+    /**
+     * First episode the user has NOT completed (progress < 90%) — used by
+     * the front-end "Continue Watching" CTA on a series detail page.
+     *
+     * Walks episodes in canonical order (Season 1 Ep 1 → Season N Ep M).
+     * Returns the first unwatched episode, OR the first episode if the
+     * user has zero history (fresh viewer).
+     */
+    public function firstUnwatchedEpisode(User $user): ?Episode
+    {
+        $episodes = $this->relationLoaded('episodes')
+            ? $this->episodes
+            : $this->episodes()->with('season')->get();
+
+        if ($episodes->isEmpty()) {
+            return null;
+        }
+
+        // Re-sort with season number so cross-season order is correct
+        // (the relation only orders by episode_number, which would
+        // interleave seasons if we trusted it alone).
+        $ordered = $episodes->sortBy(fn ($ep) => [
+            $ep->season?->season_number ?? 0,
+            $ep->episode_number,
+        ])->values();
+
+        $completed = WatchHistory::query()
+            ->where('user_id', $user->id)
+            ->whereIn('episode_id', $ordered->pluck('id'))
+            ->where('completed', true)
+            ->pluck('episode_id')
+            ->all();
+
+        foreach ($ordered as $ep) {
+            if (! in_array($ep->id, $completed, true)) {
+                return $ep;
+            }
+        }
+
+        return null; // fully binged
+    }
+
+    /**
+     * Episode that plays after `$current` finishes — rolls over into the
+     * next season if `$current` is the season finale. Returns null when
+     * the series has no more episodes to show.
+     */
+    public function nextEpisodeAfter(Episode $current): ?Episode
+    {
+        $next = $current->nextInSeason();
+        if ($next) {
+            return $next;
+        }
+
+        $currentSeasonNumber = $current->season?->season_number;
+        if ($currentSeasonNumber === null) {
+            return null;
+        }
+
+        $nextSeason = $this->seasons()
+            ->where('season_number', '>', $currentSeasonNumber)
+            ->with('episodes')
+            ->orderBy('season_number')
+            ->first();
+
+        return $nextSeason?->episodes->first();
     }
 }

@@ -13,14 +13,14 @@
         @auth
             <!-- Desktop Nav Links -->
             <ul class="ml-10 hidden flex-row items-center gap-6 text-sm lg:flex">
-                <li><a href="{{ route('velflix.index') }}" class="font-medium text-white hover:text-[#C5A55A] transition-colors">Home</a></li>
-                <li><a href="{{ route('velflix.index') }}" class="text-gray-300 hover:text-[#C5A55A] transition-colors">Films</a></li>
+                <li><a href="{{ route('velflix.index') }}" class="font-medium text-white hover:text-[#C5A55A] transition-colors">{{ __('Home') }}</a></li>
+                <li><a href="{{ route('velflix.index') }}" class="text-gray-300 hover:text-[#C5A55A] transition-colors">{{ __('Films') }}</a></li>
 
                 <!-- Discover dropdown (AI discovery features) -->
                 <li x-data="{ openDiscover: false }" class="relative">
                     <button @click="openDiscover = !openDiscover" @click.away="openDiscover = false"
                             class="flex items-center gap-1 text-gray-300 hover:text-[#C5A55A] transition-colors">
-                        <span>Discover</span>
+                        <span>{{ __('Discover') }}</span>
                         <span :class="openDiscover ? '-rotate-180' : ''" class="transform transition-transform duration-300">
                             <x-icon name="chevron-down" :size="14" />
                         </span>
@@ -75,7 +75,7 @@
                 <li x-data="{ openList: false }" class="relative">
                     <button @click="openList = !openList" @click.away="openList = false"
                             class="flex items-center gap-1 text-gray-300 hover:text-[#C5A55A] transition-colors">
-                        <span>My List</span>
+                        <span>{{ __('My List') }}</span>
                         <span :class="openList ? '-rotate-180' : ''" class="transform transition-transform duration-300">
                             <x-icon name="chevron-down" :size="14" />
                         </span>
@@ -102,7 +102,8 @@
                     </div>
                 </li>
 
-                <li><a href="{{ route('rewards.index') }}" class="text-gray-300 hover:text-[#C5A55A] transition-colors">Rewards</a></li>
+                <li><a href="{{ route('rewards.index') }}" class="text-gray-300 hover:text-[#C5A55A] transition-colors">{{ __('Rewards') }}</a></li>
+                <li><a href="{{ route('leaderboards.streaks') }}" class="text-gray-300 hover:text-[#C5A55A] transition-colors">Leaderboards</a></li>
             </ul>
         @endauth
 
@@ -110,7 +111,8 @@
         <nav class="hidden items-center gap-4 lg:flex">
             @auth
                 <x-search.smart-bar />
-                <a href="{{ route('notifications.index') }}" class="relative text-gray-300 hover:text-[#C5A55A] transition-colors" title="Notifications">
+                <x-lang-switcher />
+                <a href="{{ route('notifications.index') }}" class="relative text-gray-300 hover:text-[#C5A55A] transition-colors" title="{{ __('Notifications') }}">
                     <x-icon name="bell" :size="20" />
                 </a>
 
@@ -151,12 +153,24 @@
                             @if($user->isStaff())
                                 <a href="{{ $user->adminDashboardUrl() }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
                                     <x-icon name="cog" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
-                                    <span>Admin Dashboard</span>
+                                    <span>{{ __('Admin Dashboard') }}</span>
                                 </a>
                             @endif
-                            <a href="{{ route('profile.show') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                            {{-- "My Profile" links to the public /u/{username} page when
+                                 the user has set a handle, otherwise falls back to the
+                                 private /profile editor so the menu item never 404s. --}}
+                            <a href="{{ $user->publicProfileUrl() ?? route('profile.show') }}"
+                               class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
                                 <x-icon name="user" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
-                                <span>Profile</span>
+                                <span>{{ __('My Profile') }}</span>
+                            </a>
+                            <a href="{{ route('feed.index') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                <x-icon name="sparkles" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                <span>Feed</span>
+                            </a>
+                            <a href="{{ route('profile.show') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                <x-icon name="cog" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                <span>Account Settings</span>
                             </a>
                             <a href="{{ route('profile.sessions.index') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
                                 <x-icon name="server" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
@@ -185,14 +199,15 @@
                             @csrf
                             <button type="submit" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-400 hover:text-red-400 hover:bg-red-500/5 transition-colors group">
                                 <x-icon name="logout" :size="16" />
-                                <span>Log Out</span>
+                                <span>{{ __('Log Out') }}</span>
                             </button>
                         </form>
                     </div>
                 </div>
             @else
-                <a href="/login" class="text-sm text-gray-300 hover:text-[#C5A55A] transition-colors">Log In</a>
-                <a href="/register" class="text-sm font-semibold px-4 py-2 rounded text-black hover:opacity-90 transition-opacity" style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">Sign Up</a>
+                <x-lang-switcher />
+                <a href="/login" class="text-sm text-gray-300 hover:text-[#C5A55A] transition-colors">{{ __('Log In') }}</a>
+                <a href="/register" class="text-sm font-semibold px-4 py-2 rounded text-black hover:opacity-90 transition-opacity" style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">{{ __('Sign Up') }}</a>
             @endauth
         </nav>
 
@@ -274,6 +289,9 @@
                 <a href="{{ route('rewards.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
                     <x-icon name="trophy" :size="18" class="text-[#C5A55A]/80" /> Rewards
                 </a>
+                <a href="{{ route('leaderboards.streaks') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                    <x-icon name="trophy" :size="18" class="text-[#C5A55A]/80" /> Leaderboards
+                </a>
                 <a href="{{ route('notifications.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
                     <x-icon name="bell" :size="18" class="text-[#C5A55A]/80" /> Notifications
                 </a>
@@ -282,8 +300,15 @@
                 </a>
 
                 <div class="pt-2 mt-2 border-t border-gray-800/60 space-y-0.5">
+                    <a href="{{ $user->publicProfileUrl() ?? route('profile.show') }}"
+                       class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                        <x-icon name="user" :size="18" class="text-[#C5A55A]/80" /> My Profile
+                    </a>
+                    <a href="{{ route('feed.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                        <x-icon name="sparkles" :size="18" class="text-[#C5A55A]/80" /> Feed
+                    </a>
                     <a href="{{ route('profile.show') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
-                        <x-icon name="user" :size="18" class="text-[#C5A55A]/80" /> Profile
+                        <x-icon name="cog" :size="18" class="text-[#C5A55A]/80" /> Account Settings
                     </a>
                     <a href="{{ route('profile.sessions.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
                         <x-icon name="server" :size="18" class="text-[#C5A55A]/80" /> Manage Sessions

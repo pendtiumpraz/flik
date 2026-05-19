@@ -19,6 +19,16 @@
                 </div>
             </div>
 
+            <!-- Trending shelf — pre-aggregated from movie_views (DEV #2). -->
+            <!-- Renders nothing when the cache is empty (no views yet),    -->
+            <!-- so it stays out of the way on a brand-new install.         -->
+            <x-home.trending-shelf window="24h" :limit="12" />
+
+            <!-- Daily watch-streak widget (auth-only) — reads WatchStreak directly -->
+            @auth
+            <x-home.streak-widget />
+            @endauth
+
             <!-- Time-aware shelf — "Cocok ditonton sekarang" -->
             @auth
             <x-home.time-aware-shelf />

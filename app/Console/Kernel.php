@@ -67,6 +67,44 @@ class Kernel extends ConsoleKernel
             ->timezone('Asia/Jakarta')
             ->withoutOverlapping()
             ->onOneServer();
+
+        // ━━━ Trending engine (flik:trending:recompute) ━━━
+        // Per-window cadence: shorter windows recompute more often so
+        // "what's hot right now" updates in near-real-time, longer
+        // windows churn less to keep DB pressure down. Each runs
+        // independently (separate processes won't overlap thanks to
+        // withoutOverlapping()), and onOneServer() prevents two boxes
+        // from racing on the same window in HA deployments.
+        $schedule->command('flik:trending:recompute --window=1h')
+            ->everyTenMinutes()
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        $schedule->command('flik:trending:recompute --window=24h')
+            ->hourlyAt(5)
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        $schedule->command('flik:trending:recompute --window=7d')
+            ->everySixHours()
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        $schedule->command('flik:trending:recompute --window=30d')
+            ->dailyAt('03:30')
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        // ━━━ Gamification ━━━
+        // Monthly streak-freeze credit grant (1st of month, 04:00 Jakarta).
+        // Awards 1 freeze credit per active subscriber so loyal subs can
+        // survive a busy day without losing their streak. See
+        // App\Console\Commands\GrantStreakFreezeCredits.
+        $schedule->command('flik:streak:grant-freeze-credits')
+            ->monthlyOn(1, '04:00')
+            ->timezone('Asia/Jakarta')
+            ->withoutOverlapping()
+            ->onOneServer();
     }
 
     /**

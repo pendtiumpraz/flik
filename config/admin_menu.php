@@ -118,10 +118,27 @@ return [
                     'icon' => 'gem',
                 ],
                 [
+                    'label' => 'Queues',
+                    'route' => 'admin.queue-dashboard.index',
+                    'permission' => 'system.queues',
+                    'icon' => 'server',
+                ],
+                [
                     'label' => 'Pitch Deck',
                     'route' => 'admin.pitch-deck',
                     'permission' => null, // informational
                     'icon' => 'medal',
+                ],
+                [
+                    // i18n dashboard — UI string coverage per locale + AI
+                    // translation cache stats. No dedicated permission yet;
+                    // any admin with the `admin` gate can read it (it's
+                    // diagnostic, not mutating). Switch the permission once
+                    // an `i18n.manage` ability is added to the catalogue.
+                    'label' => 'Translations',
+                    'route' => 'admin.translations.index',
+                    'permission' => null,
+                    'icon' => 'sparkles',
                 ],
             ],
         ],
@@ -190,7 +207,25 @@ return [
                 [
                     'label' => 'Email A/B Subjects',
                     'route' => 'admin.marketing-ops.email-subjects',
-                    'permission' => 'marketing.email',
+                    'permission' => 'marketing.email_ab',
+                    'icon' => 'lightning',
+                ],
+                [
+                    // Bulk email campaign builder — segmentation, AI copy
+                    // draft, tracked sends. Shares the `marketing.email_ab`
+                    // permission with the A/B subject helper above.
+                    'label' => 'Email Campaigns',
+                    'route' => 'admin.email-campaigns.index',
+                    'permission' => 'marketing.email_ab',
+                    'icon' => 'sparkles',
+                ],
+                [
+                    // Push Broadcasts — owned by peer DEV #5. The sidebar
+                    // component calls Route::has() and silently skips this
+                    // item until that swarm registers the route.
+                    'label' => 'Push Broadcasts',
+                    'route' => 'admin.push-broadcasts.index',
+                    'permission' => 'marketing.email_ab',
                     'icon' => 'lightning',
                 ],
                 [
@@ -198,6 +233,25 @@ return [
                     'route' => 'admin.marketing-ops.cs-reply',
                     'permission' => 'marketing.cs_reply',
                     'icon' => 'chat',
+                ],
+                [
+                    // Web Push broadcasts — composer + send history. Gated on the
+                    // dedicated `push.send` permission so it can be scoped tighter
+                    // than the broader marketing.email_ab bundle.
+                    'label' => 'Push Notifications',
+                    'route' => 'admin.push.index',
+                    'permission' => 'push.send',
+                    'icon' => 'sparkles',
+                ],
+                [
+                    // Subscription discount codes (manual + bulk-generated).
+                    // Sits in Marketing because the day-to-day operators are
+                    // marketing/growth, not finance — finance only sees the
+                    // result via the Revenue Dashboard.
+                    'label' => 'Promo Codes',
+                    'route' => 'admin.promo-codes.index',
+                    'permission' => 'promo.manage',
+                    'icon' => 'gift',
                 ],
             ],
         ],

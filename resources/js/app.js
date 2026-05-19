@@ -33,3 +33,9 @@ import './echo';
 // Safe to import on every page; the Alpine component only runs when the
 // bell blade is actually rendered. ━━━
 import './admin-notifications';
+
+// ━━━ Web Push (VAPID) opt-in module — registers `window.FlikPush`.
+// Hides itself gracefully when the browser lacks support OR when no
+// VAPID public key is exposed via <meta name="vapid-public-key">.
+// The Blade component <x-push-opt-in /> consumes this surface. ━━━
+import './push-notifications';

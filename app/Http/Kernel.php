@@ -59,6 +59,11 @@ class Kernel extends HttpKernel
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            // i18n — resolves ?lang= / session / user.preferred_locale /
+            // Accept-Language → app()->setLocale(). MUST run AFTER
+            // StartSession (session lookup) AND SubstituteBindings (so
+            // $request->user() is hydrated for the user-preference branch).
+            \App\Http\Middleware\SetLocale::class,
         ],
 
         'api' => [

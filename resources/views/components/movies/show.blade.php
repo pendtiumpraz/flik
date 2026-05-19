@@ -168,9 +168,29 @@
 
                         <!-- Action buttons -->
                         <div class="flex items-center flex-wrap gap-2 mb-5">
-                            <button class="inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold text-black hover:opacity-95 transition-opacity" style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">
-                                <x-icon name="play-solid" :size="14" /> Play
-                            </button>
+                            @php
+                                // Series: jump directly into the first unwatched episode
+                                // (or the very first episode for a fresh viewer). Standalone
+                                // movies fall back to the in-page player.
+                                $resumeEpisode = null;
+                                if ($movieModel->isSeries() && auth()->check()) {
+                                    $resumeEpisode = $movieModel->firstUnwatchedEpisode(auth()->user());
+                                } elseif ($movieModel->isSeries()) {
+                                    $resumeEpisode = $movieModel->episodes->first();
+                                }
+                            @endphp
+                            @if($resumeEpisode)
+                                <a href="{{ route('episodes.watch', $resumeEpisode) }}"
+                                   class="inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold text-black hover:opacity-95 transition-opacity"
+                                   style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">
+                                    <x-icon name="play-solid" :size="14" />
+                                    {{ $resumeEpisode->season?->season_number ? 'Play S' . $resumeEpisode->season->season_number . 'E' . $resumeEpisode->episode_number : 'Play' }}
+                                </a>
+                            @else
+                                <button class="inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-bold text-black hover:opacity-95 transition-opacity" style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">
+                                    <x-icon name="play-solid" :size="14" /> Play
+                                </button>
+                            @endif
 
                             <form method="POST" action="{{ route('watchlist.toggle') }}">
                                 @csrf
@@ -250,6 +270,11 @@
                         @endif
                     </aside>
                 </div>
+
+                {{-- ━━━ Series episode picker (renders nothing for standalone movies) ━━━
+                     Populated by VelflixController::show() which eager-loads
+                     seasons.episodes + the current user's per-episode watch_histories. --}}
+                <x-series.episode-list :movie="$movieModel" :episodeProgress="$episodeProgress ?? collect()" />
 
                 {{-- ━━━ AI-generated content sections ━━━
                      Each conditional: only renders if data exists. Models load via

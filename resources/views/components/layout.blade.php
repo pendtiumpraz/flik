@@ -13,10 +13,19 @@
         $metaOgImage = url($metaOgImage);
     }
     $metaUrl = url()->current();
+
+    // i18n — pull the current locale + its metadata from config/locales.php
+    // so RTL languages render the page with dir="rtl". The CSS shim below
+    // hands off the rest (logical properties + a few legacy margin flips).
+    $appLocale = app()->getLocale();
+    $localeMeta = (array) config('locales.available.' . $appLocale, []);
+    $isRtl = (bool) ($localeMeta['rtl'] ?? false);
 @endphp
 
 <!DOCTYPE html>
-<html lang="id" x-data="{ darkMode: localStorage.getItem('theme') !== 'light' }"
+<html lang="{{ $appLocale }}"
+      dir="{{ $isRtl ? 'rtl' : 'ltr' }}"
+      x-data="{ darkMode: localStorage.getItem('theme') !== 'light' }"
       :class="darkMode ? 'dark' : 'light'"
       x-init="$watch('darkMode', val => localStorage.setItem('theme', val ? 'dark' : 'light'))">
 <head>
@@ -45,8 +54,12 @@
     <meta name="twitter:description" content="{{ $metaDescription }}">
     <meta name="twitter:image" content="{{ $metaOgImage }}">
 
-    <!-- hreflang -->
-    <link rel="alternate" hreflang="id" href="{{ $metaUrl }}">
+    <!-- hreflang — one entry per available locale + x-default → site root.
+         Pre-rendered from config('locales.available') so adding a locale
+         automatically lights up its hreflang line without view edits. -->
+    @foreach((array) config('locales.available', []) as $hlCode => $hlMeta)
+        <link rel="alternate" hreflang="{{ $hlCode }}" href="{{ $metaUrl }}{{ str_contains($metaUrl, '?') ? '&' : '?' }}lang={{ $hlCode }}">
+    @endforeach
     <link rel="alternate" hreflang="x-default" href="{{ $metaUrl }}">
 
     <title>{{ $title }}</title>
@@ -56,6 +69,12 @@
     <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
     <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
     <link rel="manifest" href="/manifest.json">
+
+    {{-- VAPID public key for Web Push (read by resources/js/push-notifications.js).
+         Emitted only when VAPID_PUBLIC_KEY is set; absent meta → graceful no-op. --}}
+    @if (config('services.push.public_key'))
+        <meta name="vapid-public-key" content="{{ config('services.push.public_key') }}">
+    @endif
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -65,6 +84,40 @@
         body { font-family: 'Inter', sans-serif; }
         h1, h2, h3, h4, h5, h6, .font-heading { font-family: 'Outfit', sans-serif; }
         .brand-gold { color: #C5A55A; }
+
+        /* ─── RTL shim (Arabic, future Hebrew/Persian) ──────────────────
+         * Prefer Tailwind logical properties (me-*, ms-*, ps-*, pe-*) in
+         * new views; this block only patches a handful of LEGACY views
+         * that still ship physical-side classes. When dir="rtl" is set on
+         * <html>, ml-* swaps to right-margin and mr-* to left-margin so
+         * existing layouts mirror without being rewritten.
+         *
+         * Inline styles (`style="margin-left:..."`) are NOT covered — those
+         * have to be migrated case-by-case (see docs/i18n-todo.md).
+         */
+        [dir="rtl"] .ml-1 { margin-left: 0; margin-right: 0.25rem; }
+        [dir="rtl"] .ml-2 { margin-left: 0; margin-right: 0.5rem; }
+        [dir="rtl"] .ml-3 { margin-left: 0; margin-right: 0.75rem; }
+        [dir="rtl"] .ml-4 { margin-left: 0; margin-right: 1rem; }
+        [dir="rtl"] .ml-6 { margin-left: 0; margin-right: 1.5rem; }
+        [dir="rtl"] .ml-10 { margin-left: 0; margin-right: 2.5rem; }
+        [dir="rtl"] .mr-1 { margin-right: 0; margin-left: 0.25rem; }
+        [dir="rtl"] .mr-2 { margin-right: 0; margin-left: 0.5rem; }
+        [dir="rtl"] .mr-3 { margin-right: 0; margin-left: 0.75rem; }
+        [dir="rtl"] .mr-4 { margin-right: 0; margin-left: 1rem; }
+        [dir="rtl"] .pl-3 { padding-left: 0; padding-right: 0.75rem; }
+        [dir="rtl"] .pl-4 { padding-left: 0; padding-right: 1rem; }
+        [dir="rtl"] .pr-3 { padding-right: 0; padding-left: 0.75rem; }
+        [dir="rtl"] .pr-4 { padding-right: 0; padding-left: 1rem; }
+        [dir="rtl"] .text-left { text-align: right; }
+        [dir="rtl"] .text-right { text-align: left; }
+        [dir="rtl"] .left-0 { left: auto; right: 0; }
+        [dir="rtl"] .right-0 { right: auto; left: 0; }
+        /* Flickity carousels — flip the slider direction so swipes
+         * follow reading order. Re-init may be required if a slider
+         * is mounted before dir attribute is applied (it isn't here). */
+        [dir="rtl"] .flickity-prev-next-button.previous { left: auto; right: 10px; }
+        [dir="rtl"] .flickity-prev-next-button.next { right: auto; left: 10px; }
     </style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link rel="stylesheet" href="https://unpkg.com/flickity@2/dist/flickity.min.css">
@@ -131,6 +184,13 @@
          "Cookie Settings" link calls `window.FlikConsent.reopen()` to bring
          it back. --}}
     <x-cookie-banner />
+
+    {{-- Web Push opt-in banner. Hides itself when:
+         - Browser doesn't support Notification/PushManager
+         - VAPID public key is not configured (no meta tag emitted above)
+         - User already has an active push subscription
+         - User dismissed it (localStorage flag) --}}
+    <x-push-opt-in />
 
     @stack('scripts')
 </body>

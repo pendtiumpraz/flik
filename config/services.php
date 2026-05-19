@@ -85,4 +85,20 @@ return [
         'site_key' => env('TURNSTILE_SITE_KEY'),
         'secret_key' => env('TURNSTILE_SECRET_KEY'),
     ],
+
+    // Web Push (VAPID — RFC 8292). Both keys must be set for push delivery to
+    // engage; absent keys make WebPushSender::enabled() return false, the
+    // subscribe controller returns 503 with a helpful message, and the
+    // <x-push-opt-in /> banner hides itself (FLiK's standard env-gating
+    // pattern). Generate a fresh keypair with:
+    //   php artisan flik:push:generate-vapid-keys
+    //
+    // The `subject` is delivered to push services in the JWT `sub` claim so
+    // they can contact an operator about abuse — keep it pointed at a
+    // real, monitored inbox.
+    'push' => [
+        'public_key' => env('VAPID_PUBLIC_KEY'),
+        'private_key' => env('VAPID_PRIVATE_KEY'),
+        'subject' => env('VAPID_SUBJECT', 'mailto:admin@flik.example.com'),
+    ],
 ];
