@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>FLiK — Kamu sedang offline</title>
+    <meta name="theme-color" content="#0a0a0a">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #C5A55A;
+            --gold-light: #E8D5A3;
+            --bg: #0a0a0a;
+            --bg-soft: #141414;
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            min-height: 100%;
+            background: var(--bg);
+            color: #e5e5e5;
+            font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 2rem 1.5rem;
+            text-align: center;
+        }
+        .logo {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--gold), var(--gold-light));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 10px 40px rgba(197,165,90,0.2);
+        }
+        .logo img { width: 40px; height: 40px; object-fit: contain; }
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 1.875rem;
+            margin: 0 0 0.5rem;
+            color: #fff;
+            letter-spacing: -0.02em;
+        }
+        .tag { color: var(--gold); font-weight: 600; font-size: 0.875rem; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.75rem; }
+        p { color: #a3a3a3; font-size: 1rem; line-height: 1.6; max-width: 28rem; margin: 0 0 2rem; }
+        .actions { display: flex; flex-direction: column; gap: 0.75rem; width: 100%; max-width: 18rem; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            font-size: 0.9375rem;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: opacity 0.15s, background 0.15s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--gold), var(--gold-light));
+            color: #000;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-ghost {
+            background: transparent;
+            color: #c5c5c5;
+            border: 1px solid #2a2a2a;
+        }
+        .btn-ghost:hover { background: var(--bg-soft); color: #fff; }
+        .status {
+            margin-top: 2rem;
+            padding: 0.5rem 0.875rem;
+            border-radius: 999px;
+            background: rgba(197,165,90,0.08);
+            border: 1px solid rgba(197,165,90,0.2);
+            color: var(--gold);
+            font-size: 0.75rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ef4444;
+            box-shadow: 0 0 0 0 rgba(239,68,68,0.6);
+            animation: pulse 2s infinite;
+        }
+        .dot.online { background: #22c55e; animation: none; }
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+            70%  { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+            100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="logo" aria-hidden="true">
+        <img src="/img/flik-logo.png" alt="">
+    </div>
+    <div class="tag">FLiK</div>
+    <h1>Kamu sedang offline</h1>
+    <p>
+        Tidak ada koneksi internet saat ini. Coba periksa Wi-Fi atau data
+        selularmu, lalu muat ulang halaman ini.
+    </p>
+    <div class="actions">
+        <button class="btn btn-primary" onclick="location.reload()">
+            Muat Ulang
+        </button>
+        <a class="btn btn-ghost" href="/my-list">Buka My List (offline)</a>
+        <a class="btn btn-ghost" href="/">Beranda</a>
+    </div>
+    <div class="status" id="status">
+        <span class="dot" id="dot"></span>
+        <span id="statusText">Status: Offline</span>
+    </div>
+
+    <script>
+        (function () {
+            var dot = document.getElementById('dot');
+            var text = document.getElementById('statusText');
+            function update() {
+                if (navigator.onLine) {
+                    dot.classList.add('online');
+                    text.textContent = 'Status: Kembali Online — memuat ulang…';
+                    setTimeout(function () { location.reload(); }, 800);
+                } else {
+                    dot.classList.remove('online');
+                    text.textContent = 'Status: Offline';
+                }
+            }
+            window.addEventListener('online', update);
+            window.addEventListener('offline', update);
+            update();
+        })();
+    </script>
+</body>
+</html>

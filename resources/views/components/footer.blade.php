@@ -10,12 +10,12 @@
         <div class="space-y-3">
             <a href="{{ route('velflix.index') }}" class="block hover:text-white transition-colors">Jelajahi Film</a>
             <a href="{{ route('plans.index') }}" class="block hover:text-white transition-colors">Paket Langganan</a>
-            <div class="hover:text-white transition-colors cursor-pointer">Pusat Bantuan</div>
+            <a href="{{ route('help.index') }}" class="block hover:text-white transition-colors">Pusat Bantuan</a>
             <div class="hover:text-white transition-colors cursor-pointer">Hubungi Kami</div>
         </div>
         <div class="space-y-3">
             <a href="{{ route('rewards.index') }}" class="block hover:text-white transition-colors">Rewards & Coins</a>
-            <div class="hover:text-white transition-colors cursor-pointer">FAQ</div>
+            <a href="{{ route('help.index') }}" class="block hover:text-white transition-colors">FAQ & Bantuan</a>
             <a href="{{ route('legal.privacy') }}" class="block hover:text-white transition-colors">Kebijakan Privasi</a>
         </div>
         <div class="space-y-3">

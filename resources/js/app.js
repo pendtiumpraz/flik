@@ -39,3 +39,15 @@ import './admin-notifications';
 // VAPID public key is exposed via <meta name="vapid-public-key">.
 // The Blade component <x-push-opt-in /> consumes this surface. ━━━
 import './push-notifications';
+
+// ━━━ Comment emoji reactions — registers `window.commentReactions(...)`
+// Alpine factory consumed by the reaction pill bar in the comment list.
+// Optimistic UI, optional Echo subscription for live updates when Pusher
+// is configured (no-ops gracefully otherwise). ━━━
+import './comment-reactions';
+
+// ━━━ PWA install prompt — exposes `window.FlikPwaInstall` and dispatches
+// the `flik:show-install-prompt` custom event after a 30 s warm-up. Consumed
+// by <x-pwa-install-banner />. iOS Safari fallback is auto-detected. The
+// module is a no-op when already running standalone or recently dismissed. ━━━
+import './pwa-install';

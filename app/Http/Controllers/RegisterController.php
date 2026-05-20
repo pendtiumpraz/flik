@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Rules\CaptchaPassed;
 use App\Rules\NotBreached;
 use App\Rules\StrongPassword;
+use App\Services\Referrals\ReferralService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Contracts\View\View;
@@ -49,6 +50,32 @@ class RegisterController extends Controller
         ]);
 
         $user = User::create($attributes);
+
+        // ── Refer-a-friend attribution ─────────────────────────────
+        // The /r/{code} capture endpoint stashes a code in BOTH the
+        // session and a 30-day cookie. Prefer the session (set in the
+        // same browser tab as the registration), fall back to the
+        // cookie for "browsed first, registered tomorrow" flows. The
+        // service is idempotent + self-referral safe so we never
+        // double-attribute. Wrapped in try/catch so a missing migration
+        // never breaks the auth pipeline.
+        try {
+            $refCode = (string) (
+                request()->session()->pull(\App\Http\Controllers\ReferralController::COOKIE_KEY)
+                ?: request()->cookie(\App\Http\Controllers\ReferralController::COOKIE_KEY, '')
+            );
+            if ($refCode !== '') {
+                app(ReferralService::class)->attribute($refCode, $user);
+                // Burn the cookie so a later registration on the same
+                // browser doesn't get re-attributed to the same referrer.
+                cookie()->queue(cookie()->forget(\App\Http\Controllers\ReferralController::COOKIE_KEY));
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('RegisterController: referral attribution failed', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
+        }
 
         // Fire Registered → EventServiceProvider's SendEmailVerificationNotification
         // listener calls $user->sendEmailVerificationNotification() (overridden

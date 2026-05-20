@@ -12,7 +12,8 @@ use Illuminate\Console\Command;
  * Usage:
  *   php artisan flik:cast:enrich-bios                    # all casts missing bio
  *   php artisan flik:cast:enrich-bios --cast=42          # one cast by id
- *   php artisan flik:cast:enrich-bios --all              # re-enrich every cast (skips already-enriched)
+ *   php artisan flik:cast:enrich-bios --all              # iterate every cast (skips already-enriched)
+ *   php artisan flik:cast:enrich-bios --force            # re-enrich EVERY cast (clears bio_generated_at first)
  *   php artisan flik:cast:enrich-bios --limit=20         # cap processed rows
  */
 class EnrichCastBios extends Command
@@ -20,7 +21,8 @@ class EnrichCastBios extends Command
     protected $signature = 'flik:cast:enrich-bios
         {--cast= : Specific cast ID}
         {--all : Process every cast (still respects bio_generated_at idempotency)}
-        {--limit=0 : Max number of casts to process (0 = no limit)}';
+        {--force : Re-enrich every cast (clears bio_generated_at first)}
+        {--limit=50 : Max number of casts to process (0 = no limit)}';
 
     protected $description = 'Enrich cast members with AI-generated biographies (X-Ray feature)';
 
@@ -28,6 +30,16 @@ class EnrichCastBios extends Command
     {
         $limit = (int) $this->option('limit');
         $casts = $this->resolveCasts($limit);
+
+        // --force clears the idempotency stamp on the resolved set so the
+        // enricher actually re-runs against each row (otherwise it would
+        // short-circuit at bio_generated_at !== null).
+        if ($this->option('force') && $casts->isNotEmpty()) {
+            $this->warn('--force in effect: clearing bio_generated_at on ' . $casts->count() . ' row(s).');
+            $casts->each(function (Cast $c) {
+                $c->forceFill(['bio_generated_at' => null])->save();
+            });
+        }
 
         if ($casts->isEmpty()) {
             $this->warn('No cast members matched the given criteria.');
@@ -92,7 +104,9 @@ class EnrichCastBios extends Command
 
         $query = Cast::query()->orderBy('id');
 
-        if (!$this->option('all')) {
+        // --force and --all both walk every row; without either flag we
+        // limit to casts that have never been enriched (bio_generated_at IS NULL).
+        if (! $this->option('all') && ! $this->option('force')) {
             $query->whereNull('bio_generated_at');
         }
 

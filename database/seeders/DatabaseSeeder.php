@@ -63,6 +63,14 @@ class DatabaseSeeder extends Seeder
             SubscriptionPlanSeeder::class,
             AchievementSeeder::class,
             PromoCodeSeeder::class,
+            // Runtime-editable config — feature flags + settings registry.
+            // Both seeders are idempotent and preserve operator edits on
+            // re-run (only first insert writes the canonical defaults).
+            FeatureFlagSeeder::class,
+            SettingSeeder::class,
+            // Help Center starter content — 4 categories + 6 articles.
+            // Idempotent (firstOrCreate by slug) so re-seeding never duplicates.
+            HelpSeeder::class,
         ]);
     }
 

@@ -3,27 +3,69 @@
     "short_name": "FLiK",
     "description": "Platform streaming film premium dengan koleksi terlengkap film Indonesia dan internasional.",
     "start_url": "/",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#0A0A0A",
-    "theme_color": "#C5A55A",
-    "orientation": "any",
-    "icons": [
-        {
-            "src": "/img/flik-logo.png",
-            "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "any maskable"
-        },
-        {
-            "src": "/img/flik-logo.png",
-            "sizes": "512x512",
-            "type": "image/png"
-        }
-    ],
+    "orientation": "portrait",
+    "background_color": "#0a0a0a",
+    "theme_color": "#0a0a0a",
+    "lang": "id",
+    "dir": "ltr",
+    "prefer_related_applications": false,
     "categories": [
         "entertainment",
+        "movies",
         "video"
     ],
-    "lang": "id",
-    "dir": "ltr"
+    "icons": [
+        { "src": "/icons/icon-72.png",  "sizes": "72x72",   "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-96.png",  "sizes": "96x96",   "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-152.png", "sizes": "152x152", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+        { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+        { "src": "/img/flik-logo.png",  "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    ],
+    "screenshots": [
+        {
+            "src": "/img/home-full-page.png",
+            "sizes": "1280x720",
+            "type": "image/png",
+            "form_factor": "wide",
+            "label": "FLiK home with personalized rows"
+        },
+        {
+            "src": "/img/home.png",
+            "sizes": "750x1334",
+            "type": "image/png",
+            "form_factor": "narrow",
+            "label": "FLiK mobile home"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Discover by Mood",
+            "short_name": "Discover",
+            "description": "Find movies that match your mood",
+            "url": "/discover/mood",
+            "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
+        },
+        {
+            "name": "My List",
+            "short_name": "My List",
+            "description": "Your saved movies and watchlist",
+            "url": "/my-list",
+            "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
+        },
+        {
+            "name": "Continue Watching",
+            "short_name": "Continue",
+            "description": "Resume what you were watching",
+            "url": "/?continue=1",
+            "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
+        }
+    ]
 }

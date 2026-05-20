@@ -4,13 +4,16 @@ namespace App\Providers;
 
 use App\Contracts\Ai\AiClientContract;
 use App\Contracts\Storage\CdnStorageContract;
+use App\Models\CommentReaction;
 use App\Models\EncodingJob;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Observers\CommentReactionObserver;
 use App\Observers\EncodingJobAdminNotifyObserver;
 use App\Observers\SubscriptionAdminNotifyObserver;
 use App\Observers\UserObserver;
 use App\Services\Ai\AiClient;
+use App\Services\Features\FeatureManager;
 use App\Services\Security\HtmlSanitizer;
 use App\Services\Storage\BunnyStorageService;
 use App\Services\Storage\S3StorageService;
@@ -67,6 +70,11 @@ class AppServiceProvider extends ServiceProvider
         // and we want to avoid re-allocating DOMDocument-adjacent state
         // per call.
         $this->app->singleton(HtmlSanitizer::class, fn () => new HtmlSanitizer());
+
+        // FeatureManager — wraps FeatureFlag::evaluate behind a
+        // single injectable service so controllers can DI it and
+        // tests can swap with a fake. Stateless ⇒ singleton.
+        $this->app->singleton(FeatureManager::class, fn () => new FeatureManager());
     }
 
     /**
@@ -97,6 +105,13 @@ class AppServiceProvider extends ServiceProvider
         // duplicate notifications.
         Subscription::observe(SubscriptionAdminNotifyObserver::class);
         EncodingJob::observe(EncodingJobAdminNotifyObserver::class);
+
+        // Reactions: keep Comment.reactions_count + top_reaction
+        // denormalised columns in sync, bust the per-comment cache,
+        // and (when broadcasting is configured) fan out live pill
+        // updates over Pusher. See CommentReactionObserver for the
+        // single-statement recompute query.
+        CommentReaction::observe(CommentReactionObserver::class);
 
         // NOTE: the `admin` gate is now owned by AuthServiceProvider where
         // it routes through the new RBAC system (super_admin OR has 'admin'
@@ -149,6 +164,26 @@ class AppServiceProvider extends ServiceProvider
         // Equivalent inline form: {!! app(HtmlSanitizer::class)->sanitize($comment->body) !!}
         Blade::directive('safe', function (string $expression): string {
             return "<?php echo app(\\App\\Services\\Security\\HtmlSanitizer::class)->sanitize($expression); ?>";
+        });
+
+        // @feature('key') ... @endfeature — gate a Blade block on a
+        // feature flag for the current user. Compiles into a plain
+        // if/endif so the runtime overhead is identical to writing
+        // `@if(feature('key'))` by hand.
+        //
+        // Why a custom directive when feature() already exists? Two
+        // reasons: (1) it reads more naturally to operators auditing
+        // a template, and (2) the form `@feature('x', $user)` for a
+        // non-current user is just as readable as the manual @if.
+        Blade::if('feature', function (string $key, $user = null): bool {
+            return feature($key, $user instanceof \App\Models\User ? $user : auth()->user());
+        });
+
+        // @setting('site.name') — echo a setting value with htmlspecial
+        // chars escaping (same safety contract as {{ $foo }}). Default
+        // can be passed as a 2nd arg: @setting('site.name', 'FLiK').
+        Blade::directive('setting', function (string $expression): string {
+            return "<?php echo e(setting($expression)); ?>";
         });
     }
 }

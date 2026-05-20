@@ -85,6 +85,28 @@ return [
                     'permission' => 'movies.update',
                     'icon' => 'sparkles',
                 ],
+                [
+                    'label' => 'Help Articles',
+                    'route' => 'admin.help.articles.index',
+                    'permission' => 'help.manage',
+                    'icon' => 'info',
+                ],
+                [
+                    'label' => 'Help Categories',
+                    'route' => 'admin.help.categories.index',
+                    'permission' => 'help.manage',
+                    'icon' => 'bookmark',
+                ],
+                [
+                    // TMDB Import Wizard — admin pastes an id (or searches by
+                    // title) to auto-fill a Movie row + cast + posters. Sits
+                    // under Content because the operator using it is the
+                    // catalogue editor, not a sysadmin.
+                    'label' => 'TMDB Import',
+                    'route' => 'admin.tmdb.index',
+                    'permission' => 'movies.create',
+                    'icon' => 'sparkles',
+                ],
             ],
         ],
 
@@ -124,6 +146,28 @@ return [
                     'icon' => 'server',
                 ],
                 [
+                    // Operational health dashboard (mirrors `php artisan flik:doctor`).
+                    // Permission `system.health` is granted to both `admin` and
+                    // `super_admin` so day-to-day operators can triage without
+                    // shelling into the box.
+                    'label' => 'Health',
+                    'route' => 'admin.health.index',
+                    'permission' => 'system.health',
+                    'icon' => 'shield',
+                ],
+                [
+                    // App-level maintenance kill switch — gated tighter than
+                    // Health because flipping it takes the site down for
+                    // everyone outside the allow list. Seeded ONLY to
+                    // super_admin; the legacy `is_admin` Gate fallback in
+                    // AuthServiceProvider still grants access before the seed
+                    // is re-run, so the entry never silently disappears.
+                    'label' => 'Maintenance',
+                    'route' => 'admin.maintenance.index',
+                    'permission' => 'system.maintenance',
+                    'icon' => 'cog',
+                ],
+                [
                     'label' => 'Pitch Deck',
                     'route' => 'admin.pitch-deck',
                     'permission' => null, // informational
@@ -139,6 +183,24 @@ return [
                     'route' => 'admin.translations.index',
                     'permission' => null,
                     'icon' => 'sparkles',
+                ],
+                [
+                    // Runtime feature toggles — gradual rollouts (role /
+                    // percentage / user list / authed / guest). Backed by
+                    // App\Models\FeatureFlag + App\Services\Features\FeatureManager.
+                    'label' => 'Feature Flags',
+                    'route' => 'admin.feature-flags.index',
+                    'permission' => 'system.feature_flags',
+                    'icon' => 'lightning',
+                ],
+                [
+                    // Runtime-editable application settings (branding,
+                    // social handles, limits, AI knobs). Backed by
+                    // App\Models\Setting + setting()/Setting::get helpers.
+                    'label' => 'Settings',
+                    'route' => 'admin.settings.index',
+                    'permission' => 'system.settings',
+                    'icon' => 'cog',
                 ],
             ],
         ],

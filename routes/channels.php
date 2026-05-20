@@ -66,3 +66,17 @@ Broadcast::channel('admin-notifications.{role}', function ($user, $role) {
 
     return $user->hasRole($role);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Movie Comment Reactions (live pill counts)
+|--------------------------------------------------------------------------
+|
+| `movie.{movieId}.comments` carries `comment.reaction.updated` events
+| fired by CommentReactionUpdated. Comments are public on the movie
+| detail page, so any authenticated viewer is permitted to listen —
+| there is nothing private about the reaction counts themselves.
+*/
+Broadcast::channel('movie.{movieId}.comments', function ($user, int $movieId) {
+    return $user !== null;
+});

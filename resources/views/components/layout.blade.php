@@ -34,11 +34,43 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="description" content="{{ $metaDescription }}">
-    <meta name="theme-color" content="#0A0A0A">
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: light)">
     <meta name="msapplication-TileColor" content="#C5A55A">
     @auth
     <meta name="user-name" content="{{ auth()->user()->name }}">
     @endauth
+
+    {{-- iOS PWA / "Add to Home Screen" support — these are Apple-proprietary
+         tags (the W3C manifest is ignored by Safari for many flags). Without
+         apple-mobile-web-app-capable Safari won't treat the saved icon as a
+         standalone app; without the splash <link>s the launch flashes a blank
+         white screen. See public/icons/ + the GenerateSplashScreens artisan
+         command for asset generation. --}}
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FLiK">
+    <meta name="format-detection" content="telephone=no">
+
+    {{-- iOS splash screens (apple-touch-startup-image) — one entry per common
+         viewport. Media queries follow Apple's documented matrix; missing
+         files degrade gracefully to a blank dark launch screen. Generate via
+         `php artisan flik:pwa:generate-splash`. --}}
+    <link rel="apple-touch-startup-image" href="/icons/splash-iphone-se.png"
+          media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
+    <link rel="apple-touch-startup-image" href="/icons/splash-iphone-14.png"
+          media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)">
+    <link rel="apple-touch-startup-image" href="/icons/splash-iphone-14-pro.png"
+          media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)">
+    <link rel="apple-touch-startup-image" href="/icons/splash-iphone-14-pro-max.png"
+          media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)">
+    <link rel="apple-touch-startup-image" href="/icons/splash-ipad-mini.png"
+          media="(device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2)">
+    <link rel="apple-touch-startup-image" href="/icons/splash-ipad-pro-11.png"
+          media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2)">
+    <link rel="apple-touch-startup-image" href="/icons/splash-ipad-pro-12.png"
+          media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)">
 
     <!-- Open Graph -->
     <meta property="og:title" content="{{ $title }}">
@@ -68,6 +100,7 @@
     <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}">
     <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
     <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
     <link rel="manifest" href="/manifest.json">
 
     {{-- VAPID public key for Web Push (read by resources/js/push-notifications.js).
@@ -126,7 +159,7 @@
 <style>
     [x-cloak] { display: none !important; }
 </style>
-<body>
+<body class="pb-16 lg:pb-0">
 
     @unless($hideHeader)
         @auth
@@ -137,6 +170,18 @@
     {{ $slot }}
 
     <x-flash />
+
+    {{-- Mobile bottom tab bar — only when authed. Hidden on lg+ via Tailwind
+         lg:hidden on the component itself; the body has pb-16 lg:pb-0 above
+         to ensure page content isn't masked by the fixed nav on mobile. --}}
+    @auth
+        <x-mobile-nav />
+    @endauth
+
+    {{-- PWA install banner. JS in resources/js/pwa-install.js manages throttling
+         + native prompt; this Blade component is purely the UI surface. Listens
+         for `flik:show-install-prompt` (Chromium native + iOS fallback). --}}
+    <x-pwa-install-banner />
 
 
     <script>

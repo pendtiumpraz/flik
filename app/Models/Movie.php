@@ -31,6 +31,7 @@ class Movie extends Model
         'slug',
         'original_title',
         'overview',
+        'tagline',
         'poster_path',
         'backdrop_path',
         'slider_path',
@@ -50,6 +51,16 @@ class Movie extends Model
         'content_type',
         'total_seasons',
         'total_episodes',
+        'runtime_minutes',
+        // ── Provenance / cross-reference (TMDB import wizard) ────────────
+        // tmdb_id is the dedupe key for find-or-create-by-tmdb_id; imdb_id
+        // is a bonus identifier (TMDB returns it in the same payload).
+        // imported_from / imported_at stamp the row's origin so audit/debug
+        // doesn't need a join into audit_logs.
+        'tmdb_id',
+        'imdb_id',
+        'imported_from',
+        'imported_at',
     ];
 
     protected static function booted()
@@ -85,6 +96,9 @@ class Movie extends Model
         'seo_generated_at' => 'datetime',
         'total_seasons' => 'integer',
         'total_episodes' => 'integer',
+        'runtime_minutes' => 'integer',
+        'tmdb_id' => 'integer',
+        'imported_at' => 'datetime',
     ];
 
     /**

@@ -1,8 +1,27 @@
 <x-admin.layout :title="$movie ? 'Edit: ' . $movie->title : 'Add New Movie'">
 
     <div style="max-width:700px">
-        <div style="margin-bottom:24px">
+        <div style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:12px">
             <a href="{{ route('admin.movies.index') }}" style="font-size:13px;color:#888;text-decoration:none">← Back to Movies</a>
+
+            {{-- Re-sync from TMDB — only shown when the row already has a tmdb_id
+                 stamped on it (i.e. originally came from the TMDB wizard). Posts
+                 to the same import endpoint with overwrite_fields=true so the
+                 admin's hand-tuned tweaks are intentionally replaced. --}}
+            @if($movie && !empty($movie->tmdb_id) && Route::has('admin.tmdb.import') && auth()->user()?->can('movies.create'))
+                <form method="POST" action="{{ route('admin.tmdb.import') }}"
+                      onsubmit="return confirm('Re-sync this movie from TMDB? This will overwrite title, overview, cast, genres, and images with TMDB data.');">
+                    @csrf
+                    <input type="hidden" name="tmdb_id" value="{{ $movie->tmdb_id }}">
+                    <input type="hidden" name="type" value="{{ $movie->content_type === 'series' ? 'tv' : 'movie' }}">
+                    <input type="hidden" name="queue" value="0">
+                    <input type="hidden" name="options[overwrite_fields]" value="1">
+                    <input type="hidden" name="options[download_images]" value="1">
+                    <button type="submit" class="btn btn-ghost btn-sm" title="TMDB ID: {{ $movie->tmdb_id }}">
+                        Re-sync from TMDB
+                    </button>
+                </form>
+            @endif
         </div>
 
         <form method="POST" action="{{ $movie ? route('admin.movies.update', $movie) : route('admin.movies.store') }}"

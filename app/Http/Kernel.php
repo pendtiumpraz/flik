@@ -59,6 +59,14 @@ class Kernel extends HttpKernel
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            // App-level maintenance switch (separate from Laravel's native
+            // `php artisan down` file marker — that one still runs in the
+            // global stack via PreventRequestsDuringMaintenance). Placed
+            // AFTER SubstituteBindings + StartSession so $request->user()
+            // is hydrated for the role-based bypass logic. Short-circuits
+            // /admin/maintenance + /login internally so a stranded admin
+            // can always disable the switch.
+            \App\Http\Middleware\CheckCustomMaintenance::class,
             // i18n — resolves ?lang= / session / user.preferred_locale /
             // Accept-Language → app()->setLocale(). MUST run AFTER
             // StartSession (session lookup) AND SubstituteBindings (so

@@ -95,6 +95,15 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->onOneServer();
 
+        // ━━━ Editorial Blog — scheduled-post publisher ━━━
+        // Every 5 min: flip any blog_posts row with status='scheduled' and
+        // scheduled_for <= now() to 'published'. Cheap (indexed query +
+        // small chunk update) so the high cadence is fine.
+        $schedule->command('flik:blog:publish-scheduled')
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // ━━━ Gamification ━━━
         // Monthly streak-freeze credit grant (1st of month, 04:00 Jakarta).
         // Awards 1 freeze credit per active subscriber so loyal subs can

@@ -36,6 +36,8 @@ class RolePermissionSeeder extends Seeder
             ['genres.manage',   'Manage Genres',        'Create, edit, and delete genres.'],
             ['casts.manage',    'Manage Casts',         'Create, edit, and delete cast members.'],
             ['banners.manage',  'Manage Banners',       'Manage homepage hero banners and slider artwork.'],
+            ['blog.manage',     'Manage Blog',          'Create, edit, schedule, and publish editorial blog posts and categories.'],
+            ['help.manage',     'Manage Help Center',   'Create, edit, and publish Help Center articles and categories.'],
         ],
         'subtitles' => [
             ['subtitles.generate',  'Generate Subtitles',   'Run AI subtitle generation for a movie.'],
@@ -94,7 +96,11 @@ class RolePermissionSeeder extends Seeder
             ['movies.encoding_status', 'View Encoding Status',    'Inspect the transcoding/encoding pipeline status.'],
         ],
         'system' => [
-            ['system.queues', 'Manage Queues', 'View the queue dashboard, retry/delete failed jobs, flush the failed queue.'],
+            ['system.queues',         'Manage Queues',         'View the queue dashboard, retry/delete failed jobs, flush the failed queue.'],
+            ['system.maintenance',    'Maintenance Mode',      'Enable/disable the App-level maintenance switch (with custom message + bypass rules).'],
+            ['system.health',         'View Health Dashboard', 'Access the operational health dashboard and run on-demand health checks.'],
+            ['system.feature_flags',  'Manage Feature Flags',  'Toggle feature flags, edit rollout strategies (role / percentage / user list).'],
+            ['system.settings',       'Manage Settings',       'Edit runtime-editable application settings (branding, social, limits, etc.).'],
         ],
     ];
 
@@ -122,7 +128,7 @@ class RolePermissionSeeder extends Seeder
             'permissions'  => [
                 // Everything in `content`
                 'movies.view', 'movies.create', 'movies.update', 'movies.delete',
-                'genres.manage', 'casts.manage', 'banners.manage',
+                'genres.manage', 'casts.manage', 'banners.manage', 'blog.manage', 'help.manage',
                 // `subtitles`
                 'subtitles.generate', 'subtitles.translate', 'subtitles.delete',
                 // `ai`
@@ -147,6 +153,14 @@ class RolePermissionSeeder extends Seeder
                 'movies.upload_master', 'movies.encoding_status',
                 // `system` (operational, not destructive at the role-management level)
                 'system.queues',
+                'system.health',
+                // Feature flags + settings are day-to-day knobs — admins
+                // own these. super_admin already gets them via '*'.
+                'system.feature_flags',
+                'system.settings',
+                // NB: system.maintenance is INTENTIONALLY omitted from the
+                // standard admin role — only super_admin can flip the kill
+                // switch on the production site.
             ],
         ],
         [
@@ -169,7 +183,7 @@ class RolePermissionSeeder extends Seeder
             'priority'     => 40,
             'permissions'  => [
                 'movies.view', 'movies.create', 'movies.update', 'movies.delete',
-                'genres.manage', 'casts.manage', 'banners.manage',
+                'genres.manage', 'casts.manage', 'banners.manage', 'blog.manage', 'help.manage',
                 'subtitles.generate', 'subtitles.translate', 'subtitles.delete',
             ],
         ],

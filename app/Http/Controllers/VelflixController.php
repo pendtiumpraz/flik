@@ -306,7 +306,12 @@ class VelflixController extends Controller
             'vote_count' => $movie->vote_count,
             'genres' => $movie->genres->map(fn ($g) => ['id' => $g->id, 'name' => $g->name])->toArray(),
             'credits' => [
+                // `id` + `slug` are passed through so the movie-detail view
+                // can render each cast name as a deep-link to /cast/{id}/{slug}.
+                // Slug is computed via the Cast accessor (no DB column needed).
                 'cast' => $movie->castMembers->map(fn ($c) => [
+                    'id' => $c->id,
+                    'slug' => $c->slug,
                     'name' => $c->name,
                     'character' => $c->pivot->character,
                     'profile_path' => $c->profile_path,
@@ -322,12 +327,26 @@ class VelflixController extends Controller
         $inWatchlist = auth()->check() ? auth()->user()->hasInWatchlist($movie->id) : false;
         $userRating = auth()->check() ? auth()->user()->getRatingFor($movie->id) : null;
 
-        $comments = $movie->comments()
+        // ?sort= controls the comment ordering — newest (default),
+        // oldest, or top (most reactions first). The latter reads from
+        // the denormalised reactions_count column kept in sync by
+        // CommentReactionObserver, so it's a single index lookup not
+        // an aggregate JOIN at request time.
+        $sort = in_array($request->query('sort'), ['newest', 'oldest', 'top'], true)
+            ? $request->query('sort')
+            : 'newest';
+
+        $commentsQuery = $movie->comments()
             ->topLevel()
-            ->with(['user', 'replies.user'])
-            ->latest()
-            ->take(20)
-            ->get();
+            ->with(['user', 'replies.user']);
+
+        $commentsQuery = match ($sort) {
+            'oldest' => $commentsQuery->oldest(),
+            'top' => $commentsQuery->orderByDesc('reactions_count')->latest(),
+            default => $commentsQuery->latest(),
+        };
+
+        $comments = $commentsQuery->take(20)->get();
 
         $avgRating = $movie->average_rating;
         $ratingsCount = $movie->ratings_count;

@@ -19,6 +19,17 @@ class AdminController extends Controller
 {
     public function dashboard()
     {
+        // PWA install count — soft-fail if the table hasn't been migrated yet
+        // (admin dashboards must never 500 on a missing optional table).
+        $pwaInstalls = 0;
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('pwa_installs')) {
+                $pwaInstalls = (int) \App\Models\PwaInstall::count();
+            }
+        } catch (\Throwable $e) {
+            $pwaInstalls = 0;
+        }
+
         $stats = [
             'total_movies' => Movie::count(),
             'total_genres' => Genre::count(),
@@ -30,6 +41,7 @@ class AdminController extends Controller
             'total_comments' => \App\Models\Comment::count(),
             'total_watchlists' => \App\Models\Watchlist::count(),
             'active_banners' => \App\Models\Banner::where('is_active', true)->count(),
+            'pwa_installs' => $pwaInstalls,
             'payment_enabled' => ! empty(config('services.midtrans.server_key')),
             'storage_disk' => config('filesystems.default'),
         ];

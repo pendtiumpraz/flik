@@ -39,19 +39,33 @@ class UserObserver
             // Skip silently when the RBAC tables / model aren't present
             // yet (peer agent's migrations not yet run on this install).
             if (!class_exists(\App\Models\Role::class) || !Schema::hasTable('role_user')) {
-                return;
+                // continue past — referral code generation below does NOT depend on roles.
+            } else {
+                // Respect any role explicitly assigned during seeding /
+                // factory creation — only seed the default when truly empty.
+                if (! $user->roles()->exists()) {
+                    $user->assignRole(self::DEFAULT_ROLE);
+                }
             }
-
-            // Respect any role explicitly assigned during seeding /
-            // factory creation — only seed the default when truly empty.
-            if ($user->roles()->exists()) {
-                return;
-            }
-
-            $user->assignRole(self::DEFAULT_ROLE);
         } catch (\Throwable $e) {
             // Auth pipeline must keep flowing — log and swallow.
             Log::warning('UserObserver: failed to assign default role on registration', [
+                'user_id' => $user->id ?? null,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        // ── Refer-a-friend bootstrap ────────────────────────────────
+        // Stamp a unique 12-char referral code so the user can start
+        // sharing immediately from /referrals. The HasReferrals trait's
+        // generator is idempotent — if a factory already set the code,
+        // we no-op.
+        try {
+            if (Schema::hasColumn('users', 'referral_code') && empty($user->referral_code)) {
+                $user->generateReferralCode();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('UserObserver: failed to generate referral code', [
                 'user_id' => $user->id ?? null,
                 'message' => $e->getMessage(),
             ]);

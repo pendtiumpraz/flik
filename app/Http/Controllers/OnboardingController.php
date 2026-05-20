@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Genre;
 use App\Models\UserPreference;
+use App\Services\Referrals\ReferralService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -55,6 +56,19 @@ class OnboardingController extends Controller
                 'onboarded_at'        => now(),
             ]
         );
+
+        // ── Refer-a-friend: mark qualified ──────────────────────────
+        // Onboarding completion is the "qualified" trigger — both the
+        // referrer and the new user get a small coin grant. The service
+        // is a no-op when the user wasn't referred or already qualified.
+        try {
+            app(ReferralService::class)->markQualified($request->user());
+        } catch (\Throwable $e) {
+            \Log::warning('OnboardingController: referral qualify failed', [
+                'user_id' => $request->user()->id,
+                'error'   => $e->getMessage(),
+            ]);
+        }
 
         return redirect('/movies')->with('success', 'Preferensi tersimpan! Ini rekomendasi awal untukmu.');
     }

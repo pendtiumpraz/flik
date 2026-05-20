@@ -252,7 +252,13 @@
                             <div class="text-[10px] uppercase tracking-wider text-[#C5A55A] font-semibold mb-2">Cast</div>
                             <div class="text-gray-300 leading-relaxed">
                                 @foreach (array_slice($movies['credits']['cast'], 0, 8) as $cast)
-                                    <span class="inline-block">{{ $cast['name'] }}@if(!$loop->last),@endif</span>
+                                    @if(! empty($cast['id']))
+                                        <a href="{{ route('public.cast.show', ['cast' => $cast['id'], 'slug' => $cast['slug'] ?? null]) }}"
+                                           class="inline-block hover:text-[#C5A55A] transition-colors"
+                                           title="Lihat profil {{ $cast['name'] }}">{{ $cast['name'] }}</a>@if(!$loop->last),@endif
+                                    @else
+                                        <span class="inline-block">{{ $cast['name'] }}@if(!$loop->last),@endif</span>
+                                    @endif
                                 @endforeach
                             </div>
                         </div>
@@ -363,12 +369,45 @@
 
                 <!-- Comments Section -->
                 <div class="mt-8">
-                    <div class="flex items-center justify-between mb-5">
+                    @php
+                        // Sort options for the comment list. The controller
+                        // (VelflixController::show) accepts ?sort=newest|oldest|top
+                        // — anything else falls back to newest.
+                        $commentSort = in_array(request('sort'), ['newest', 'oldest', 'top'], true)
+                            ? request('sort')
+                            : 'newest';
+                        $sortLabels = [
+                            'newest' => 'Terbaru',
+                            'oldest' => 'Terlama',
+                            'top' => 'Top Reactions',
+                        ];
+                    @endphp
+                    <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
                         <div class="flex items-center gap-2.5">
                             <x-icon name="user" :size="18" class="text-[#C5A55A]" />
                             <h3 class="font-heading font-semibold text-white">Komentar</h3>
                             <span class="text-xs px-2 py-0.5 rounded-full" style="background: rgba(197,165,90,0.1); color: #C5A55A">{{ $comments->count() }}</span>
                         </div>
+                        {{-- ━━━ Sort selector ━━━
+                             GET form so the choice survives a hard refresh /
+                             share-link. JS auto-submits on change for a snappy
+                             feel without an "Apply" button. --}}
+                        <form method="GET" class="flex items-center gap-2 text-xs">
+                            <label for="comment-sort" class="text-gray-500">Sort:</label>
+                            <select id="comment-sort" name="sort" onchange="this.form.submit()"
+                                    class="bg-[rgba(20,18,16,0.6)] text-gray-300 rounded px-2 py-1 focus:outline-none focus:border-[#C5A55A]"
+                                    style="border: 1px solid rgba(197,165,90,0.25)">
+                                @foreach($sortLabels as $key => $label)
+                                    <option value="{{ $key }}" @selected($commentSort === $key)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            {{-- Preserve any other querystring params (e.g. anchors) --}}
+                            @foreach(request()->except(['sort', 'page']) as $k => $v)
+                                @if(is_scalar($v))
+                                    <input type="hidden" name="{{ $k }}" value="{{ $v }}">
+                                @endif
+                            @endforeach
+                        </form>
                     </div>
 
                     <!-- Comment Form -->
@@ -466,6 +505,15 @@
                                 <p class="text-sm text-gray-300">{{ $comment->body }}</p>
                             @endif
 
+                            {{-- ━━━ Reaction pill bar ━━━
+                                 Auth-gated (no-op render for guests; the toggle
+                                 endpoint itself is also auth-protected).
+                                 Reactions array literal must mirror
+                                 \App\Models\CommentReaction::REACTIONS + EMOJI. --}}
+                            @auth
+                                <x-comments.reaction-bar :comment="$comment" :movieId="$movies['id']" />
+                            @endauth
+
                             @if($comment->user_id === auth()->id() || auth()->user()?->isStaff())
                             <form method="POST" action="{{ route('comment.destroy', $comment) }}" class="mt-2">
                                 @csrf @method('DELETE')
@@ -483,6 +531,10 @@
                                         <span class="text-xs text-gray-600">{{ $reply->created_at->diffForHumans() }}</span>
                                     </div>
                                     <p class="text-xs text-gray-400">{{ $reply->body }}</p>
+                                    {{-- Reaction bar on replies too — same pattern. --}}
+                                    @auth
+                                        <x-comments.reaction-bar :comment="$reply" :movieId="$movies['id']" />
+                                    @endauth
                                 </div>
                                 @endforeach
                             </div>

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Concerns\Follows;
+use App\Models\Concerns\HasLists;
+use App\Models\Concerns\HasReferrals;
 use App\Notifications\Auth\ResetPasswordNotification;
 use App\Notifications\Auth\VerifyEmailNotification;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -17,7 +19,7 @@ use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
-    use Follows, HasFactory, Notifiable;
+    use Follows, HasFactory, HasLists, HasReferrals, Notifiable;
 
     /**
      * Mass-assignable attributes for end-user controlled writes (registration,

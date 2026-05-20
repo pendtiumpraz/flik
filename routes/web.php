@@ -27,7 +27,22 @@ Route::post('newsletter', NewsletterController::class)
 
 // ━━━ SEO infrastructure (public, no auth — crawlers must reach these) ━━━
 Route::get('/sitemap.xml', [\App\Http\Controllers\SeoController::class, 'sitemap'])->name('seo.sitemap');
+Route::get('/sitemap-cast.xml', [\App\Http\Controllers\SeoController::class, 'sitemapCast'])->name('seo.sitemap.cast');
 Route::get('/robots.txt', [\App\Http\Controllers\SeoController::class, 'robots'])->name('seo.robots');
+
+// ━━━ Cast / Director public profiles (public, no auth) ━━━
+// /cast/{id}/{slug?} — slug is a SEO suffix; the controller 301-redirects
+// missing/stale slugs to the canonical URL so search engines settle on one.
+// {cast} is constrained to an integer so /cast/some-string can never collide
+// with the listing index route below.
+Route::get('/cast', [\App\Http\Controllers\PublicCastController::class, 'index'])
+    ->name('public.cast.index');
+Route::get('/cast/{cast}/{slug?}', [\App\Http\Controllers\PublicCastController::class, 'show'])
+    ->where('cast', '[0-9]+')
+    ->where('slug', '[A-Za-z0-9\-_]+')
+    ->name('public.cast.show');
+Route::get('/api/movies/{movie}/cast', [\App\Http\Controllers\PublicCastController::class, 'byMovie'])
+    ->name('public.cast.by-movie');
 
 // ━━━ Legal pages (public, no auth — required for app-store review,
 // cookie banner links, and prospective users browsing pre-signup) ━━━
@@ -39,6 +54,24 @@ Route::get('/robots.txt', [\App\Http\Controllers\SeoController::class, 'robots']
 Route::get('/privacy-policy', [\App\Http\Controllers\LegalController::class, 'privacy'])->name('legal.privacy');
 Route::get('/terms', [\App\Http\Controllers\LegalController::class, 'terms'])->name('legal.terms');
 Route::get('/refund-policy', [\App\Http\Controllers\LegalController::class, 'refund'])->name('legal.refund');
+
+// ━━━ Help Center (public, no auth — discoverable without signup) ━━━
+// Article suggest is JSON for the autocomplete typeahead — capped at
+// 60/min/IP via the named 'search' limiter so a typing storm doesn't
+// hammer the DB. Feedback POST is throttled tight (10/hr/IP) because
+// each submission writes a row and bumps a counter.
+Route::get('/help', [\App\Http\Controllers\HelpController::class, 'index'])->name('help.index');
+Route::get('/help/search', [\App\Http\Controllers\HelpController::class, 'search'])->name('help.search');
+Route::get('/help/api/suggest', [\App\Http\Controllers\HelpController::class, 'searchSuggest'])
+    ->middleware('throttle:search')
+    ->name('help.suggest');
+Route::get('/help/category/{category:slug}', [\App\Http\Controllers\HelpController::class, 'category'])
+    ->name('help.category');
+Route::get('/help/{article:slug}', [\App\Http\Controllers\HelpController::class, 'show'])
+    ->name('help.show');
+Route::post('/help/{article:slug}/feedback', [\App\Http\Controllers\HelpController::class, 'feedback'])
+    ->middleware('throttle:10,60')
+    ->name('help.feedback');
 
 // ━━━ Locale switcher (public — anonymous visitors get session locale) ━━━
 // POST so the choice cannot be CSRF'd silently via a stray <a href="?lang=..">
@@ -162,6 +195,14 @@ Route::middleware('auth')->group(function () {
         ->middleware('throttle:comments')
         ->name('comment.store');
     Route::delete('/comment/{comment}', [\App\Http\Controllers\CommentController::class, 'destroy'])->name('comment.destroy');
+
+    // Emoji reactions — share the 'comments' limiter so a single user
+    // can't burst reactions any faster than they can post. Returns
+    // JSON; consumed optimistically by the Alpine commentReactions()
+    // factory.
+    Route::post('/comments/{comment}/react', [\App\Http\Controllers\CommentReactionController::class, 'toggle'])
+        ->middleware('throttle:comments')
+        ->name('comment.react');
 
     // Profile
     Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'show'])->name('profile.show');
@@ -292,6 +333,20 @@ Route::middleware('auth')->group(function () {
     Route::post('/movie/{movie}/quiz', [\App\Http\Controllers\QuizController::class, 'submit'])->name('quiz.submit');
     Route::get('/movie/{movie}/quiz/leaderboard', [\App\Http\Controllers\QuizController::class, 'leaderboard'])->name('quiz.leaderboard');
 
+    // ━━━ Refer-a-friend dashboard + Gift redeem (auth-only surface) ━━━
+    // Dashboard shows the user's referral code + share link + ledger.
+    // Gift redeem is auth-gated because we need a User row to stamp
+    // redeemed_by_user_id; throttled tight to prevent brute force
+    // enumeration of 12-char gift codes.
+    Route::get('/referrals', [\App\Http\Controllers\ReferralController::class, 'dashboard'])
+        ->name('referral.dashboard');
+
+    Route::get('/gift/redeem', [\App\Http\Controllers\GiftSubscriptionController::class, 'redeemForm'])
+        ->name('gift.redeem-form');
+    Route::post('/gift/redeem', [\App\Http\Controllers\GiftSubscriptionController::class, 'redeem'])
+        ->middleware('throttle:10,1')
+        ->name('gift.redeem');
+
     // ━━━ Privacy & GDPR (export + erase) ━━━
     // Self-service "right to access" + "right to be forgotten". The download
     // route is wrapped in `signed` middleware so the temporary URL produced
@@ -320,12 +375,58 @@ Route::post('/api/push/unsubscribe', [\App\Http\Controllers\PushSubscriptionCont
     ->middleware('throttle:60,1')
     ->name('push.unsubscribe');
 
+// ━━━ PWA install telemetry (auth optional) ━━━
+// Fired by resources/js/pwa-install.js on `appinstalled` or userChoice
+// resolution. Append-only ledger consumed by the admin install-count widget.
+// 30/min/IP cap is more than enough for legitimate installs without leaving
+// a wide-open POST endpoint.
+Route::post('/api/pwa/track-install', [\App\Http\Controllers\PwaInstallTrackController::class, 'store'])
+    ->middleware('throttle:30,1')
+    ->name('pwa.track-install');
+
+// ━━━ Offline fallback page (server-rendered mirror of public/offline.html) ━━━
+// The static asset is what the service worker actually serves when fetch()
+// fails, but this route is here so deep-link callers can still reach the
+// view via a real URL (e.g. browser bookmark, share link).
+Route::view('/offline', 'offline')->name('offline');
+
 // Midtrans Webhook (no auth required) — gateway can fan out per state
 // change so the cap is generous (named 'webhook' limiter = 100/min/IP).
 // Anchored on the IP so a single misbehaving sender can't drown legit ones.
 Route::post('/payment/webhook', [\App\Http\Controllers\PaymentController::class, 'webhook'])
     ->middleware('throttle:webhook')
     ->name('payment.webhook');
+
+// ━━━ Refer-a-friend public capture (no auth — works for prospects) ━━━
+// Bare /r/{code} endpoint records the attribution into a 30-day cookie
+// + session value, then bounces the visitor to /register (or home if
+// already authed). The actual ReferralConversion row is created by
+// RegisterController::store once the User row exists. Coarse throttle
+// keeps a botnet from burning random codes into the cookie jar.
+Route::get('/r/{code}', [\App\Http\Controllers\ReferralController::class, 'redirect'])
+    ->where('code', '[A-Za-z0-9]{6,16}')
+    ->middleware('throttle:30,1')
+    ->name('referral.redirect');
+
+// ━━━ Gift subscription public surface ━━━
+// Buy form + checkout submit are auth-OPTIONAL — anonymous shoppers
+// can purchase a gift. Redeem requires auth (you need a User row to
+// stamp redeemed_by_user_id). Webhook is its own public endpoint that
+// also forwards non-gift orders to PaymentController::webhook so we
+// can point Midtrans at a single URL when ops prefer that topology.
+// {plan} is constrained to numeric so /gift/redeem (a string segment)
+// never tries to model-bind against subscription_plans and 404 — the
+// redeem GET is declared inside the auth group below.
+Route::get('/gift/{plan}', [\App\Http\Controllers\GiftSubscriptionController::class, 'buy'])
+    ->whereNumber('plan')
+    ->name('gift.buy');
+Route::post('/gift/purchase/{plan}', [\App\Http\Controllers\GiftSubscriptionController::class, 'purchase'])
+    ->whereNumber('plan')
+    ->middleware('throttle:10,1')
+    ->name('gift.purchase');
+Route::post('/gift/webhook', [\App\Http\Controllers\GiftSubscriptionController::class, 'webhook'])
+    ->middleware('throttle:webhook')
+    ->name('gift.webhook');
 
 // Health check endpoints (no auth — for load balancers / orchestrators)
 Route::get('/healthz', [\App\Http\Controllers\HealthController::class, 'live'])->name('health.live');
@@ -393,6 +494,18 @@ Route::get('/email/track/click/{trackingId}', [\App\Http\Controllers\EmailTracki
     ->middleware('throttle:1000,1')
     ->name('email.track.click');
 
+// ━━━ Editorial Blog (public — anonymous reading) ━━━
+//
+// Route order matters: the catch-all /blog/{post:slug} MUST come LAST so
+// it doesn't shadow /blog/feed.xml or /blog/category/{slug}. The show
+// action allows preview for users holding `blog.manage` (so editors can
+// review a draft) — everyone else gets 404 for non-published posts.
+Route::get('/blog', [\App\Http\Controllers\BlogController::class, 'index'])->name('blog.index');
+Route::get('/blog/feed.xml', [\App\Http\Controllers\BlogController::class, 'rss'])->name('blog.rss');
+Route::get('/blog/category/{category:slug}', [\App\Http\Controllers\BlogController::class, 'byCategory'])
+    ->name('blog.category');
+Route::get('/blog/{post:slug}', [\App\Http\Controllers\BlogController::class, 'show'])->name('blog.show');
+
 // ━━━ Admin panel (per-permission gating) ━━━
 //
 // Outer middleware stack: `auth` + `can:admin` is the COARSE gate.
@@ -439,6 +552,26 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::post('/movies/bulk', [\App\Http\Controllers\Admin\MovieBulkController::class, 'apply'])
         ->middleware('can:movies.update')->name('movies.bulk');
 
+    // ─── TMDB Import Wizard ─────────────────────────────────────
+    // Bulk + single-id imports of TMDB movies/TV. All endpoints share
+    // the existing `movies.create` permission so no new permission slug
+    // needs seeding. The /search and /preview endpoints are JSON-only
+    // (used by the Alpine.js wizard for typeahead + preview pane); the
+    // /import endpoint accepts both JSON (XHR submit) and form-encoded
+    // (server-rendered POST fallback).
+    Route::get('/tmdb-import', [\App\Http\Controllers\Admin\TmdbImportController::class, 'index'])
+        ->middleware('can:movies.create')->name('tmdb.index');
+    Route::get('/tmdb-import/bulk', [\App\Http\Controllers\Admin\TmdbImportController::class, 'bulkIndex'])
+        ->middleware('can:movies.create')->name('tmdb.bulk');
+    Route::get('/tmdb-import/search', [\App\Http\Controllers\Admin\TmdbImportController::class, 'search'])
+        ->middleware('can:movies.create')->name('tmdb.search');
+    Route::get('/tmdb-import/preview', [\App\Http\Controllers\Admin\TmdbImportController::class, 'preview'])
+        ->middleware('can:movies.create')->name('tmdb.preview');
+    Route::post('/tmdb-import', [\App\Http\Controllers\Admin\TmdbImportController::class, 'import'])
+        ->middleware('can:movies.create')->name('tmdb.import');
+    Route::post('/tmdb-import/bulk', [\App\Http\Controllers\Admin\TmdbImportController::class, 'bulkImport'])
+        ->middleware('can:movies.create')->name('tmdb.bulk-import');
+
     // ─── Genres / Casts (bundled under movies.update — taxonomy ops) ──
     Route::get('/genres', [\App\Http\Controllers\AdminController::class, 'genres'])
         ->middleware('can:movies.update')->name('genres.index');
@@ -453,6 +586,12 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
         ->middleware('can:movies.update')->name('casts.store');
     Route::delete('/casts/{cast}', [\App\Http\Controllers\AdminController::class, 'destroyCast'])
         ->middleware('can:movies.update')->name('casts.destroy');
+
+    // AI bio enrichment — admin button on the public /cast/{id} page.
+    // Synchronous one-shot (web search + AI call). Throttle inherits the
+    // admin group's coarse limiter; abuse is implausible behind can:admin.
+    Route::post('/cast/{cast}/enrich-bio', [\App\Http\Controllers\PublicCastController::class, 'enrichBio'])
+        ->middleware('can:movies.update')->name('cast.enrich-bio');
 
     // ─── Users ───────────────────────────────────────────────────
     Route::get('/users', [\App\Http\Controllers\AdminController::class, 'users'])
@@ -792,6 +931,92 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
         ->whereNumber('adminNotification')->name('notifications.read');
     Route::post('/notifications/read-all', [\App\Http\Controllers\Admin\NotificationController::class, 'markAllRead'])
         ->name('notifications.read-all');
+
+    // ━━━ Maintenance Mode (App-level kill switch, separate from `artisan down`) ━━━
+    // Gated on `system.maintenance` — seeded only to super_admin. The
+    // CheckCustomMaintenance middleware short-circuits requests to
+    // /admin/maintenance* so an admin can always disable the switch
+    // they enabled, even from a non-allow-listed IP.
+    Route::get('/maintenance', [\App\Http\Controllers\Admin\MaintenanceController::class, 'index'])
+        ->middleware('can:system.maintenance')->name('maintenance.index');
+    Route::post('/maintenance/enable', [\App\Http\Controllers\Admin\MaintenanceController::class, 'enable'])
+        ->middleware('can:system.maintenance')->name('maintenance.enable');
+    Route::post('/maintenance/disable', [\App\Http\Controllers\Admin\MaintenanceController::class, 'disable'])
+        ->middleware('can:system.maintenance')->name('maintenance.disable');
+    Route::post('/maintenance/update', [\App\Http\Controllers\Admin\MaintenanceController::class, 'update'])
+        ->middleware('can:system.maintenance')->name('maintenance.update');
+
+    // ━━━ Health Dashboard (operational diagnostics) ━━━
+    // Same engine as `php artisan flik:doctor`. Gated on `system.health`
+    // — granted to both admin and super_admin via the seeder. The JSON
+    // sub-endpoint powers the per-card auto-refresh poller in the view.
+    Route::get('/health', [\App\Http\Controllers\Admin\HealthDashboardController::class, 'index'])
+        ->middleware('can:system.health')->name('health.index');
+    Route::get('/health/check/{section}', [\App\Http\Controllers\Admin\HealthDashboardController::class, 'runCheck'])
+        ->middleware('can:system.health')
+        ->where('section', '[a-z]+')
+        ->name('health.check');
+
+    // ━━━ Editorial Blog (admin CRUD + AI assist) ━━━
+    // Gated on `blog.manage` (seeded under the `content` category). The
+    // legacy `Gate::before` admin fallback in AuthServiceProvider keeps
+    // these routes reachable for users with the old `is_admin` flag even
+    // before the seeder runs.
+    //
+    // AI assist + restore + publish endpoints come BEFORE the resource
+    // declaration so Laravel doesn't try to bind {post} = "ai" / "restore"
+    // / etc.
+    Route::post('/blog/posts/ai/suggest-titles', [\App\Http\Controllers\Admin\BlogAiController::class, 'suggestTitles'])
+        ->middleware('can:blog.manage')->name('blog.ai.suggest-titles');
+    Route::post('/blog/posts/ai/outline', [\App\Http\Controllers\Admin\BlogAiController::class, 'outline'])
+        ->middleware('can:blog.manage')->name('blog.ai.outline');
+    Route::post('/blog/posts/ai/enrich', [\App\Http\Controllers\Admin\BlogAiController::class, 'enrich'])
+        ->middleware('can:blog.manage')->name('blog.ai.enrich');
+
+    Route::post('/blog/posts/{id}/restore', [\App\Http\Controllers\Admin\BlogPostController::class, 'restore'])
+        ->whereNumber('id')
+        ->middleware('can:blog.manage')->name('blog.posts.restore');
+    Route::post('/blog/posts/{post}/publish', [\App\Http\Controllers\Admin\BlogPostController::class, 'publish'])
+        ->middleware('can:blog.manage')->name('blog.posts.publish');
+
+    Route::resource('/blog/posts', \App\Http\Controllers\Admin\BlogPostController::class)
+        ->except(['show'])
+        ->parameters(['posts' => 'post'])
+        ->middleware('can:blog.manage')
+        ->names('blog.posts');
+
+    Route::resource('/blog/categories', \App\Http\Controllers\Admin\BlogCategoryController::class)
+        ->only(['index', 'store', 'update', 'destroy'])
+        ->parameters(['categories' => 'category'])
+        ->middleware('can:blog.manage')
+        ->names('blog.categories');
+
+    // ━━━ Help Center CMS (admin CRUD + AI assist) ━━━
+    // Gated on `help.manage` (content category) — granted to admin +
+    // content_editor via RolePermissionSeeder. AI assist + publish
+    // endpoints come BEFORE the resource declaration so Laravel doesn't
+    // bind {article} = "ai" / "publish" / etc.
+    Route::post('/help/articles/ai/suggest-title', [\App\Http\Controllers\Admin\HelpAiController::class, 'suggestTitle'])
+        ->middleware('can:help.manage')->name('help.ai.suggest-title');
+    Route::post('/help/articles/ai/draft-answer', [\App\Http\Controllers\Admin\HelpAiController::class, 'draftAnswer'])
+        ->middleware('can:help.manage')->name('help.ai.draft-answer');
+    Route::post('/help/articles/ai/improve', [\App\Http\Controllers\Admin\HelpAiController::class, 'improve'])
+        ->middleware('can:help.manage')->name('help.ai.improve');
+
+    Route::post('/help/articles/{article}/publish', [\App\Http\Controllers\Admin\HelpArticleController::class, 'publish'])
+        ->middleware('can:help.manage')->name('help.articles.publish');
+
+    Route::resource('/help/articles', \App\Http\Controllers\Admin\HelpArticleController::class)
+        ->except(['show'])
+        ->parameters(['articles' => 'article'])
+        ->middleware('can:help.manage')
+        ->names('help.articles');
+
+    Route::resource('/help/categories', \App\Http\Controllers\Admin\HelpCategoryController::class)
+        ->only(['index', 'store', 'update', 'destroy'])
+        ->parameters(['categories' => 'category'])
+        ->middleware('can:help.manage')
+        ->names('help.categories');
 });
 
 // ━━━ User-facing AI Features ━━━
@@ -911,4 +1136,81 @@ Route::middleware('auth')->group(function () {
     Route::delete('/u/{user}/follow', [\App\Http\Controllers\PublicProfileController::class, 'unfollow'])
         ->whereNumber('user')
         ->name('profile.public.unfollow');
+});
+
+// ━━━ User-curated lists (sharable, follow-able movie playlists) ━━━
+//
+// Distinct concept from the /my-list watchlist endpoint (private bookmark
+// flat-list). UserList rows have a title, description, visibility
+// (public/unlisted/private), follower graph, and manual item ordering.
+//
+// URL convention: /lists/{user:username}/{list:slug} with ->scopeBindings()
+// so {list} is resolved within the {user}'s owned lists. Per-user slug
+// uniqueness means two users can both have a list called "Best of 2025"
+// without colliding.
+//
+// `auth-only` collection routes (mine, following, create, store) are declared
+// BEFORE the catch-all show route so /lists/mine never matches as username
+// "mine". Action routes (POST follow, DELETE, etc.) live in their own
+// auth-guarded group further down.
+Route::get('/lists', [\App\Http\Controllers\UserListController::class, 'index'])
+    ->name('user-lists.index');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/lists/mine', [\App\Http\Controllers\UserListController::class, 'mine'])
+        ->name('user-lists.mine');
+    Route::get('/lists/following', [\App\Http\Controllers\UserListController::class, 'following'])
+        ->name('user-lists.following');
+    Route::get('/lists/create', [\App\Http\Controllers\UserListController::class, 'create'])
+        ->name('user-lists.create');
+    Route::post('/lists', [\App\Http\Controllers\UserListController::class, 'store'])
+        ->name('user-lists.store');
+});
+
+// Public show (visibility is enforced in the controller — guests can read
+// public + unlisted lists; private 404s for non-owners).
+Route::get('/lists/{user:username}/{list:slug}', [\App\Http\Controllers\UserListController::class, 'show'])
+    ->scopeBindings()
+    ->where('user', '[A-Za-z0-9_\.]+')
+    ->name('user-lists.show');
+
+// Owner-only mutating actions. scopeBindings() means {list} is resolved as
+// $user->lists()->where('slug', $list) so a malicious slug can't match a
+// list belonging to a different account.
+Route::middleware('auth')->group(function () {
+    Route::get('/lists/{user:username}/{list:slug}/edit', [\App\Http\Controllers\UserListController::class, 'edit'])
+        ->scopeBindings()
+        ->where('user', '[A-Za-z0-9_\.]+')
+        ->name('user-lists.edit');
+    Route::put('/lists/{user:username}/{list:slug}', [\App\Http\Controllers\UserListController::class, 'update'])
+        ->scopeBindings()
+        ->where('user', '[A-Za-z0-9_\.]+')
+        ->name('user-lists.update');
+    Route::delete('/lists/{user:username}/{list:slug}', [\App\Http\Controllers\UserListController::class, 'destroy'])
+        ->scopeBindings()
+        ->where('user', '[A-Za-z0-9_\.]+')
+        ->name('user-lists.destroy');
+
+    Route::post('/lists/{user:username}/{list:slug}/items', [\App\Http\Controllers\UserListController::class, 'addMovie'])
+        ->scopeBindings()
+        ->where('user', '[A-Za-z0-9_\.]+')
+        ->name('user-lists.items.add');
+    Route::delete('/lists/{user:username}/{list:slug}/items/{movie:id}', [\App\Http\Controllers\UserListController::class, 'removeMovie'])
+        ->scopeBindings()
+        ->where('user', '[A-Za-z0-9_\.]+')
+        ->whereNumber('movie')
+        ->name('user-lists.items.remove');
+    Route::post('/lists/{user:username}/{list:slug}/reorder', [\App\Http\Controllers\UserListController::class, 'reorder'])
+        ->scopeBindings()
+        ->where('user', '[A-Za-z0-9_\.]+')
+        ->name('user-lists.reorder');
+
+    Route::post('/lists/{user:username}/{list:slug}/follow', [\App\Http\Controllers\UserListController::class, 'follow'])
+        ->scopeBindings()
+        ->where('user', '[A-Za-z0-9_\.]+')
+        ->name('user-lists.follow');
+    Route::delete('/lists/{user:username}/{list:slug}/follow', [\App\Http\Controllers\UserListController::class, 'unfollow'])
+        ->scopeBindings()
+        ->where('user', '[A-Za-z0-9_\.]+')
+        ->name('user-lists.unfollow');
 });

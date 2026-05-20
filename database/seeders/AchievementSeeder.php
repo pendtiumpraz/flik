@@ -27,6 +27,10 @@ class AchievementSeeder extends Seeder
 
             // Comment milestones
             ['name' => 'Conversationalist', 'slug' => 'conversationalist', 'description' => 'Tulis 10 komentar', 'icon' => '💬', 'coin_reward' => 30, 'xp_reward' => 50, 'condition_type' => 'comment_count', 'condition_value' => 10, 'tier' => 'bronze'],
+            // Awarded by CommentReactionObserver when any of the user's
+            // comments crosses 10 reactions (any type). condition_type
+            // is informational — the trigger lives in the observer.
+            ['name' => 'Community Favorite', 'slug' => 'community_favorite', 'description' => 'Salah satu komentarmu mendapat 10+ reaksi dari komunitas', 'icon' => '🌟', 'coin_reward' => 75, 'xp_reward' => 150, 'condition_type' => 'comment_reactions', 'condition_value' => 10, 'tier' => 'gold'],
 
             // Watchlist milestones
             ['name' => 'Collector', 'slug' => 'collector', 'description' => 'Tambahkan 20 film ke watchlist', 'icon' => '📚', 'coin_reward' => 50, 'xp_reward' => 100, 'condition_type' => 'watchlist_count', 'condition_value' => 20, 'tier' => 'silver'],

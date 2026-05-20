@@ -30,7 +30,15 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // TMDB (The Movie Database) — read-only API used by the admin import wizard
+    // (App\Services\Tmdb\TmdbClient + MovieImporter). Either `api_key` (v3 key,
+    // passed as ?api_key=) or `bearer` (v4 read token, passed as Authorization:
+    // Bearer ...) is sufficient — the client prefers the bearer when both are
+    // set because v4 has higher rate limits. `token` is kept as a legacy alias
+    // for any existing callers that read it directly.
     'tmdb' => [
+        'api_key' => env('TMDB_KEY'),
+        'bearer' => env('TMDB_BEARER'),
         'token' => env('TMDB_TOKEN'),
     ],
 

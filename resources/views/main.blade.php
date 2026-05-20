@@ -24,6 +24,10 @@
             <!-- so it stays out of the way on a brand-new install.         -->
             <x-home.trending-shelf window="24h" :limit="12" />
 
+            <!-- Curated-lists shelf — featured + most-followed user-curated -->
+            <!-- playlists. Self-hides when no public lists exist yet.       -->
+            <x-home.curated-lists-shelf :limit="8" />
+
             <!-- Daily watch-streak widget (auth-only) — reads WatchStreak directly -->
             @auth
             <x-home.streak-widget />

@@ -1,36 +1,65 @@
 // FLiK Service Worker — Offline Cache + Web Push
-const CACHE_NAME = 'flik-v2';
-const OFFLINE_URL = '/offline';
+//
+// Two named caches:
+//   • flik-static-v1   — long-lived, pre-cached at install. Logo, offline
+//                        fallback page, manifest, core JS/CSS. We deliberately
+//                        keep this list small; large assets are populated
+//                        lazily by the runtime cache.
+//   • flik-runtime-v3  — everything fetched at runtime that's safe to cache
+//                        (GET, same-origin, non-admin, non-API). Bumped from
+//                        flik-v2 → flik-runtime-v3 to drop stale entries.
+//
+// Strategy:
+//   • Navigation requests (mode === 'navigate'): network-first, falling back
+//     to /offline.html (pre-cached) when offline.
+//   • Static assets (image, script, style, font): cache-first with network
+//     fallback (refreshes the cache opportunistically).
+//   • Everything else: network-only (no caching), so admin/API/livewire
+//     never see stale data.
 
-// Assets to pre-cache
+const STATIC_CACHE = 'flik-static-v1';
+const RUNTIME_CACHE = 'flik-runtime-v3';
+const OFFLINE_URL = '/offline.html';
+
+// Pre-cached at install — must succeed in bulk for the install to complete,
+// so keep this list to genuinely-always-present URLs. Anything optional goes
+// into the runtime cache instead.
 const PRECACHE_URLS = [
     '/',
-    '/css/app.css',
-    '/js/app.js',
-    '/js/content-protection.js',
+    OFFLINE_URL,
+    '/manifest.json',
     '/img/flik-logo.png',
     '/favicon.png',
 ];
 
-// Install: pre-cache core assets
+// Install: pre-cache core assets into the named static cache. .addAll is
+// atomic — if any URL 404s the whole install fails — so we wrap individual
+// puts to survive missing optional assets without losing the rest.
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            return cache.addAll(PRECACHE_URLS).catch(() => {
-                // Silently fail individual assets
-            });
+        caches.open(STATIC_CACHE).then(async (cache) => {
+            await Promise.all(
+                PRECACHE_URLS.map((url) =>
+                    cache.add(url).catch(() => {
+                        // Silently swallow individual failures so install can complete
+                        // even if one optional asset is missing.
+                    })
+                )
+            );
         })
     );
     self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: delete any cache that isn't on the current allow-list. Keeps the
+// storage quota from blowing up over multiple SW versions.
 self.addEventListener('activate', (event) => {
+    const allow = new Set([STATIC_CACHE, RUNTIME_CACHE]);
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames
-                    .filter((name) => name !== CACHE_NAME)
+                    .filter((name) => !allow.has(name))
                     .map((name) => caches.delete(name))
             );
         })
@@ -38,33 +67,93 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-// Fetch: Network-first with cache fallback
-self.addEventListener('fetch', (event) => {
-    // Skip non-GET and admin/API
-    if (event.request.method !== 'GET') return;
-    if (event.request.url.includes('/admin') ||
-        event.request.url.includes('/api') ||
-        event.request.url.includes('/livewire')) return;
+// Helpers ─────────────────────────────────────────────────────────────────
 
-    event.respondWith(
-        fetch(event.request)
-            .then((response) => {
-                // Cache successful responses
-                if (response.status === 200) {
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseClone);
-                    });
-                }
-                return response;
-            })
-            .catch(() => {
-                // Return cached version
-                return caches.match(event.request).then((response) => {
-                    return response || caches.match('/');
-                });
-            })
+function isCacheableStatic(request) {
+    // Only same-origin GETs. Cross-origin (Google Fonts, CDN scripts) bypass
+    // the SW entirely so they can rely on their own cache headers.
+    if (request.method !== 'GET') return false;
+    const url = new URL(request.url);
+    if (url.origin !== self.location.origin) return false;
+    const dest = request.destination;
+    return dest === 'image' || dest === 'script' || dest === 'style' || dest === 'font';
+}
+
+function shouldBypass(url) {
+    return (
+        url.includes('/admin') ||
+        url.includes('/api') ||
+        url.includes('/livewire') ||
+        url.includes('/sanctum') ||
+        url.includes('/_debugbar') ||
+        url.includes('/horizon') ||
+        url.includes('/telescope')
     );
+}
+
+// Fetch ───────────────────────────────────────────────────────────────────
+
+self.addEventListener('fetch', (event) => {
+    const request = event.request;
+    if (request.method !== 'GET') return;
+    if (shouldBypass(request.url)) return;
+
+    // Navigation requests — HTML page loads. Network-first, fall back to
+    // cached page if available, else the pre-cached /offline.html.
+    if (request.mode === 'navigate') {
+        event.respondWith(
+            fetch(request)
+                .then((response) => {
+                    // Cache successful navigations for offline replay.
+                    if (response && response.status === 200) {
+                        const clone = response.clone();
+                        caches.open(RUNTIME_CACHE).then((cache) => {
+                            cache.put(request, clone).catch(() => {});
+                        });
+                    }
+                    return response;
+                })
+                .catch(async () => {
+                    const cached = await caches.match(request);
+                    if (cached) return cached;
+                    const offline = await caches.match(OFFLINE_URL);
+                    if (offline) return offline;
+                    // Last-resort minimal response so the browser doesn't show
+                    // its own offline page (which is uglier than nothing).
+                    return new Response(
+                        '<!doctype html><meta charset=utf-8><title>FLiK — Offline</title><body style="background:#0a0a0a;color:#C5A55A;font-family:sans-serif;text-align:center;padding:4rem">You are offline.</body>',
+                        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+                    );
+                })
+        );
+        return;
+    }
+
+    // Static assets — cache-first with background refresh. Serves instantly
+    // from cache; the network response (if it arrives) refreshes the entry
+    // for next time.
+    if (isCacheableStatic(request)) {
+        event.respondWith(
+            caches.match(request).then((cached) => {
+                const networkFetch = fetch(request)
+                    .then((response) => {
+                        if (response && response.status === 200) {
+                            const clone = response.clone();
+                            caches.open(RUNTIME_CACHE).then((cache) => {
+                                cache.put(request, clone).catch(() => {});
+                            });
+                        }
+                        return response;
+                    })
+                    .catch(() => cached);
+                return cached || networkFetch;
+            })
+        );
+        return;
+    }
+
+    // Everything else: pure network. We don't cache POSTs, signed URLs,
+    // or unknown destinations.
 });
 
 // ─────────────────────────────────────────────────────────────

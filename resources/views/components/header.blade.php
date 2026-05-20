@@ -98,6 +98,17 @@
                                 <x-icon name="lightning" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
                                 <span>Smart Watchlist</span>
                             </a>
+                            {{-- Curated user-lists (peer LISTS) — distinct concept from
+                                 the flat watchlist above: shareable playlists with title,
+                                 description, follower graph, public/unlisted/private. --}}
+                            <a href="{{ route('user-lists.index') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                <x-icon name="film" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                <span>Discover Lists</span>
+                            </a>
+                            <a href="{{ route('user-lists.mine') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                <x-icon name="user" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                <span>My Lists</span>
+                            </a>
                         </div>
                     </div>
                 </li>
@@ -248,6 +259,12 @@
                 </a>
                 <a href="{{ route('watchlist.smart') }}" class="flex items-center gap-3 py-2.5 px-3 pl-9 text-sm text-gray-300 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
                     <x-icon name="lightning" :size="16" class="text-[#C5A55A]/80" /> Smart Watchlist
+                </a>
+                <a href="{{ route('user-lists.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                    <x-icon name="film" :size="18" class="text-[#C5A55A]/80" /> Discover Lists
+                </a>
+                <a href="{{ route('user-lists.mine') }}" class="flex items-center gap-3 py-2.5 px-3 pl-9 text-sm text-gray-300 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                    <x-icon name="user" :size="16" class="text-[#C5A55A]/80" /> My Lists
                 </a>
 
                 <!-- Discover collapsible (mobile) -->

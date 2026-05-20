@@ -142,6 +142,15 @@
                         Watchlist
                     </button>
                 @endif
+                @if(($publicListsCount ?? 0) > 0)
+                    <button @click="tab = 'lists'"
+                            :class="tab === 'lists' ? 'text-white' : 'text-gray-500 hover:text-gray-300'"
+                            :style="tab === 'lists' ? 'border-color:#C5A55A' : 'border-color:transparent'"
+                            class="px-4 py-2.5 text-sm font-semibold border-b-2 transition">
+                        Lists
+                        <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded" style="background:rgba(197,165,90,0.15);color:#C5A55A">{{ $publicListsCount }}</span>
+                    </button>
+                @endif
                 <button @click="tab = 'achievements'"
                         :class="tab === 'achievements' ? 'text-white' : 'text-gray-500 hover:text-gray-300'"
                         :style="tab === 'achievements' ? 'border-color:#C5A55A' : 'border-color:transparent'"
@@ -220,6 +229,29 @@
                         @else
                             <p class="text-gray-600 text-sm text-center py-12">Watchlist is empty</p>
                         @endif
+                    </div>
+                </div>
+            @endif
+
+            {{-- Lists tab (peer LISTS) — curated user-lists owned by this user --}}
+            @if(($publicListsCount ?? 0) > 0)
+                <div x-show="tab === 'lists'" x-cloak>
+                    <div class="flex items-center justify-between mb-3">
+                        <p class="text-xs text-gray-500">
+                            {{ $publicLists->count() }} dari {{ $publicListsCount }} list ditampilkan
+                        </p>
+                        @if($isOwner)
+                            <a href="{{ route('user-lists.mine') }}"
+                               class="text-xs text-[#C5A55A] hover:underline">Kelola semua list &rsaquo;</a>
+                        @elseif($user->username)
+                            <a href="{{ route('user-lists.index', ['user' => $user->username]) }}"
+                               class="text-xs text-[#C5A55A] hover:underline">Lihat semua list &rsaquo;</a>
+                        @endif
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        @foreach($publicLists as $list)
+                            <x-lists.card :list="$list" :showOwner="false" />
+                        @endforeach
                     </div>
                 </div>
             @endif

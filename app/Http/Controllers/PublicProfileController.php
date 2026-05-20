@@ -79,6 +79,33 @@ class PublicProfileController extends Controller
         $followingCount = $user->followingCount();
         $moviesWatched = $this->safeCountMoviesWatched($user);
 
+        // Curated user-lists (peer LISTS) — public lists only when viewed by
+        // a stranger; the owner sees all of their own lists. Defensive against
+        // a fresh install before the user_lists migration has run.
+        $publicLists = collect();
+        $publicListsCount = 0;
+        try {
+            if (Schema::hasTable('user_lists') && method_exists($user, 'lists')) {
+                $listsQuery = $isOwner
+                    ? $user->lists()
+                    : $user->publicLists();
+                $publicListsCount = (clone $listsQuery)->count();
+                $publicLists = $listsQuery
+                    ->with([
+                        'cover:id,title,slug,poster_path,backdrop_path',
+                        'items' => fn ($q) => $q->orderBy('position')->limit(4),
+                        'items.movie:id,title,poster_path,backdrop_path',
+                    ])
+                    ->take(8)
+                    ->get();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('public-profile: lists load failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return view('profile.public.show', [
             'user' => $user,
             'isOwner' => $isOwner,
@@ -93,6 +120,8 @@ class PublicProfileController extends Controller
             'followersCount' => $followersCount,
             'followingCount' => $followingCount,
             'moviesWatched' => $moviesWatched,
+            'publicLists' => $publicLists,
+            'publicListsCount' => $publicListsCount,
         ]);
     }
 

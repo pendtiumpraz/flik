@@ -6,6 +6,7 @@ use App\Models\PromoCode;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Services\Billing\PromoCodeService;
+use App\Services\Referrals\ReferralService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -257,6 +258,25 @@ class PaymentController extends Controller
                     // Award XP
                     $level = $subscription->user->getOrCreateLevel();
                     $level->addXp(50);
+
+                    // ── Refer-a-friend: mark rewarded ─────────────
+                    // First paid activation by a referred user triggers
+                    // the big referrer bonus + denormalised counter
+                    // bump. Idempotent — re-running the webhook does
+                    // NOT double-pay (status guard inside the service).
+                    try {
+                        app(ReferralService::class)->markRewarded(
+                            $subscription->user,
+                            $subscription
+                        );
+                    } catch (\Throwable $e) {
+                        \Log::warning('PaymentController: referral reward dispatch failed', [
+                            'order_id'        => $orderId,
+                            'subscription_id' => $subscription->id,
+                            'user_id'         => $subscription->user_id,
+                            'error'           => $e->getMessage(),
+                        ]);
+                    }
 
                     // Admin bell — finance team gets pinged on successful
                     // payments. Queued (default queue, $tries=2) so a notif
