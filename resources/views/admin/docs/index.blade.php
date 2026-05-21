@@ -1190,6 +1190,26 @@ erDiagram
             scroll ke tab yang relevan saat ada pertanyaan "kenapa gak pakai X?"
         </p>
 
+        {{-- Live dynamic-switch banner --}}
+        <div style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(34,197,94,0.04));border:1px solid rgba(34,197,94,0.35);border-radius:12px;padding:16px 20px;margin-bottom:18px;display:flex;align-items:center;gap:14px">
+            <div style="flex-shrink:0;width:40px;height:40px;background:linear-gradient(135deg,#22c55e,#86efac);border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px -4px rgba(34,197,94,0.5)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </div>
+            <div style="flex:1">
+                <div style="color:#86efac;font-weight:700;font-size:13.5px;letter-spacing:-0.2px">✓ Provider berikut sekarang BISA DIGANTI dari admin tanpa redeploy</div>
+                <div style="color:#bbb;font-size:12.5px;line-height:1.55;margin-top:4px">
+                    Tab <strong>CDN, DRM, Storage, Realtime, Payment, Email</strong> + <strong>Integrations</strong> — semua provider di dropdown bisa di-switch live.
+                    Setting disimpan di <code style="background:#0a0a0a;padding:2px 6px;border-radius:4px;color:#86efac;font-size:11px">settings</code> table, kemudian
+                    <code style="background:#0a0a0a;padding:2px 6px;border-radius:4px;color:#86efac;font-size:11px">DynamicInfrastructureProvider</code> override
+                    config() saat request berikutnya. Tidak perlu edit .env, tidak perlu restart worker.
+                </div>
+                <a href="{{ route('admin.infrastructure.index') }}"
+                   style="display:inline-block;margin-top:8px;font-size:12px;color:#22c55e;font-weight:700;text-decoration:none">
+                    → Buka /admin/infrastructure untuk switch sekarang
+                </a>
+            </div>
+        </div>
+
         <div class="docs-card" x-data="{ tab: 'cdn' }" style="padding:0;overflow:hidden">
 
             {{-- Tab strip --}}
@@ -1266,8 +1286,62 @@ erDiagram
                 <div class="callout">
                     <strong>Kapan migrate ke CloudFront/Akamai?</strong> Kalau (a) konten dapat lisensi studio Hollywood yang mensyaratkan DDoS-protected CDN dengan SLA 99.99%, atau (b) traffic &gt; 500TB/bulan (volume discount Akamai mulai menarik).
                 </div>
-                <div class="callout">
-                    <strong>Kapan migrate ke self-host?</strong> Hampir <em>tidak pernah</em> untuk streaming. ISP bandwidth lebih mahal + tidak ada edge globally + sulit scale. Cuma masuk akal untuk LAN-only deployment.
+
+                <h4 class="why-compare-h" style="margin-top:28px">📋 Detail per Provider — Pilih yang cocok untuk kasus kamu</h4>
+                <div class="provider-grid">
+                    {{-- Bunny --}}
+                    <div class="provider-card" style="border-color:#C5A55A">
+                        <div class="provider-header"><span class="provider-name">Bunny CDN</span><span class="provider-tag" style="background:#C5A55A;color:#0a0a0a">DEFAULT</span></div>
+                        <div class="provider-fact">$0.01/GB · 119 edge · HLS-optimized</div>
+                        <div class="prov-mini">✅ Termurah untuk streaming · ✅ HLS Token Auth signed URL built-in · ✅ Edge SG+Jakarta dekat · ✅ Free TLS + storage</div>
+                        <div class="prov-mini neg">❌ WAF/DDoS lebih lemah · ❌ Support standard saja · ❌ No Lambda@Edge</div>
+                        <div class="provider-when">Pakai saat: startup-mid, traffic &lt; 500TB/mo, butuh murah</div>
+                    </div>
+
+                    {{-- Cloudflare R2 --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Cloudflare R2</span><span class="provider-tag" style="background:rgba(59,130,246,0.18);color:#93c5fd">Hybrid</span></div>
+                        <div class="provider-fact">$0.015/GB · 300+ edge · zero egress fee</div>
+                        <div class="prov-mini">✅ Zero egress cost (revolution) · ✅ Cloudflare WAF terbaik · ✅ Workers AI integration · ✅ S3-compatible API</div>
+                        <div class="prov-mini neg">❌ R2 + CDN integration butuh setup ekstra · ❌ Pull zone behavior beda dari Bunny · ❌ Region selection terbatas</div>
+                        <div class="provider-when">Pakai saat: traffic spike unpredictable, sudah pakai Cloudflare</div>
+                    </div>
+
+                    {{-- AWS CloudFront --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">AWS S3 + CloudFront</span><span class="provider-tag" style="background:rgba(234,179,8,0.18);color:#fde68a">Enterprise</span></div>
+                        <div class="provider-fact">$0.085/GB · 450+ edge · Lambda@Edge support</div>
+                        <div class="prov-mini">✅ Edge terbanyak globally · ✅ Integrasi penuh dengan AWS services · ✅ Lambda@Edge untuk edge compute · ✅ Field-level encryption</div>
+                        <div class="prov-mini neg">❌ 8× lebih mahal dari Bunny · ❌ Pricing complex (multi-axis) · ❌ Setup signed URL lebih ribet</div>
+                        <div class="provider-when">Pakai saat: sudah AWS-heavy, butuh edge compute, budget enterprise</div>
+                    </div>
+
+                    {{-- Akamai --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Akamai</span><span class="provider-tag" style="background:rgba(239,68,68,0.18);color:#fca5a5">Studio-grade</span></div>
+                        <div class="provider-fact">Custom $$$ · 4000+ edge · MPAA Tier-1 compliant</div>
+                        <div class="prov-mini">✅ Standar broadcaster Hollywood · ✅ Edge node terbanyak · ✅ Dedicated TAM (technical account manager) · ✅ Bisa pasangkan dengan Widevine</div>
+                        <div class="prov-mini neg">❌ Mahal — minimum commitment $5K+/mo · ❌ Contract negotiation lama · ❌ Overkill untuk startup</div>
+                        <div class="provider-when">Pakai saat: dapat licensing Disney/Warner/Universal, traffic 1PB+/mo</div>
+                    </div>
+
+                    {{-- DO Spaces --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">DigitalOcean Spaces</span><span class="provider-tag" style="background:rgba(168,85,247,0.18);color:#d8b4fe">Simple</span></div>
+                        <div class="provider-fact">$5/mo flat 250GB + 1TB transfer included</div>
+                        <div class="prov-mini">✅ Flat pricing, predictable bill · ✅ S3-compatible · ✅ Edge node SGP1 dekat Indonesia · ✅ Dashboard sederhana</div>
+                        <div class="prov-mini neg">❌ Edge cuma 13 lokasi · ❌ Tidak HLS-optimized seperti Bunny · ❌ Throughput per object terbatas</div>
+                        <div class="provider-when">Pakai saat: dev/staging, MVP launch, simplicity > feature</div>
+                    </div>
+
+                    {{-- Local --}}
+                    <div class="provider-card" style="opacity:0.7">
+                        <div class="provider-header"><span class="provider-name">Local (No CDN)</span><span class="provider-tag" style="background:#3a3a3a;color:#aaa">Dev only</span></div>
+                        <div class="provider-fact">Serve dari server origin → bandwidth ISP</div>
+                        <div class="prov-mini">✅ Setup 0 menit · ✅ No external dep · ✅ Free</div>
+                        <div class="prov-mini neg">❌ Tidak ada edge → latency tinggi untuk user jauh · ❌ Bandwidth ISP mahal · ❌ Origin server kebanjiran traffic saat spike · ❌ Tidak realistic untuk scale</div>
+                        <div class="provider-when">Pakai saat: development local, LAN-only, demo internal</div>
+                    </div>
                 </div>
             </div>
 
@@ -1317,6 +1391,81 @@ erDiagram
 
                 <div class="callout">
                     <strong>Kapan upgrade ke Multi-DRM?</strong> Kalau dapat content licensing deal yang mensyaratkan studio audit (Disney, Warner, Universal, Sony). Atau mau 4K UHD content. Migration: 1-2 minggu dengan PallyCon, struktur kita modular (Shaka Player support multi-DRM out-of-box).
+                </div>
+
+                <h4 class="why-compare-h" style="margin-top:28px">📋 Detail per DRM — Pilih sesuai konten + budget</h4>
+                <div class="provider-grid">
+                    {{-- AES-128 --}}
+                    <div class="provider-card" style="border-color:#C5A55A">
+                        <div class="provider-header"><span class="provider-name">HLS AES-128 (DIY)</span><span class="provider-tag" style="background:#C5A55A;color:#0a0a0a">DEFAULT</span></div>
+                        <div class="provider-fact">$0 lifetime · 800 LOC PHP · Semua browser</div>
+                        <div class="prov-mini">✅ Zero license cost · ✅ Browser-agnostic · ✅ Setup 1 hari · ✅ Plus JWT key + signed URL + geo-block + watermark</div>
+                        <div class="prov-mini neg">❌ Tidak MPAA-compliant · ❌ Tidak HDCP-enforced · ❌ No offline DRM · ❌ Tidak bisa lisensi Hollywood</div>
+                        <div class="provider-when">Pakai saat: konten indie Indonesia, indie production, budget tipis</div>
+                    </div>
+
+                    {{-- Widevine L3 --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Widevine L3</span><span class="provider-tag" style="background:rgba(59,130,246,0.18);color:#93c5fd">Software DRM</span></div>
+                        <div class="provider-fact">$5K/year · Chrome/Android/Edge · Software CDM</div>
+                        <div class="prov-mini">✅ Standar industry untuk Chrome/Android · ✅ Software-only (no hardware) · ✅ Tier 3 studio audit pass · ✅ Banyak vendor (PallyCon $1500/mo)</div>
+                        <div class="prov-mini neg">❌ Tidak HDCP-enforced di L3 · ❌ Cuma Chromium/Android/Edge · ❌ License negotiation Google</div>
+                        <div class="provider-when">Pakai saat: konten butuh entry-level studio compliance, budget cukup</div>
+                    </div>
+
+                    {{-- Widevine L1 --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Widevine L1</span><span class="provider-tag" style="background:rgba(168,85,247,0.18);color:#d8b4fe">Hardware DRM</span></div>
+                        <div class="provider-fact">$20K+/year · Android L1 devices · TEE-backed</div>
+                        <div class="prov-mini">✅ Hardware-backed (TEE) keamanan tinggi · ✅ Tier 1-2 studio compliant · ✅ Bisa 4K UHD · ✅ HDCP enforced</div>
+                        <div class="prov-mini neg">❌ Mahal · ❌ Cuma Android L1 devices · ❌ Audit ketat (Conviva, Eurofins) · ❌ Setup 2-3 bulan</div>
+                        <div class="provider-when">Pakai saat: konten studio Hollywood, 4K UHD, mobile-focused</div>
+                    </div>
+
+                    {{-- FairPlay --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Apple FairPlay</span><span class="provider-tag" style="background:rgba(168,85,247,0.18);color:#d8b4fe">Hardware DRM</span></div>
+                        <div class="provider-fact">Apple Dev + special license · Safari/iOS/tvOS</div>
+                        <div class="prov-mini">✅ Satu-satunya DRM untuk Safari/iOS · ✅ Hardware-backed di Apple chip · ✅ Tier 1-2 compliant · ✅ Native player support</div>
+                        <div class="prov-mini neg">❌ Cuma Apple devices · ❌ Setup license dari Apple ribet · ❌ Butuh dedicated FairPlay server</div>
+                        <div class="provider-when">Pakai saat: pasar iOS Apple-heavy, butuh native iOS app</div>
+                    </div>
+
+                    {{-- PlayReady --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Microsoft PlayReady</span><span class="provider-tag" style="background:rgba(168,85,247,0.18);color:#d8b4fe">Hardware DRM</span></div>
+                        <div class="provider-fact">Microsoft license · Edge/Xbox/Windows</div>
+                        <div class="prov-mini">✅ Native Edge + Xbox support · ✅ Tier 1-2 compliant · ✅ Standard untuk smart TV Samsung/LG</div>
+                        <div class="prov-mini neg">❌ Cuma Microsoft + smart TV ecosystem · ❌ Tidak Chrome/Android/iOS native · ❌ Microsoft licensing</div>
+                        <div class="provider-when">Pakai saat: smart TV deployment, Xbox/Windows-heavy user</div>
+                    </div>
+
+                    {{-- Multi-CENC PallyCon --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">PallyCon Multi-DRM</span><span class="provider-tag" style="background:rgba(234,179,8,0.18);color:#fde68a">All-in-One</span></div>
+                        <div class="provider-fact">$1,500/mo · Widevine+PlayReady+FairPlay · 1 SDK</div>
+                        <div class="prov-mini">✅ Cover semua browser/device · ✅ Single integration single billing · ✅ Vendor handle license server · ✅ Setup 1-2 minggu</div>
+                        <div class="prov-mini neg">❌ Vendor lock-in · ❌ Setup awal masih audit-heavy · ❌ Mahal untuk MVP</div>
+                        <div class="provider-when">Pakai saat: ready buat lisensi studio, butuh universal coverage</div>
+                    </div>
+
+                    {{-- ezDRM --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">ezDRM</span><span class="provider-tag" style="background:rgba(234,179,8,0.18);color:#fde68a">Enterprise SaaS</span></div>
+                        <div class="provider-fact">$3K-10K/mo · Multi-DRM · Dedicated support</div>
+                        <div class="prov-mini">✅ White-glove enterprise support · ✅ Tier 1 ready · ✅ Custom contract</div>
+                        <div class="prov-mini neg">❌ Lebih mahal dari PallyCon · ❌ Sales-led pricing (no public price)</div>
+                        <div class="provider-when">Pakai saat: studio konten contract sudah deal, butuh enterprise SLA</div>
+                    </div>
+
+                    {{-- BuyDRM --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">BuyDRM KeyOS</span><span class="provider-tag" style="background:rgba(239,68,68,0.18);color:#fca5a5">Premium</span></div>
+                        <div class="provider-fact">Enterprise $$$ · Full Tier-1 audit pass</div>
+                        <div class="prov-mini">✅ Used by Hulu/Disney+/etc · ✅ White-label license server · ✅ Hardware-backed all DRMs</div>
+                        <div class="prov-mini neg">❌ Pricing tidak transparan · ❌ Minimum commitment besar · ❌ Overkill untuk &lt; 1M MAU</div>
+                        <div class="provider-when">Pakai saat: scale Netflix/Hulu/Disney+, content premium high-value</div>
+                    </div>
                 </div>
             </div>
 
@@ -1520,6 +1669,63 @@ erDiagram
                         <tr><td>Mayar / iPaymu</td><td>1-2%</td><td>T+1</td><td>⚠️</td><td>Murah, fitur lebih basic</td></tr>
                     </tbody>
                 </table>
+
+                <h4 class="why-compare-h" style="margin-top:28px">📋 Detail per Payment Gateway</h4>
+                <div class="provider-grid">
+                    {{-- Midtrans --}}
+                    <div class="provider-card" style="border-color:#C5A55A">
+                        <div class="provider-header"><span class="provider-name">Midtrans</span><span class="provider-tag" style="background:#C5A55A;color:#0a0a0a">DEFAULT</span></div>
+                        <div class="provider-fact">Fee 1.5-3% · T+1/T+2 · Owned by GoTo</div>
+                        <div class="prov-mini">✅ GoPay/OVO/ShopeePay/DANA built-in · ✅ Snap = single integration semua metode · ✅ VA Bank Mandiri/BCA/BNI/BRI/Permata · ✅ Indomaret/Alfamart cash · ✅ Reputation tinggi (GoTo Group)</div>
+                        <div class="prov-mini neg">❌ Fee tinggi (3% kartu kredit) · ❌ Dashboard reporting basic · ❌ Customer support lambat di plan standard</div>
+                        <div class="provider-when">Pakai saat: target user Indonesia, butuh semua metode bayar lokal</div>
+                    </div>
+
+                    {{-- Xendit --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Xendit</span><span class="provider-tag" style="background:rgba(59,130,246,0.18);color:#93c5fd">SE Asia</span></div>
+                        <div class="provider-fact">Fee 1.5-3% · T+1 · Multi-country (ID/PH/MY/TH/VN)</div>
+                        <div class="prov-mini">✅ Dashboard reporting jauh lebih bagus · ✅ Multi-country dari satu account · ✅ Recurring billing canggih · ✅ Customer support responsif · ✅ Developer docs solid</div>
+                        <div class="prov-mini neg">❌ Coverage e-wallet lokal kalah sedikit dari Midtrans · ❌ Customer base lebih kecil</div>
+                        <div class="provider-when">Pakai saat: ekspansi ke Asia Tenggara, butuh dashboard analytics bagus</div>
+                    </div>
+
+                    {{-- Doku --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Doku</span><span class="provider-tag" style="background:rgba(168,85,247,0.18);color:#d8b4fe">Enterprise ID</span></div>
+                        <div class="provider-fact">Fee ~2% · T+1 · Used by Tokopedia/Tiket.com</div>
+                        <div class="prov-mini">✅ Salah satu PSP tertua di Indonesia · ✅ Enterprise contract negotiable · ✅ Custom integration support · ✅ B2B billing</div>
+                        <div class="prov-mini neg">❌ Setup lebih ribet · ❌ Documentation kurang modern · ❌ Less startup-friendly</div>
+                        <div class="provider-when">Pakai saat: enterprise contract, B2B billing, custom kebutuhan</div>
+                    </div>
+
+                    {{-- Stripe --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Stripe</span><span class="provider-tag" style="background:rgba(34,197,94,0.18);color:#86efac">Global</span></div>
+                        <div class="provider-fact">Fee 2.9% + $0.30 · T+2 · Global standard</div>
+                        <div class="prov-mini">✅ Developer experience #1 di dunia · ✅ Subscription billing terbaik · ✅ Global card coverage · ✅ Invoicing, tax, marketplace built-in · ✅ Stripe Atlas (incorp US)</div>
+                        <div class="prov-mini neg">❌ Tidak support GoPay/OVO/ShopeePay/DANA · ❌ Tidak ada VA bank Indonesia · ❌ Currency lebih ribet untuk IDR · ❌ Cuma kartu + bank transfer global</div>
+                        <div class="provider-when">Pakai saat: target user global, B2B SaaS, fokus subscription</div>
+                    </div>
+
+                    {{-- iPaymu / Mayar --}}
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Mayar / iPaymu</span><span class="provider-tag" style="background:rgba(234,179,8,0.18);color:#fde68a">Indie</span></div>
+                        <div class="provider-fact">Fee 1-2% · T+1 · Bootstrap-friendly</div>
+                        <div class="prov-mini">✅ Fee paling murah · ✅ Onboarding cepat (1 hari) · ✅ Cocok creator economy</div>
+                        <div class="prov-mini neg">❌ Tidak semua metode bayar tersedia · ❌ Volume capacity lebih kecil · ❌ Smart-contract level features kurang · ❌ Dashboard basic</div>
+                        <div class="provider-when">Pakai saat: MVP/bootstrap, indie product, volume kecil</div>
+                    </div>
+
+                    {{-- None --}}
+                    <div class="provider-card" style="opacity:0.7">
+                        <div class="provider-header"><span class="provider-name">Disabled</span><span class="provider-tag" style="background:#3a3a3a;color:#aaa">Free-only</span></div>
+                        <div class="provider-fact">Payment dimatikan total — cuma free plan</div>
+                        <div class="prov-mini">✅ Zero PCI compliance burden · ✅ No transaction fee · ✅ Setup 0 menit</div>
+                        <div class="prov-mini neg">❌ No revenue model · ❌ Free plan only · ❌ Tidak bisa monetize</div>
+                        <div class="provider-when">Pakai saat: free service, ad-supported, B2B free trial period</div>
+                    </div>
+                </div>
             </div>
 
             {{-- ─── Realtime ─── --}}
@@ -1563,6 +1769,49 @@ erDiagram
 
                 <div class="callout">
                     <strong>Roadmap:</strong> Saat traffic Pusher menyentuh $200/bulan, migrate ke <strong>Laravel Reverb</strong> (self-host) — drop-in tanpa code change karena pakai Pusher protocol.
+                </div>
+
+                <h4 class="why-compare-h" style="margin-top:28px">📋 Detail per Realtime Broker</h4>
+                <div class="provider-grid">
+                    <div class="provider-card" style="border-color:#C5A55A">
+                        <div class="provider-header"><span class="provider-name">Pusher</span><span class="provider-tag" style="background:#C5A55A;color:#0a0a0a">DEFAULT</span></div>
+                        <div class="provider-fact">200K msg/day free · $49/mo+ · Managed SaaS</div>
+                        <div class="prov-mini">✅ Setup 5 menit · ✅ Laravel Echo plug-in · ✅ Presence channel untuk watch party · ✅ Free tier generous</div>
+                        <div class="prov-mini neg">❌ Vendor lock-in · ❌ Pricing exponential di scale · ❌ Latency US/EU-biased</div>
+                        <div class="provider-when">Pakai saat: MVP, &lt; 200K message/day, butuh quick start</div>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Laravel Reverb</span><span class="provider-tag" style="background:rgba(34,197,94,0.18);color:#86efac">Self-host</span></div>
+                        <div class="provider-fact">$5+ VPS · Official Laravel · Pusher-protocol compatible</div>
+                        <div class="prov-mini">✅ Free (cuma VPS cost) · ✅ Drop-in replace Pusher tanpa code change · ✅ Official Laravel maintained · ✅ Self-host = full control</div>
+                        <div class="prov-mini neg">❌ Harus operate VPS sendiri · ❌ Scaling horizontal butuh setup · ❌ Tidak ada dashboard built-in</div>
+                        <div class="provider-when">Pakai saat: Pusher cost &gt; $200/mo, ingin self-host</div>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Soketi</span><span class="provider-tag" style="background:rgba(34,197,94,0.18);color:#86efac">Self-host</span></div>
+                        <div class="provider-fact">$5+ VPS · Node.js · Pusher-protocol compatible</div>
+                        <div class="prov-mini">✅ Free + open source · ✅ Drop-in Pusher replacement · ✅ Horizontal scale via Redis adapter · ✅ Lebih ringan dari socket.io</div>
+                        <div class="prov-mini neg">❌ Maintained by community (bukan official Laravel) · ❌ Node.js dep · ❌ Documentation lebih tipis</div>
+                        <div class="provider-when">Pakai saat: butuh self-host tapi tim sudah ada Node.js</div>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Ably</span><span class="provider-tag" style="background:rgba(59,130,246,0.18);color:#93c5fd">Premium SaaS</span></div>
+                        <div class="provider-fact">6M msg/mo free · $25/mo+ · Highest SLA</div>
+                        <div class="prov-mini">✅ SLA 99.999% (5 nines) · ✅ Push notification + realtime di satu service · ✅ Global edge · ✅ Free tier lebih besar</div>
+                        <div class="prov-mini neg">❌ API tidak compatible dengan Echo native (perlu wrapper) · ❌ Vendor lock-in lebih dalam</div>
+                        <div class="provider-when">Pakai saat: butuh enterprise SLA, mission-critical realtime</div>
+                    </div>
+
+                    <div class="provider-card" style="opacity:0.7">
+                        <div class="provider-header"><span class="provider-name">Polling Only</span><span class="provider-tag" style="background:#3a3a3a;color:#aaa">Fallback</span></div>
+                        <div class="provider-fact">Fetch tiap 30s · No WebSocket · $0</div>
+                        <div class="prov-mini">✅ Zero dependency · ✅ Bekerja di network apapun (no WS) · ✅ Free</div>
+                        <div class="prov-mini neg">❌ Bukan real realtime · ❌ Server load lebih tinggi (polling overhead) · ❌ Tidak cocok watch party</div>
+                        <div class="provider-when">Pakai saat: Pusher belum di-setup, atau emergency fallback</div>
+                    </div>
                 </div>
             </div>
 
@@ -1626,6 +1875,57 @@ erDiagram
 
                 <div class="callout">
                     <strong>Kapan migrate ke AWS SES?</strong> Saat email transactional &gt; 100K/bulan. SES paling hemat di volume tinggi.
+                </div>
+
+                <h4 class="why-compare-h" style="margin-top:28px">📋 Detail per Email Provider</h4>
+                <div class="provider-grid">
+                    <div class="provider-card" style="border-color:#C5A55A">
+                        <div class="provider-header"><span class="provider-name">SMTP (Gmail/Zoho)</span><span class="provider-tag" style="background:#C5A55A;color:#0a0a0a">DEFAULT</span></div>
+                        <div class="provider-fact">$6/mo Workspace · 500/day per account · Universal</div>
+                        <div class="prov-mini">✅ Setup trivial · ✅ Inbox-friendly (from Gmail = trusted) · ✅ Free tier ada · ✅ Bekerja di mana saja</div>
+                        <div class="prov-mini neg">❌ Limit 500 email/day per account · ❌ Tidak cocok untuk volume tinggi · ❌ No per-recipient analytics</div>
+                        <div class="provider-when">Pakai saat: MVP, &lt; 500 email/day, transactional saja</div>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">AWS SES</span><span class="provider-tag" style="background:rgba(234,179,8,0.18);color:#fde68a">Volume King</span></div>
+                        <div class="provider-fact">62K/mo free (di EC2) · $0.10/1K · Sandbox limit awal</div>
+                        <div class="prov-mini">✅ Paling murah di volume tinggi · ✅ Reputation IP shared dengan AWS · ✅ Built-in bounce/complaint handler · ✅ DKIM auto-config</div>
+                        <div class="prov-mini neg">❌ Setup awal ribet (sandbox + production limit request) · ❌ Tidak ada UI campaign · ❌ Inbox deliverability variable</div>
+                        <div class="provider-when">Pakai saat: email transactional &gt; 100K/mo</div>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Mailgun</span><span class="provider-tag" style="background:rgba(59,130,246,0.18);color:#93c5fd">Pro</span></div>
+                        <div class="provider-fact">100/day free · $15/mo @ 10K · API-first</div>
+                        <div class="prov-mini">✅ Transactional fokus · ✅ Analytics per-email tracking lengkap · ✅ Webhook untuk event (open/click/bounce) · ✅ EU + US region pilihan</div>
+                        <div class="prov-mini neg">❌ Free tier kecil (100/day) · ❌ Setup DNS lebih ribet · ❌ Bounce rate strict (auto-suspend)</div>
+                        <div class="provider-when">Pakai saat: butuh tracking analytics rinci per email</div>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Postmark</span><span class="provider-tag" style="background:rgba(168,85,247,0.18);color:#d8b4fe">Highest Deliverability</span></div>
+                        <div class="provider-fact">100/mo free · $15/mo @ 10K · Inbox-first</div>
+                        <div class="prov-mini">✅ Inbox rate tertinggi di industry · ✅ Separate stream untuk transactional vs marketing · ✅ Email templates dengan branching · ✅ Customer support responsif</div>
+                        <div class="prov-mini neg">❌ Lebih mahal per email dibanding SES · ❌ Marketing campaign features tidak ada · ❌ Strict acceptable use policy</div>
+                        <div class="provider-when">Pakai saat: kritikal email harus masuk inbox (verify, password reset)</div>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">Resend</span><span class="provider-tag" style="background:rgba(34,197,94,0.18);color:#86efac">Modern</span></div>
+                        <div class="provider-fact">3K/mo, 100/day free · $20/mo @ 50K · DX-focused</div>
+                        <div class="prov-mini">✅ API termodern, developer-friendly · ✅ React Email integration · ✅ Free tier decent · ✅ Dashboard cantik · ✅ Built by ex-Vercel team</div>
+                        <div class="prov-mini neg">❌ Relatif baru (2023) · ❌ Lebih sedikit reputation IP pool · ❌ Marketing tools belum lengkap</div>
+                        <div class="provider-when">Pakai saat: tim suka modern stack, butuh React Email template</div>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-header"><span class="provider-name">SendGrid</span><span class="provider-tag" style="background:rgba(59,130,246,0.18);color:#93c5fd">Twilio</span></div>
+                        <div class="provider-fact">100/day free · $20/mo @ 50K · Twilio-owned</div>
+                        <div class="prov-mini">✅ Bagian Twilio ecosystem (SMS/voice integrate) · ✅ Marketing + transactional di satu platform · ✅ Email designer UI · ✅ Inbox sangat solid</div>
+                        <div class="prov-mini neg">❌ UI overkill kalau cuma transactional · ❌ Pricing kompleks (multiple tiers) · ❌ Marketing tools cenderung kalah Mailchimp</div>
+                        <div class="provider-when">Pakai saat: sudah pakai Twilio SMS/voice</div>
+                    </div>
                 </div>
             </div>
 
@@ -1753,6 +2053,54 @@ erDiagram
         </div>{{-- /docs-card --}}
 
         <style>
+            /* Per-provider cards (used in CDN/DRM/Payment/Realtime/Email tabs) */
+            .provider-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 12px;
+                margin-top: 12px;
+            }
+            .provider-card {
+                background: linear-gradient(180deg, #1a1a1a, #141414);
+                border: 1px solid #2a2a2a;
+                border-radius: 12px;
+                padding: 16px 18px;
+                transition: all 0.15s ease;
+            }
+            .provider-card:hover {
+                border-color: #3a3a3a;
+                transform: translateY(-1px);
+            }
+            .provider-header {
+                display: flex; align-items: center; justify-content: space-between;
+                gap: 8px; margin-bottom: 6px; flex-wrap: wrap;
+            }
+            .provider-name {
+                color: #fff; font-weight: 700; font-size: 14px;
+            }
+            .provider-tag {
+                font-size: 10px; font-weight: 700;
+                padding: 3px 9px; border-radius: 12px;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+            }
+            .provider-fact {
+                color: #888; font-size: 11.5px; margin-bottom: 10px;
+                font-family: ui-monospace, Menlo, monospace;
+            }
+            .prov-mini {
+                color: #ccc; font-size: 12px; line-height: 1.55;
+                margin: 4px 0;
+            }
+            .prov-mini.neg { color: #999; }
+            .provider-when {
+                margin-top: 10px;
+                padding-top: 10px;
+                border-top: 1px dashed #2a2a2a;
+                color: #C5A55A;
+                font-size: 11.5px;
+                font-weight: 600;
+            }
             .tech-tab {
                 padding: 12px 18px;
                 background: transparent; border: none;
