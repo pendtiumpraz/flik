@@ -1,6 +1,6 @@
 {
   "resources/css/app.css": {
-    "file": "assets/app-C2_Rk_99.css",
+    "file": "assets/app-D1fD4BNS.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -9,9 +9,15 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-DY352AOr.js",
+    "file": "assets/app-6-WO-FSp.js",
     "name": "app",
     "src": "resources/js/app.js",
+    "isEntry": true
+  },
+  "resources/js/watch-party.js": {
+    "file": "assets/watch-party-D9U_3GIj.js",
+    "name": "watch-party",
+    "src": "resources/js/watch-party.js",
     "isEntry": true
   }
 }
