@@ -122,6 +122,12 @@ return [
                     'icon' => 'book',
                 ],
                 [
+                    'label' => 'Infrastructure',
+                    'route' => 'admin.infrastructure.index',
+                    'permission' => null, // any admin (sensitive — could tighten later)
+                    'icon' => 'wrench',
+                ],
+                [
                     'label' => 'Users',
                     'route' => 'admin.users.index',
                     'permission' => 'users.view',

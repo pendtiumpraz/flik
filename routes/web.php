@@ -640,6 +640,12 @@ Route::middleware(['auth', '2fa', 'can:admin'])->prefix('admin')->name('admin.')
     Route::post('/cast/{cast}/enrich-bio', [\App\Http\Controllers\PublicCastController::class, 'enrichBio'])
         ->middleware('can:movies.update')->name('cast.enrich-bio');
 
+    // ─── Infrastructure Settings (dynamic tech stack config) ────
+    Route::get('/infrastructure', [\App\Http\Controllers\Admin\InfrastructureController::class, 'index'])
+        ->name('infrastructure.index');
+    Route::post('/infrastructure', [\App\Http\Controllers\Admin\InfrastructureController::class, 'update'])
+        ->name('infrastructure.update');
+
     // ─── Architecture Docs (client-facing HLA) ──────────────────
     // Password-gated (every reload re-prompts). Default password: ott2026
     // Configurable via /admin/settings → key `pages.protected_password`.
