@@ -1,9 +1,24 @@
 import './bootstrap';
 
-// Alpine.js is auto-bundled & started by Livewire 3.
-// Don't import/start it here to avoid double-init (which doubles every x-data state).
-// If you need to extend Alpine (plugins, custom directives), use:
-//   document.addEventListener('alpine:init', () => { window.Alpine.directive(...) })
+// ━━━ Alpine.js bundled via Vite — SINGLE SOURCE OF TRUTH ━━━
+// Replaces the previous CDN script tags scattered across layout.blade.php,
+// admin/layout.blade.php, and home.blade.php. Having multiple CDN tags +
+// the implicit Alpine injected by Livewire-3 caused "multiple Alpine
+// instances" warnings → every x-show became a no-op → all dropdowns
+// rendered visible + click handlers detached. This bundle ensures ONE
+// instance, deterministic init order, and proper plugin registration
+// before Alpine.start().
+import Alpine from 'alpinejs';
+import collapse from '@alpinejs/collapse';
+
+// Guard: if some other consumer (legacy CDN tag, Livewire's bundled
+// Alpine) already booted, do not start again — register on the existing
+// instance instead.
+if (!window.Alpine) {
+    window.Alpine = Alpine;
+    Alpine.plugin(collapse);
+    Alpine.start();
+}
 
 // ━━━ Player modules (Shaka wrapper + auto-skip + X-Ray overlay) ━━━
 // Each player file already self-registers on `window` for non-module callers,

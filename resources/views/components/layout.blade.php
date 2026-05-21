@@ -156,31 +156,11 @@
         [dir="rtl"] .flickity-prev-next-button.previous { left: auto; right: 10px; }
         [dir="rtl"] .flickity-prev-next-button.next { right: auto; left: 10px; }
     </style>
+    {{-- Alpine.js is now bundled via Vite (resources/js/app.js) for ONE
+         deterministic instance. CDN <script> tags removed to prevent
+         "multiple Alpine instances" double-init that broke every
+         x-show/x-data. --}}
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-
-    {{-- Alpine.js — defensive loader. Loads Alpine CDN ONLY if no other
-         consumer (Livewire scripts, home.blade.php inline CDN, etc.) has
-         already loaded it. Prevents the "Detected multiple instances of
-         Alpine" bug that broke every x-show + x-data on pages where both
-         Livewire and the CDN were present at once. --}}
-    <script>
-        (function () {
-            if (window.__alpineLoadInitiated) return;
-            window.__alpineLoadInitiated = true;
-            if (window.Alpine || window.deferLoadingAlpine) return;
-            document.addEventListener('DOMContentLoaded', function () {
-                if (window.Alpine) return;
-                var collapse = document.createElement('script');
-                collapse.defer = true;
-                collapse.src = 'https://unpkg.com/@alpinejs/collapse@3.x.x/dist/cdn.min.js';
-                document.head.appendChild(collapse);
-                var core = document.createElement('script');
-                core.defer = true;
-                core.src = 'https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js';
-                document.head.appendChild(core);
-            });
-        })();
-    </script>
     <link rel="stylesheet" href="https://unpkg.com/flickity@2/dist/flickity.min.css">
     <script src="https://unpkg.com/flickity@2/dist/flickity.pkgd.min.js"></script>
 

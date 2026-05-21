@@ -123,11 +123,10 @@
         /* Alpine x-cloak: hide until Alpine initialises */
         [x-cloak] { display: none !important; }
     </style>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
-    {{-- Vite bundle (Echo + Pusher + admin notification bell) — loaded so the
-         bell component can subscribe to realtime channels. Wrapped in @vite
-         which no-ops gracefully if the manifest is missing in dev. --}}
+    {{-- Alpine.js is bundled inside resources/js/app.js (single instance);
+         the CDN <script> was removed to stop the "multiple Alpine instances"
+         double-init that broke every x-show + dropdown. --}}
     @vite(['resources/js/app.js'])
 
     {{-- Expose Pusher + role context to JS so the bell can subscribe to the
