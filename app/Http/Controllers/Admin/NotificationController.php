@@ -36,7 +36,7 @@ class NotificationController extends Controller
      *   - `severity` — `info|warning|critical`
      *   - `state`    — `unread|read|all` (default all)
      */
-    public function index(Request $request): View
+    public function index(Request $request): View|JsonResponse
     {
         $user = $request->user();
         abort_unless($user !== null, 401);
@@ -65,6 +65,38 @@ class NotificationController extends Controller
             $query->unreadFor($user);
         } elseif ($filters['state'] === 'read') {
             $query->whereHas('reads', fn ($q) => $q->where('user_id', $user->id));
+        }
+
+        // JSON path: bell dropdown polls this endpoint with `?recent=1&limit=N`
+        // expecting {items: [...]}. Returns a flat list (no pagination) capped
+        // at the requested limit so the bell list renders without parsing
+        // HTML. Same query/filter semantics as the HTML index.
+        if ($request->boolean('recent') || $request->wantsJson() || $request->ajax()) {
+            $limit = max(1, min(50, (int) $request->input('limit', 10)));
+            $rows = $query
+                ->latest('created_at')
+                ->latest('id')
+                ->limit($limit)
+                ->get()
+                ->map(function ($n) use ($user) {
+                    return [
+                        'id'         => $n->id,
+                        'category'   => $n->category,
+                        'title'      => $n->title,
+                        'message'    => $n->message,
+                        'severity'   => $n->severity,
+                        'meta'       => $n->meta,
+                        'action_url' => $n->action_url,
+                        'created_at' => optional($n->created_at)->toIso8601String(),
+                        'read'       => method_exists($n, 'isReadBy') ? $n->isReadBy($user) : $n->reads->isNotEmpty(),
+                    ];
+                })
+                ->values();
+
+            return response()->json([
+                'items'       => $rows,
+                'unread_count' => $this->notifier->unreadCountFor($user),
+            ]);
         }
 
         $notifications = $query
