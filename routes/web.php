@@ -445,6 +445,13 @@ Route::post('/chat', [\App\Http\Controllers\ChatController::class, 'respond'])
     ->middleware(['auth', 'throttle:ai-chat'])
     ->name('chat.respond');
 
+// Per-user persistent chat history — list/load/delete sessions
+Route::middleware('auth')->group(function () {
+    Route::get('/chat/history', [\App\Http\Controllers\ChatController::class, 'history'])->name('chat.history');
+    Route::get('/chat/session/{session}', [\App\Http\Controllers\ChatController::class, 'session'])->whereNumber('session')->name('chat.session');
+    Route::delete('/chat/session/{session}', [\App\Http\Controllers\ChatController::class, 'destroySession'])->whereNumber('session')->name('chat.session.destroy');
+});
+
 // AI Plot Explainer (auth required) — named 'ai-batch' limiter (50/hr/user)
 // is the outer guard. The controller still keeps its own per-feature 10/hr
 // budget for cost control, so this is intentional defence-in-depth, not a

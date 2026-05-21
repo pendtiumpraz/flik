@@ -29,9 +29,16 @@
                     <div class="text-[10px] text-green-400">● Online</div>
                 </div>
             </div>
-            <button @click="chatOpen = false" class="text-gray-500 hover:text-[#C5A55A] transition-colors">
-                <x-icon name="x" :size="18" />
-            </button>
+            <div class="flex items-center gap-2">
+                <button @click="startNewChat()"
+                        title="Mulai chat baru"
+                        class="text-gray-500 hover:text-[#C5A55A] transition-colors p-1">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                </button>
+                <button @click="chatOpen = false" title="Tutup" class="text-gray-500 hover:text-[#C5A55A] transition-colors">
+                    <x-icon name="x" :size="18" />
+                </button>
+            </div>
         </div>
 
         <!-- Messages -->
@@ -108,14 +115,60 @@
             messages: [
                 { role: 'bot', text: 'Hai! Aku FLiK Assistant. Mau cari film apa hari ini?' }
             ],
+            sessionId: null,
+            historyLoaded: false,
             input: '',
             isLoading: false,
+
+            init() {
+                // Load most recent persisted session on first open (lazy —
+                // only fires when user actually opens the panel, to avoid
+                // an extra HTTP per page load).
+                this.$watch('chatOpen', (open) => {
+                    if (open && !this.historyLoaded) {
+                        this.loadLatestSession();
+                    }
+                });
+            },
+
+            async loadLatestSession() {
+                this.historyLoaded = true;
+                try {
+                    const r = await fetch('/chat/history', {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    });
+                    if (!r.ok) return;
+                    const data = await r.json();
+                    const latest = (data.sessions || [])[0];
+                    if (!latest) return; // first-time user — keep greeting
+                    // Fetch full transcript
+                    const tr = await fetch('/chat/session/' + latest.id, {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    });
+                    if (!tr.ok) return;
+                    const transcript = await tr.json();
+                    if (transcript.messages && transcript.messages.length) {
+                        this.sessionId = transcript.session_id;
+                        // Replace greeting with real history
+                        this.messages = transcript.messages.map(m => ({ role: m.role, text: m.text }));
+                        this.scrollToBottom();
+                    }
+                } catch (e) {
+                    // Silent — anonymous users + 404 are expected.
+                }
+            },
+
+            startNewChat() {
+                if (this.isLoading) return;
+                this.sessionId = null;
+                this.messages = [{ role: 'bot', text: 'Sesi baru dimulai. Mau cari film apa kali ini?' }];
+                this.input = '';
+            },
 
             async sendMessage() {
                 const text = this.input.trim();
                 if (!text || this.isLoading) return;
 
-                // Push user message
                 this.messages.push({ role: 'user', text });
                 this.input = '';
                 this.isLoading = true;
@@ -135,7 +188,9 @@
                         },
                         body: JSON.stringify({
                             message: text,
-                            // Send last 10 messages as conversation history
+                            session_id: this.sessionId,
+                            // Client-side history kept as fallback for anonymous
+                            // users; auth users get DB-backed history server-side.
                             history: this.messages.slice(-10, -1).map(m => ({ role: m.role, text: m.text })),
                         }),
                     });
@@ -144,6 +199,7 @@
 
                     if (response.ok && data.reply) {
                         this.messages.push({ role: 'bot', text: data.reply });
+                        if (data.session_id) this.sessionId = data.session_id;
                     } else {
                         this.messages.push({
                             role: 'bot',

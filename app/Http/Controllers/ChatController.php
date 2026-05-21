@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AiChatMessage;
+use App\Models\AiChatSession;
 use App\Services\Ai\AiClient;
 use App\Services\Ai\FilmKnowledgeService;
 use App\Services\Ai\WebSearchService;
@@ -9,6 +11,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class ChatController extends Controller
 {
@@ -50,6 +54,8 @@ class ChatController extends Controller
             'history' => 'nullable|array|max:20',
             'history.*.role' => 'required_with:history|in:user,bot',
             'history.*.text' => 'required_with:history|string|max:2000',
+            'session_id' => 'nullable|integer|exists:ai_chat_sessions,id',
+            'new_session' => 'nullable|boolean',
         ]);
 
         // Rate limit
@@ -59,24 +65,81 @@ class ChatController extends Controller
         }
         RateLimiter::hit($rateKey, 60);
 
+        // ━━━ Per-user persistent session (auth users only) ━━━
+        // Resolve or create the AiChatSession. Anonymous users still get
+        // an in-memory conversation, but no DB persistence.
+        $session = null;
+        if (auth()->check() && Schema::hasTable('ai_chat_sessions')) {
+            try {
+                if (!empty($data['session_id'])) {
+                    $session = AiChatSession::where('user_id', auth()->id())
+                        ->where('id', $data['session_id'])
+                        ->first();
+                }
+                if (empty($data['new_session']) && $session === null) {
+                    $session = AiChatSession::latestFor((int) auth()->id());
+                }
+                if ($session === null) {
+                    $session = AiChatSession::create([
+                        'user_id' => auth()->id(),
+                        'title' => Str::limit($data['message'], 60, ''),
+                        'messages_count' => 0,
+                        'last_message_at' => now(),
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('chat: session resolve failed — continuing without persistence', ['error' => $e->getMessage()]);
+                $session = null;
+            }
+        }
+
         // ━━━ RAG: retrieve relevant films + full catalog whitelist ━━━
         $relevantFilms = $kb->searchRelevant($data['message'], 8);
         $catalogStats = $kb->catalogOverview();
         $filmsContext = $relevantFilms->map(fn ($m) => $kb->formatForAi($m))->toArray();
-        // Authoritative slug whitelist (entire catalog, compact)
         $catalogIndex = $kb->fullCatalogIndex();
 
         $systemPrompt = $this->buildSystemPrompt($catalogStats, $filmsContext, $catalogIndex);
 
-        // Build conversation messages
+        // Build conversation messages — prefer DB history over client history
+        // when we have a session (the DB is the source of truth and survives
+        // client cache wipes / device switches).
         $messages = [['role' => 'system', 'content' => $systemPrompt]];
-        foreach (array_slice($data['history'] ?? [], -10) as $msg) {
+        $historyForAi = [];
+        if ($session !== null) {
+            $historyForAi = AiChatMessage::where('ai_chat_session_id', $session->id)
+                ->orderByDesc('id')
+                ->limit(10)
+                ->get()
+                ->reverse()
+                ->map(fn ($m) => ['role' => $m->role, 'text' => $m->text])
+                ->all();
+        }
+        if (empty($historyForAi)) {
+            $historyForAi = array_slice($data['history'] ?? [], -10);
+        }
+        foreach ($historyForAi as $msg) {
             $messages[] = [
                 'role' => $msg['role'] === 'bot' ? 'assistant' : 'user',
                 'content' => $msg['text'],
             ];
         }
         $messages[] = ['role' => 'user', 'content' => $data['message']];
+
+        // Persist the user's incoming message NOW (before AI call) so it
+        // survives even if the AI call fails halfway.
+        if ($session !== null) {
+            try {
+                AiChatMessage::create([
+                    'ai_chat_session_id' => $session->id,
+                    'user_id' => auth()->id(),
+                    'role' => 'user',
+                    'text' => $data['message'],
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('chat: failed to persist user message', ['error' => $e->getMessage()]);
+            }
+        }
 
         try {
             // ━━━ Agentic loop — max 2 tool calls (prevent runaway) ━━━
@@ -150,15 +213,42 @@ class ChatController extends Controller
             // Prevents 404s from AI hallucinating film slugs that don't exist.
             $reply = $this->validateMovieLinks($reply, $kb);
 
+            $webSources = array_slice(array_unique($webSourcesShown), 0, 4);
+            $contextFilms = $relevantFilms->map(fn ($m) => [
+                'id' => $m->id, 'slug' => $m->slug, 'title' => $m->title,
+            ])->values();
+
+            // Persist bot reply + bump session counters
+            if ($session !== null && $reply !== '') {
+                try {
+                    AiChatMessage::create([
+                        'ai_chat_session_id' => $session->id,
+                        'user_id' => auth()->id(),
+                        'role' => 'bot',
+                        'text' => $reply,
+                        'provider' => $result['provider'] ?? null,
+                        'model' => $result['model'] ?? null,
+                        'used_web_search' => $usedWebSearch,
+                        'web_sources' => $webSources,
+                        'context_films' => $contextFilms->all(),
+                    ]);
+                    $session->forceFill([
+                        'messages_count' => $session->messages_count + 2,
+                        'last_message_at' => now(),
+                    ])->save();
+                } catch (\Throwable $e) {
+                    Log::warning('chat: failed to persist bot reply', ['error' => $e->getMessage()]);
+                }
+            }
+
             return response()->json([
                 'reply' => $reply,
+                'session_id' => $session?->id,
                 'provider' => $result['provider'] ?? null,
                 'model' => $result['model'] ?? null,
                 'used_web_search' => $usedWebSearch,
-                'web_sources' => array_slice(array_unique($webSourcesShown), 0, 4),
-                'context_films' => $relevantFilms->map(fn ($m) => [
-                    'id' => $m->id, 'slug' => $m->slug, 'title' => $m->title,
-                ])->values(),
+                'web_sources' => $webSources,
+                'context_films' => $contextFilms,
             ]);
         } catch (\RuntimeException $e) {
             return response()->json([
@@ -172,6 +262,66 @@ class ChatController extends Controller
                 'reply' => 'Maaf, ada gangguan sementara. Coba ulangi pesannya ya.',
             ], 500);
         }
+    }
+
+    /**
+     * GET /chat/history — list current user's chat sessions (recent first).
+     */
+    public function history(Request $request): JsonResponse
+    {
+        if (!auth()->check() || !Schema::hasTable('ai_chat_sessions')) {
+            return response()->json(['sessions' => []]);
+        }
+
+        $sessions = AiChatSession::where('user_id', auth()->id())
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get(['id', 'title', 'messages_count', 'last_message_at', 'created_at']);
+
+        return response()->json(['sessions' => $sessions]);
+    }
+
+    /**
+     * GET /chat/session/{session} — load full transcript of a session.
+     */
+    public function session(int $session): JsonResponse
+    {
+        if (!auth()->check() || !Schema::hasTable('ai_chat_sessions')) {
+            return response()->json(['error' => 'Not authenticated'], 401);
+        }
+
+        $s = AiChatSession::where('user_id', auth()->id())->where('id', $session)->first();
+        if ($s === null) {
+            return response()->json(['error' => 'Session not found'], 404);
+        }
+
+        $messages = AiChatMessage::where('ai_chat_session_id', $s->id)
+            ->orderBy('created_at')
+            ->get(['role', 'text', 'created_at'])
+            ->map(fn ($m) => ['role' => $m->role, 'text' => $m->text]);
+
+        return response()->json([
+            'session_id' => $s->id,
+            'title' => $s->title,
+            'messages' => $messages,
+        ]);
+    }
+
+    /**
+     * DELETE /chat/session/{session} — delete one chat thread.
+     */
+    public function destroySession(int $session): JsonResponse
+    {
+        if (!auth()->check() || !Schema::hasTable('ai_chat_sessions')) {
+            return response()->json(['error' => 'Not authenticated'], 401);
+        }
+
+        $deleted = AiChatSession::where('user_id', auth()->id())
+            ->where('id', $session)
+            ->delete();
+
+        return response()->json(['deleted' => (bool) $deleted]);
     }
 
     /**
