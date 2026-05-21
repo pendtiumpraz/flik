@@ -14,18 +14,39 @@
     back to plain string URLs so the bell still renders without errors.
 --}}
 @php
+    // Defensive URL resolver — must NEVER throw, otherwise the bell will
+    // 500 the entire admin layout. route() throws UrlGenerationException
+    // when the parameter name doesn't match the route's actual binding
+    // (e.g. our admin.notifications.read uses {adminNotification}, not
+    // {notification}). Wrap every call in try/catch + fall back to the
+    // literal URL pattern so the bell ALWAYS renders.
     $r = function (string $name, array $params = []) {
-        return \Illuminate\Support\Facades\Route::has($name) ? route($name, $params) : null;
+        try {
+            if (! \Illuminate\Support\Facades\Route::has($name)) {
+                return null;
+            }
+            return route($name, $params);
+        } catch (\Throwable $e) {
+            return null;
+        }
     };
+
+    // Build the per-notification "read" URL safely. The route parameter is
+    // {adminNotification}; pass it under that name. If anything fails, fall
+    // back to the literal path so the client-side {id} substitution still
+    // works for the JS Alpine component.
+    $readUrlTemplate = $r('admin.notifications.read', ['adminNotification' => '__ID__']);
+    if ($readUrlTemplate) {
+        $readUrlTemplate = str_replace('__ID__', '{id}', $readUrlTemplate);
+    } else {
+        $readUrlTemplate = '/admin/notifications/{id}/read';
+    }
 
     $urls = [
         'list'        => $r('admin.notifications.index') ? $r('admin.notifications.index') . '?recent=1&limit=10' : '/admin/notifications?recent=1&limit=10',
         'unreadCount' => $r('admin.notifications.unread-count') ?? '/admin/notifications/unread-count',
         'readAll'     => $r('admin.notifications.read-all') ?? '/admin/notifications/read-all',
-        // {id} is a literal placeholder substituted client-side per item.
-        'read'        => $r('admin.notifications.read', ['notification' => '__ID__'])
-                            ? str_replace('__ID__', '{id}', $r('admin.notifications.read', ['notification' => '__ID__']))
-                            : '/admin/notifications/{id}/read',
+        'read'        => $readUrlTemplate,
         'indexPage'   => $r('admin.notifications.index') ?? '/admin/notifications',
     ];
 @endphp
