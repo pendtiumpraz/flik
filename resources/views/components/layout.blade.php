@@ -157,6 +157,13 @@
         [dir="rtl"] .flickity-prev-next-button.next { right: auto; left: 10px; }
     </style>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+    {{-- Alpine.js — CDN fallback so chatbot, dropdowns, and Alpine-only pages
+         work even when Livewire scripts are absent (pages without Livewire
+         components don't auto-inject Livewire's Alpine bundle). Loaded
+         `defer` so component init happens after DOM ready. --}}
+    <script defer src="https://unpkg.com/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/flickity@2/dist/flickity.min.css">
     <script src="https://unpkg.com/flickity@2/dist/flickity.pkgd.min.js"></script>
 
