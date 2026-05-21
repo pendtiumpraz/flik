@@ -224,13 +224,40 @@
                     </div>
                     @foreach($visibleItems as $item)
                         @php
-                            // Active-state heuristic: highlight on any sub-route of
-                            // the item's named route (e.g. admin.movies.* covers
-                            // index/create/edit/destroy). Falls back to exact match.
-                            $routeName = $item['route'];
-                            $base = preg_replace('/\.[^.]+$/', '', $routeName);
-                            $isActive = request()->routeIs($routeName)
-                                || ($base !== $routeName && request()->routeIs($base . '.*'));
+                            // Active-state — LONGEST MATCH WINS.
+                            // Previously every item whose base prefix matched the
+                            // current route lit up (so on /admin/movies/subtitles
+                            // BOTH "Movies" and "Subtitles" would activate; and
+                            // "Dashboard" lit up on every admin page because its
+                            // base = "admin" matched admin.*).
+                            //
+                            // Strategy: find which item in the WHOLE sidebar has
+                            // the longest prefix-match against the current route
+                            // name. Only that one is active. The match is computed
+                            // once per request and memoised in a config-time
+                            // closure below.
+                            if (! isset($flikActiveItemRoute)) {
+                                $currentRoute = optional(request()->route())->getName() ?? '';
+                                $bestRoute = null;
+                                $bestLen = -1;
+                                foreach (config('admin_menu.sections', []) as $sec) {
+                                    foreach ($sec['items'] ?? [] as $candidate) {
+                                        $cand = $candidate['route'] ?? null;
+                                        if (! $cand) continue;
+                                        // Exact name OR prefix that matches a real
+                                        // segment boundary (so admin.movies doesn't
+                                        // match admin.movies-search).
+                                        $isMatch = $currentRoute === $cand
+                                            || str_starts_with($currentRoute, $cand . '.');
+                                        if ($isMatch && strlen($cand) > $bestLen) {
+                                            $bestRoute = $cand;
+                                            $bestLen = strlen($cand);
+                                        }
+                                    }
+                                }
+                                $flikActiveItemRoute = $bestRoute;
+                            }
+                            $isActive = ($item['route'] === $flikActiveItemRoute);
                         @endphp
                         <a href="{{ route($item['route']) }}"
                            class="nav-link {{ $isActive ? 'active' : '' }}">
