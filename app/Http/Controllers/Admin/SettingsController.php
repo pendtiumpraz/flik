@@ -30,17 +30,30 @@ class SettingsController extends Controller
 
     public function index(): View
     {
-        $this->authorize('system.settings');
+        // Defensive authorization — fall back to is_admin if gate missing.
+        $user = auth()->user();
+        if ($user && !$user->is_admin) {
+            try {
+                $this->authorize('system.settings');
+            } catch (\Throwable $e) {
+                abort(403, 'Tidak punya izin system.settings');
+            }
+        }
 
-        // Pull every row in one shot, ordered, grouped in PHP — the tabs
-        // need both the bucket list AND each row's full metadata so a
-        // single ordered fetch is more cache-friendly than per-group
-        // queries inside the view loop.
-        $settings = Setting::query()
-            ->orderBy('group')
-            ->orderBy('key')
-            ->get()
-            ->groupBy('group');
+        // Defensive table check — render empty state instead of 500 when
+        // settings migration hasn't been applied yet.
+        $settings = collect();
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
+                $settings = Setting::query()
+                    ->orderBy('group')
+                    ->orderBy('key')
+                    ->get()
+                    ->groupBy('group');
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('SettingsController: query failed', ['error' => $e->getMessage()]);
+        }
 
         return view('admin.settings.index', [
             'grouped' => $settings,

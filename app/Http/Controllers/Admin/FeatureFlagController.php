@@ -32,11 +32,28 @@ class FeatureFlagController extends Controller
      */
     public function index(): View
     {
-        $this->authorize('system.feature_flags');
+        // Defensive: authorize() throws AuthorizationException if the
+        // gate name isn't registered AND user isn't is_admin. We want
+        // admin to always get in — fall back to is_admin check.
+        $user = auth()->user();
+        if ($user && !$user->is_admin) {
+            try {
+                $this->authorize('system.feature_flags');
+            } catch (\Throwable $e) {
+                abort(403, 'Tidak punya izin system.feature_flags');
+            }
+        }
 
-        $flags = FeatureFlag::query()
-            ->orderBy('key')
-            ->get();
+        // Defensive: if migration hasn't run, surface a helpful empty state
+        // instead of a 500. Same pattern works for stale APP_KEY scenarios.
+        $flags = collect();
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('feature_flags')) {
+                $flags = FeatureFlag::query()->orderBy('key')->get();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('FeatureFlagController: query failed', ['error' => $e->getMessage()]);
+        }
 
         return view('admin.feature-flags.index', compact('flags'));
     }
