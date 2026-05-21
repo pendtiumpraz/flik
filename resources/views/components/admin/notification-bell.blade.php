@@ -195,7 +195,9 @@
     </div>
 </div>
 
-@push('scripts')
+{{-- Inline <script> instead of @push('scripts') — same reason as the
+     style block above: @stack('scripts') in admin layout is already
+     flushed by the time the bell renders in the body. --}}
 <script>
     // Inject category-icon helper into the Alpine factory's prototype-ish
     // surface. The factory lives in resources/js/admin-notifications.js;
@@ -221,10 +223,14 @@
         }
     });
 </script>
-@endpush
 
+{{-- Inline <style> instead of @push('styles') — @push only works when
+     the @stack target hasn't been rendered yet. On admin pages the
+     stack is in <head>, the bell renders in <body>, so by the time the
+     bell pushes its CSS the head is already flushed → no styles apply.
+     Inline style here is browser-tolerant and guaranteed to take effect. --}}
 @once
-    @push('styles')
+    <div style="display:none">
         <style>
             /* ━━━ Admin notification bell — premium redesign ━━━ */
             .notif-bell-wrap { position: relative; }
@@ -580,5 +586,5 @@
                 .notif-bell-panel::before { right: 22px; }
             }
         </style>
-    @endpush
+    </div>
 @endonce
