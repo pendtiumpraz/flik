@@ -640,6 +640,10 @@ Route::middleware(['auth', '2fa', 'can:admin'])->prefix('admin')->name('admin.')
     Route::post('/cast/{cast}/enrich-bio', [\App\Http\Controllers\PublicCastController::class, 'enrichBio'])
         ->middleware('can:movies.update')->name('cast.enrich-bio');
 
+    // ─── Architecture Docs (client-facing HLA) ──────────────────
+    Route::get('/docs', [\App\Http\Controllers\Admin\DocsController::class, 'index'])
+        ->name('docs.index');
+
     // ─── Users ───────────────────────────────────────────────────
     Route::get('/users', [\App\Http\Controllers\AdminController::class, 'users'])
         ->middleware('can:users.view')->name('users.index');

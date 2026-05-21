@@ -116,6 +116,12 @@ return [
             'category' => 'system',
             'items' => [
                 [
+                    'label' => 'Architecture Docs',
+                    'route' => 'admin.docs.index',
+                    'permission' => null, // any admin
+                    'icon' => 'book',
+                ],
+                [
                     'label' => 'Users',
                     'route' => 'admin.users.index',
                     'permission' => 'users.view',
