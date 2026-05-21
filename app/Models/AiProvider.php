@@ -37,7 +37,10 @@ class AiProvider extends Model
     ];
 
     protected $casts = [
-        'api_key' => 'encrypted',
+        // NOTE: api_key intentionally NOT cast as 'encrypted' — we override
+        // the accessor + mutator below with defensive try/catch versions so
+        // a MAC-invalid blob (APP_KEY drift) returns null instead of
+        // crashing every save/update path that reads getOriginal('api_key').
         'settings' => 'array',
         'is_active' => 'boolean',
         'is_default' => 'boolean',
@@ -46,6 +49,35 @@ class AiProvider extends Model
     ];
 
     protected $hidden = ['api_key'];
+
+    // ━━━ Defensive encrypt-on-write + try-decrypt-on-read ━━━
+    // The stock 'encrypted' cast THROWS DecryptException("The MAC is
+    // invalid") when APP_KEY drifted since the row was written. That
+    // surfaces during dirty-tracking on $model->update() — every admin
+    // who tries to edit the provider row hits a 500.
+
+    public function setApiKeyAttribute(?string $value): void
+    {
+        $this->attributes['api_key'] = $value === null || $value === ''
+            ? null
+            : \Illuminate\Support\Facades\Crypt::encryptString($value);
+    }
+
+    public function getApiKeyAttribute($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        try {
+            return \Illuminate\Support\Facades\Crypt::decryptString($value);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('AiProvider::api_key decrypt failed — APP_KEY drift?', [
+                'provider_id' => $this->id ?? null,
+                'message' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
 
     public const PROVIDERS = [
         'openai' => [
