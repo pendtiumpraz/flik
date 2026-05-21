@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Services\Audit\AuditLogger;
+use App\Support\SecurityEvents;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -496,7 +497,7 @@ final class RequestFirewall
                 Cache::put($this->banKey($ip), true, now()->addMinutes($banMinutes));
                 // Audit the escalation separately so ops can graph "ban
                 // promotions" distinct from individual rule hits.
-                $this->audit->security('security.waf.ip_banned', [
+                $this->audit->security(SecurityEvents::WAF_IP_BANNED, [
                     'ip' => $ip,
                     'hits' => $hits,
                     'threshold' => $threshold,
@@ -533,7 +534,7 @@ final class RequestFirewall
     private function record(Request $request, array $match): void
     {
         try {
-            $this->audit->security('security.waf.blocked', [
+            $this->audit->security(SecurityEvents::WAF_BLOCKED, [
                 'matched_pattern' => $match['label'],
                 'location' => $match['location'],
                 'sample' => $match['sample'],

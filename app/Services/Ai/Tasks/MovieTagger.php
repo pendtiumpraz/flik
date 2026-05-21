@@ -50,14 +50,16 @@ class MovieTagger
             $userPrompt = $this->buildUserPrompt($movie);
 
             $response = $this->ai->chat(
-                [
+                messages: [
                     ['role' => 'system', 'content' => self::SYSTEM_PROMPT],
                     ['role' => 'user', 'content' => $userPrompt],
                 ],
-                [
+                options: [
                     'max_tokens' => 400,
                     'temperature' => 0.4,
                 ],
+                taskType: 'tag.movie',
+                subject: $movie,
             );
 
             $tags = $this->parseAndValidate($response['content'] ?? '');

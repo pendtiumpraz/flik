@@ -6,6 +6,8 @@ namespace App\Services\Drm;
 
 use App\Models\DrmSession;
 use App\Models\Movie;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\URL;
 
 /**
  * Builds a per-session HLS master/media manifest at request time.
@@ -28,6 +30,19 @@ use App\Models\Movie;
 class PlaybackManifestGenerator
 {
     /**
+     * Optional forensic watermarker — when injected, the per-session
+     * watermark identifier is stamped as an `#EXT-X-SESSION-DATA` tag in the
+     * master manifest so server-side forensic trails can correlate a leaked
+     * recording to (user, session, timestamp). Real burn-in watermarking
+     * requires a per-session transcode (expensive) so we stop short of that;
+     * see audit FIX #2 §3.2 for the trade-off.
+     */
+    public function __construct(
+        protected ?ForensicWatermarker $watermarker = null,
+    ) {
+    }
+
+    /**
      * Generate the m3u8 text for a given session.
      */
     public function generate(Movie $movie, DrmSession $session, DrmTokenService $tokens): string
@@ -43,6 +58,40 @@ class PlaybackManifestGenerator
         }
 
         return $this->buildMediaManifest($movie, $session, $tokens, $masterToken);
+    }
+
+    /**
+     * Build the per-session forensic watermark identifier.
+     *
+     * Shape: "u{userId}|s{sessionToken8}|t{unix}". Embedded into the master
+     * manifest via `#EXT-X-SESSION-DATA`. Logged into the laravel.log forensic
+     * trail so a leaked recording with this manifest can be back-traced.
+     */
+    protected function forensicId(DrmSession $session): string
+    {
+        $tokenShort = substr((string) $session->session_token, 0, 8);
+        $id = sprintf('u%d|s%s|t%d', $session->user_id, $tokenShort, time());
+
+        // Audit trail so even if the player strips the manifest tag, we
+        // can correlate the session_token to (user, ts) at investigation time.
+        Log::channel(config('logging.channels.drm') ? 'drm' : config('logging.default', 'stack'))
+            ->info('drm.forensic.id_issued', [
+                'session_token' => $session->session_token,
+                'user_id' => $session->user_id,
+                'movie_id' => $session->movie_id,
+                'forensic_id' => $id,
+            ]);
+
+        if ($this->watermarker !== null) {
+            // The class exists primarily for burn-in watermarking at encode
+            // time. Here we just confirm it's wired so future per-session
+            // re-pack flows have a hook in place.
+            Log::debug('ForensicWatermarker available for session', [
+                'session_token' => $session->session_token,
+            ]);
+        }
+
+        return $id;
     }
 
     /**
@@ -63,17 +112,25 @@ class PlaybackManifestGenerator
             '#EXT-X-INDEPENDENT-SEGMENTS',
         ];
 
+        // Forensic watermark identifier (audit FIX #2 §3.2). Stamped as
+        // session data so a leaked manifest can be tied back to (user, ts).
+        $forensicId = $this->forensicId($session);
+        $lines[] = sprintf(
+            '#EXT-X-SESSION-DATA:DATA-ID="com.flik.forensic",VALUE="%s"',
+            addcslashes($forensicId, "\"\\\n\r"),
+        );
+
         foreach ($renditions as $idx => $r) {
             $height = (int) ($r['height'] ?? 720);
             $bitrate = (int) ($r['bitrate'] ?? 2_500_000);
-            $width = $this->guessWidth($height);
+            $width = (int) ($r['width'] ?? $this->guessWidth($height));
             $codecs = $r['codecs'] ?? 'avc1.4d401f,mp4a.40.2';
+            $renditionName = (string) ($r['name'] ?? sprintf('%dp', $height));
 
-            // Each rendition gets its OWN media playlist URL, signed with a
-            // fresh token. The URL points at the per-rendition route which
-            // would, in turn, return its own segment-level manifest.
-            $renditionToken = $tokens->issuePlaybackToken($session, 600);
-            $mediaUrl = $this->mediaPlaylistUrl($movie, $session, (int) $idx, $renditionToken);
+            // Each rendition gets its OWN media playlist URL, signed via
+            // Laravel's signed-URL middleware so the route can validate
+            // freshness without re-implementing JWT here.
+            $mediaUrl = $this->mediaPlaylistUrl($movie, $renditionName);
 
             $lines[] = sprintf(
                 '#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%dx%d,CODECS="%s"',
@@ -189,28 +246,47 @@ class PlaybackManifestGenerator
     }
 
     /**
-     * URL of a per-rendition media playlist (signed with playback token).
+     * URL of a per-rendition media playlist.
+     *
+     * Backed by drm.playlist route (PlaybackController::playlist), signed via
+     * Laravel's URL::temporarySignedRoute so the receiving route validates
+     * freshness via the `signed` middleware. 5-minute TTL is plenty for the
+     * player to load the manifest and start fetching segments.
      */
-    protected function mediaPlaylistUrl(Movie $movie, DrmSession $session, int $renditionIndex, string $token): string
+    protected function mediaPlaylistUrl(Movie $movie, string $renditionName): string
     {
-        return sprintf(
-            '/drm/playlist/%s/%s/%d.m3u8?token=%s',
-            rawurlencode($session->session_token),
-            rawurlencode((string) $movie->id),
-            $renditionIndex,
-            rawurlencode($token),
+        return URL::temporarySignedRoute(
+            'drm.playlist',
+            now()->addMinutes(5),
+            ['movie' => $movie->slug, 'rendition' => $renditionName],
         );
     }
 
     /**
-     * Per-segment URL stub. Real deployments swap this with CDN paths.
+     * Per-segment URL. Signed via Laravel's signed-URL middleware so each
+     * segment can be authorised independently without the player having to
+     * round-trip a JWT per chunk.
+     *
+     * NOTE: this is only used by the single-rendition fallback path; the
+     * normal multi-rendition flow lets the per-rendition `playlist.m3u8`
+     * carry the segment URLs (relative paths, resolved by Shaka against the
+     * playlist's own URL).
      */
     protected function segmentUrl(Movie $movie, int $index): string
     {
-        return sprintf(
-            '/drm/segment/%s/%05d.ts',
-            rawurlencode((string) $movie->id),
-            $index,
+        // Pick first rendition for the single-rendition fallback path.
+        $renditions = is_array($movie->encoding_renditions) ? $movie->encoding_renditions : [];
+        $first = reset($renditions);
+        $renditionName = $first === false ? 'default' : (string) ($first['name'] ?? '480p');
+
+        return URL::temporarySignedRoute(
+            'drm.segment',
+            now()->addMinutes(10),
+            [
+                'movie' => $movie->slug,
+                'rendition' => $renditionName,
+                'filename' => sprintf('segment_%03d.ts', $index),
+            ],
         );
     }
 

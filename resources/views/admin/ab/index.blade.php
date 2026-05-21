@@ -37,14 +37,14 @@
                             </td>
                             <td class="p-3">
                                 <span class="px-2 py-0.5 rounded text-xs uppercase tracking-wide
-                                    @if ($exp->status === 'running') bg-emerald-500/20 text-emerald-300
-                                    @elseif ($exp->status === 'paused') bg-yellow-500/20 text-yellow-300
-                                    @elseif ($exp->status === 'completed') bg-zinc-500/20 text-gray-300
+                                    @if (in_array($exp->status, [\App\Models\AbExperiment::STATUS_RUNNING, \App\Models\AbExperiment::STATUS_ACTIVE], true)) bg-emerald-500/20 text-emerald-300
+                                    @elseif ($exp->status === \App\Models\AbExperiment::STATUS_PAUSED) bg-yellow-500/20 text-yellow-300
+                                    @elseif ($exp->status === \App\Models\AbExperiment::STATUS_COMPLETED) bg-zinc-500/20 text-gray-300
                                     @else bg-blue-500/20 text-blue-300 @endif">
                                     {{ $exp->status }}
                                 </span>
                             </td>
-                            <td class="p-3 text-gray-400">{{ count($exp->variants ?? []) }}</td>
+                            <td class="p-3 text-gray-400">{{ count($exp->variantKeys()) }}</td>
                             <td class="p-3 text-gray-400">{{ $exp->started_at?->diffForHumans() ?? '—' }}</td>
                             <td class="p-3 text-right">
                                 <a href="{{ route('admin.ab-tests.show', $exp) }}" class="text-[#C5A55A] hover:underline">Open</a>

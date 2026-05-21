@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\Ai\Tasks\CohortInsightGenerator;
 use App\Services\Analytics\CohortAnalyzer;
+use App\Services\Audit\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -67,6 +68,39 @@ class CohortDashboardController extends Controller
             'refreshUrl' => url('/admin/cohorts').'?type='.$type.'&refresh=1',
             'toggleUrl' => fn (string $t): string => url('/admin/cohorts').'?type='.$t,
         ]);
+    }
+
+    /**
+     * GET /admin/cohorts/export.csv
+     *
+     * Public-route shim invoked by `admin.cohorts.export`. Builds (or reuses
+     * the cached) cohort matrix, audit-logs the export, and streams the
+     * CSV via the same helper the inline `?export=csv` query path uses.
+     */
+    public function export(
+        Request $request,
+        CohortAnalyzer $analyzer,
+        ?AuditLogger $auditLogger = null,
+    ): StreamedResponse {
+        $type = $this->normalizeType($request->input('type'));
+        $matrix = $this->fetchMatrix($analyzer, $type, force: false);
+
+        // Best-effort audit — never block the export on a logging failure.
+        try {
+            ($auditLogger ?? app(AuditLogger::class))->log(
+                action: 'analytics.cohorts.exported',
+                subject: null,
+                meta: [
+                    'type'         => $type,
+                    'row_count'    => count($matrix),
+                    'period_count' => $type === 'monthly' ? self::DEFAULT_MONTHS : self::DEFAULT_WEEKS,
+                ],
+            );
+        } catch (\Throwable $e) {
+            // swallow — exports must not 500 on a logging hiccup.
+        }
+
+        return $this->exportCsv($matrix, $type);
     }
 
     // ── Internals ────────────────────────────────────────────────────────

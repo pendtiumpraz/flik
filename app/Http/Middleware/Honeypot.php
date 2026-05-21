@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Services\Audit\AuditLogger;
+use App\Support\SecurityEvents;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -134,17 +135,20 @@ final class Honeypot
     }
 
     /**
-     * Persist a single audit row per hit. We use AuditLogger::log() (not
-     * security()) so we don't pager-bomb on routine bot traffic — the
-     * dashboards filter on `action='security.honeypot_hit'` for trend
-     * analysis. Failures are swallowed: a broken audit pipeline must
-     * never convert a 200 into a 500.
+     * Persist a single audit row per hit. We use AuditLogger::security()
+     * (not log()) so the row is flagged with `is_security=true` and the
+     * SecurityEventLogged event fires — driving the admin bell + the
+     * Slack/Discord alert pipeline (severity-gated + throttled to 5 min
+     * per (event, user) so routine bot traffic does not pager-bomb ops).
+     *
+     * Failures are swallowed: a broken audit pipeline must never convert
+     * a 200 into a 500.
      */
     private function record(Request $request, string $reason): void
     {
         try {
-            $this->audit->log(
-                action: 'security.honeypot_hit',
+            $this->audit->security(
+                event: SecurityEvents::HONEYPOT_HIT,
                 subject: null,
                 meta: [
                     'reason' => $reason,

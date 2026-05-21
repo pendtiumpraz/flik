@@ -49,14 +49,16 @@ class SynopsisGenerator
 
         try {
             $response = $this->ai->chat(
-                [
+                messages: [
                     ['role' => 'system', 'content' => $systemPrompt],
                     ['role' => 'user', 'content' => $userPrompt],
                 ],
-                [
+                options: [
                     'max_tokens' => $maxTokens,
                     'temperature' => 0.7,
-                ]
+                ],
+                taskType: 'synopsis.generate',
+                subject: $movie,
             );
         } catch (\Throwable $e) {
             Log::error('SynopsisGenerator: AI call failed', [

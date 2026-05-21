@@ -30,7 +30,11 @@
       x-init="$watch('darkMode', val => localStorage.setItem('theme', val ? 'dark' : 'light'))">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{-- viewport-fit=cover (FIX #10, audit 19 M-1): required for iOS standalone
+         PWA to honour env(safe-area-inset-*) on iPhone X-class notched / dynamic
+         island devices. Without this, the bottom-nav strip's safe-area padding
+         is silently ignored and the home-indicator can obscure the active tab. --}}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="description" content="{{ $metaDescription }}">
@@ -155,11 +159,18 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link rel="stylesheet" href="https://unpkg.com/flickity@2/dist/flickity.min.css">
     <script src="https://unpkg.com/flickity@2/dist/flickity.pkgd.min.js"></script>
+
+    {{-- Per-page <head> injections — pushed by views via @push('head').
+         Notably used by <x-movie-seo> on movie detail to emit AI-generated
+         SEO/OG/Twitter meta tags above the default site-wide ones. Putting
+         this LAST means per-page tags win over the generic defaults in the
+         browser's <meta> dedupe order. --}}
+    @stack('head')
 </head>
 <style>
     [x-cloak] { display: none !important; }
 </style>
-<body class="pb-16 lg:pb-0">
+<body class="pb-16 lg:pb-0 bg-[#0a0a0a] text-white min-h-screen">
 
     @unless($hideHeader)
         @auth
@@ -170,6 +181,12 @@
     {{ $slot }}
 
     <x-flash />
+
+    {{-- Global AI chatbot widget — available on every authed page (was previously
+         only mounted on home). z-[200] keeps it above mobile-nav (z-40) + modals. --}}
+    @auth
+        <x-home.chatbot-widget />
+    @endauth
 
     {{-- Mobile bottom tab bar — only when authed. Hidden on lg+ via Tailwind
          lg:hidden on the component itself; the body has pb-16 lg:pb-0 above

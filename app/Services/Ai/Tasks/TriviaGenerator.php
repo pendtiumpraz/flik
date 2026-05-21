@@ -80,14 +80,16 @@ class TriviaGenerator
         // ━━━ 3. Call AI ━━━
         try {
             $response = $this->ai->chat(
-                [
+                messages: [
                     ['role' => 'system', 'content' => $systemPrompt],
                     ['role' => 'user',   'content' => $userPrompt],
                 ],
-                [
+                options: [
                     'max_tokens'  => 1800,
                     'temperature' => 0.3,
-                ]
+                ],
+                taskType: 'trivia.generate',
+                subject: $movie,
             );
         } catch (\Throwable $e) {
             Log::error('TriviaGenerator: AI call failed', [

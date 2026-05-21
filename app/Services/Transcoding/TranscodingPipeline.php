@@ -75,7 +75,24 @@ class TranscodingPipeline
             // Persist requested specs so the admin UI can show "what we tried"
             // even before any rendition completes. EncodingJob uses
             // $guarded = ['*'] (mass-assignment audit, 2026-05-13).
-            $job->forceFill(['rendition_specs' => $ladder])->save();
+            //
+            // RenditionSpec is a readonly VO; serialise to array for JSON
+            // storage so the admin UI / next-stage job can read it back.
+            // See docs/audit/04-drm-playback.md §2.1.
+            $ladderSerialised = array_map(
+                static fn (RenditionSpec $spec): array => [
+                    'name' => $spec->name,
+                    'width' => $spec->width,
+                    'height' => $spec->height,
+                    'video_bitrate' => $spec->video_bitrate,
+                    'audio_bitrate' => $spec->audio_bitrate,
+                    'max_bitrate' => $spec->max_bitrate,
+                    'buffer_size' => $spec->buffer_size,
+                    'fps' => $spec->fps,
+                ],
+                $ladder,
+            );
+            $job->forceFill(['rendition_specs' => $ladderSerialised])->save();
 
             $jobWorkDir = $this->ensureWorkDir($job);
             $outputs = [];
@@ -85,9 +102,14 @@ class TranscodingPipeline
             $perRenditionBudget = (int) floor(75 / max(1, $totalRenditions));
 
             // ━━━ 4. Transcode each rendition → local file ━━━
+            // FfmpegTranscoder::transcode($inputPath, RenditionSpec $spec, $outputPath)
+            // is the actual signature — positional args only, no onProgress hook
+            // (progress UI ticks once per rendition). See audit §2.1.
             foreach ($ladder as $idx => $rendition) {
-                $renditionKey = $rendition['name']
-                    ?? sprintf('%dp', (int) ($rendition['height'] ?? 0));
+                /** @var RenditionSpec $rendition */
+                $renditionKey = $rendition->name !== ''
+                    ? $rendition->name
+                    : sprintf('%dp', $rendition->height);
 
                 $transcodedPath = sprintf(
                     '%s/%s.mp4',
@@ -96,43 +118,49 @@ class TranscodingPipeline
                 );
 
                 $this->ffmpeg->transcode(
-                    sourcePath: $masterPath,
-                    targetPath: $transcodedPath,
-                    rendition: $rendition,
-                    onProgress: function (int $renditionPct) use ($job, $idx, $perRenditionBudget) {
-                        // Map per-rendition progress (0-100) into the global
-                        // 5%-80% window: 5 + (idx * budget) + (pct * budget / 100)
-                        $base = 5 + ($idx * $perRenditionBudget);
-                        $delta = (int) ($renditionPct * $perRenditionBudget / 100);
-                        $job->updateProgress($base + $delta);
-                    },
+                    $masterPath,
+                    $rendition,
+                    $transcodedPath,
                 );
 
                 $outputs[$renditionKey] = [
-                    'spec' => $rendition,
+                    'spec' => $ladderSerialised[$idx],
                     'transcoded_path' => $transcodedPath,
                 ];
+
+                // Per-rendition progress: ffmpeg has no streaming hook, so
+                // we tick once per rendition completion.
+                $base = 5 + (($idx + 1) * $perRenditionBudget);
+                $job->updateProgress(min(80, $base));
             }
 
             $job->updateProgress(80);
 
             // ━━━ 5. Segment each transcoded rendition → HLS dir ━━━
+            // HlsSegmenter::segment($inputPath, int $segmentDuration, $outputDir)
+            // returns array<int,string> of .ts paths — NOT a manifest path.
+            // The actual manifest is always at $outputDir/playlist.m3u8 (the
+            // segmenter writes that filename internally). See audit §2.1.
             $perSegmentBudget = (int) floor(20 / max(1, $totalRenditions));
+            $segmentCounter = 0;
 
             foreach ($outputs as $renditionKey => $output) {
                 $hlsDir = sprintf('%s/hls/%s', $jobWorkDir, $renditionKey);
 
-                $manifestPath = $this->segmenter->segment(
-                    inputPath: $output['transcoded_path'],
-                    outputDir: $hlsDir,
-                    rendition: $output['spec'],
+                $segmentPaths = $this->segmenter->segment(
+                    $output['transcoded_path'],
+                    6, // segment duration (seconds) — matches HlsEncryptor's hls_time.
+                    $hlsDir,
                 );
 
                 $outputs[$renditionKey]['hls_dir'] = $hlsDir;
-                $outputs[$renditionKey]['manifest'] = $manifestPath;
+                $outputs[$renditionKey]['manifest'] = $hlsDir . DIRECTORY_SEPARATOR . 'playlist.m3u8';
+                $outputs[$renditionKey]['segments'] = $segmentPaths;
 
-                // Bump global progress after each rendition is segmented.
-                $job->updateProgress(min(99, 80 + ($perSegmentBudget * (array_search($renditionKey, array_keys($outputs), true) + 1))));
+                // Bump global progress after each rendition is segmented (O(n) counter,
+                // not O(n²) array_search like the original — audit §4.8).
+                $segmentCounter++;
+                $job->updateProgress(min(99, 80 + ($perSegmentBudget * $segmentCounter)));
             }
 
             // ━━━ 6. Persist outputs + mark completed ━━━

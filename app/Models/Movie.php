@@ -94,11 +94,20 @@ class Movie extends Model
         'ai_synopsis_generated_at' => 'datetime',
         'ai_short_summary_generated_at' => 'datetime',
         'seo_generated_at' => 'datetime',
+        'soundtrack_analysis' => 'array',
+        'soundtrack_analyzed_at' => 'datetime',
         'total_seasons' => 'integer',
         'total_episodes' => 'integer',
         'runtime_minutes' => 'integer',
         'tmdb_id' => 'integer',
         'imported_at' => 'datetime',
+        // Swarm-25 distribution columns. `drm_config` holds the encrypted
+        // (Crypt::encryptString) AES-128 content key under the
+        // `content_key_encrypted` key. See EncryptHlsSegments + audit doc
+        // FIX #2 §2.2 for the pipeline that writes it.
+        'drm_config' => 'array',
+        'encoding_renditions' => 'array',
+        'geo_allow' => 'array',
     ];
 
     /**
@@ -138,6 +147,18 @@ class Movie extends Model
         return $this->belongsToMany(Cast::class, 'cast_movie')
             ->withPivot('character', 'order')
             ->orderBy('cast_movie.order');
+    }
+
+    /**
+     * X-Ray scene-actor presences for this movie. Populated by
+     * {@see \App\Services\Ai\Tasks\SceneActorExtractor} either as a
+     * weekly batch (flik:ai:scene-actors --all) or on-the-fly from
+     * {@see \App\Http\Controllers\XrayController} when a movie is
+     * polled with cast data but no annotations yet.
+     */
+    public function sceneActors()
+    {
+        return $this->hasMany(MovieSceneActor::class);
     }
 
     /**

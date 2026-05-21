@@ -47,10 +47,15 @@ class SeoMetaGenerator
             ],
         ];
 
-        $response = $this->ai->chat($messages, [
-            'max_tokens' => 400,
-            'temperature' => 0.6,
-        ]);
+        $response = $this->ai->chat(
+            messages: $messages,
+            options: [
+                'max_tokens' => 400,
+                'temperature' => 0.6,
+            ],
+            taskType: 'seo.meta_generate',
+            subject: $movie,
+        );
 
         $parsed = $this->parseJson($response['content'] ?? '');
 

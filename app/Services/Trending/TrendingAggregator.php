@@ -128,11 +128,20 @@ class TrendingAggregator
                 // to 0.0 (viewed exactly at the window boundary). A
                 // film with its activity concentrated near `now`
                 // beats one with the same volume spread evenly.
+                //
+                // Carbon 3 made diffInSeconds() SIGNED by default, so
+                // `$now->diffInSeconds($lastViewedAt)` returns a negative
+                // number when `$lastViewedAt` is in the past (the only
+                // case we see in production). `max(0, negative)` then
+                // collapses to 0 → every recency boost evaluates to 1.0
+                // and the term loses all discrimination. Avoid the
+                // Carbon API entirely and compute the timestamp delta
+                // directly so the result is Carbon-version-agnostic.
                 $lastViewedAt = $row->last_viewed_at
                     ? CarbonImmutable::parse($row->last_viewed_at)
                     : $now;
-                $ageSeconds = max(0, $now->diffInSeconds($lastViewedAt));
-                $recencyBoost = max(0.0, 1.0 - ($ageSeconds / $windowSeconds));
+                $ageSeconds = max(0, $now->getTimestamp() - $lastViewedAt->getTimestamp());
+                $recencyBoost = 1.0 - min(1.0, $ageSeconds / $windowSeconds);
 
                 $raw = $views + ($uniques * 2) + $recencyBoost;
 

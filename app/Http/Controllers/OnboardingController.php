@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Genre;
 use App\Models\UserPreference;
 use App\Services\Referrals\ReferralService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -57,6 +58,20 @@ class OnboardingController extends Controller
             ]
         );
 
+        // Quiz complete — burn the dismiss-banner session flag and bust the
+        // user's cached recommendations so the next /api/recommendations
+        // hit re-runs through the engine (which will now route through
+        // ColdStartRecommender via UserPreference).
+        $request->session()->forget('onboarding.pending');
+        try {
+            \Cache::forget("flik:user:{$request->user()->id}:recommendations");
+        } catch (\Throwable $e) {
+            \Log::info('OnboardingController: failed to clear rec cache', [
+                'user_id' => $request->user()->id,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+
         // ── Refer-a-friend: mark qualified ──────────────────────────
         // Onboarding completion is the "qualified" trigger — both the
         // referrer and the new user get a small coin grant. The service
@@ -71,5 +86,18 @@ class OnboardingController extends Controller
         }
 
         return redirect('/movies')->with('success', 'Preferensi tersimpan! Ini rekomendasi awal untukmu.');
+    }
+
+    /**
+     * Dismiss the "Tell us what you like" banner on the home page.
+     * The banner is rendered only when session('onboarding.pending') is true,
+     * so clearing the flag is the cheapest way to suppress it for the rest
+     * of the session. A persistent dismissal would require a column on the
+     * user — overkill for a single nudge.
+     */
+    public function dismiss(Request $request): JsonResponse
+    {
+        $request->session()->forget('onboarding.pending');
+        return response()->json(['ok' => true]);
     }
 }

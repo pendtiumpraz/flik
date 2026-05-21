@@ -353,15 +353,51 @@ class UserDataExporter
      * the remember token are all useless to the user and dangerous to
      * leak if the export ever escapes their control.
      *
+     * PII columns (`phone`, `address`, `birth_date`) are read transparently
+     * through the model's `encrypted` casts, so the exported value is the
+     * clear text. `national_id_hash` is a one-way SHA-256 + pepper — we
+     * ship the hash itself only as proof-of-record ("yes we have your NIK
+     * on file, but no, the value is not reversible"). This satisfies the
+     * Privacy Policy's "seluruh data" promise (audit 16 PRIVACY-1).
+     *
      * @return array<string,mixed>
      */
     protected function scrubUser(User $user): array
     {
-        $arr = $user->only([
-            'id', 'name', 'email', 'role', 'is_admin',
-            'email_verified_at', 'password_changed_at',
-            'created_at', 'updated_at',
-        ]);
+        // makeVisible() lifts the model's $hidden filter for the PII keys
+        // so only() can actually return them — the User model hides
+        // phone/address/national_id_hash by default to keep accidental
+        // toArray() calls safe elsewhere.
+        $arr = $user->makeVisible([
+                'phone', 'address', 'national_id_hash', 'birth_date',
+            ])->only([
+                'id', 'name', 'email', 'role', 'is_admin',
+                'email_verified_at', 'password_changed_at',
+                'created_at', 'updated_at',
+                // PII — included for GDPR Article 15 completeness.
+                'phone', 'address', 'birth_date',
+            ]);
+
+        // Graceful null handling for legacy rows where these columns
+        // were never populated.
+        $arr['phone']      = $arr['phone'] ?? null;
+        $arr['address']    = $arr['address'] ?? null;
+        $arr['birth_date'] = isset($arr['birth_date']) && $arr['birth_date'] !== null
+            ? (string) $arr['birth_date']
+            : null;
+
+        // National ID is one-way hashed — the hash itself is meaningless
+        // to the user but its presence/absence is the disclosure they're
+        // entitled to under Article 15. Don't dump the raw hash digest
+        // (it's a 64-char hex that looks scary); emit a small descriptor.
+        $hash = $user->getAttribute('national_id_hash');
+        $arr['national_id'] = [
+            'on_record' => !empty($hash),
+            'storage'   => $hash ? 'sha256_peppered_hash_only' : null,
+            'note'      => $hash
+                ? 'Your national ID is stored only as a one-way peppered hash and cannot be recovered.'
+                : 'No national ID on file.',
+        ];
 
         // Stamp 2FA-enabled boolean rather than the secret itself.
         $arr['two_factor_enabled'] = $user->hasTwoFactorEnabled();

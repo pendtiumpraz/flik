@@ -12,9 +12,11 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Resolve and apply the request locale.
  *
- * Resolution order (highest priority first — first match wins):
+ * Resolution order (highest priority first — first match wins, evaluated
+ * on EVERY request — no first-visit short-circuits):
  *   1. `?lang=XX` query param (one-shot override + share-friendly URLs).
- *   2. `session('locale')` (this-tab preference).
+ *   2. `session('locale')` (this-tab preference, written ONLY when the
+ *      user explicitly switches via `?lang=...` or POST /locale/...).
  *   3. `auth()->user()->preferred_locale` (cross-device default).
  *   4. `Accept-Language` request header (cold visit).
  *   5. `config('locales.default')` (hard fallback).
@@ -25,6 +27,14 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Registered in App\Http\Kernel as part of the `web` group AFTER StartSession
  * so the session is hydrated before we read it.
+ *
+ * Historical note: this middleware used to "pin" the resolved locale into
+ * the session on the very first visit. That pin made branches 2 and 3
+ * permanently dead code — a user who later updated their preferred_locale
+ * in /profile saw zero effect until they manually used the lang switcher.
+ * The pin is now ONLY written when the locale comes from `?lang=...`
+ * (explicit user action), so updates to user.preferred_locale take effect
+ * on the next request.
  */
 class SetLocale
 {
@@ -47,14 +57,14 @@ class SetLocale
         }
 
         // Persist into the session ONLY when the user explicitly switched
-        // (?lang= or POST /locale/...) — otherwise we'd silently overwrite
-        // a user-chosen locale with the Accept-Language guess and pin them
-        // to the wrong language after they change their browser settings.
-        if ($request->query('lang') && $request->session()->get('locale') !== $resolved) {
-            $request->session()->put('locale', $resolved);
-        } elseif (! $request->session()->has('locale')) {
-            // First-visit pin: lock the session to whatever we resolved so
-            // refresh after locale switch doesn't re-roll the dice.
+        // via the `?lang=XX` query param. Defaults from Accept-Language or
+        // preferred_locale must NOT be pinned — otherwise the session
+        // would shadow every later change to user.preferred_locale.
+        $queryLang = (string) $request->query('lang', '');
+        if ($queryLang !== ''
+            && in_array($queryLang, $available, true)
+            && $request->session()->get('locale') !== $resolved
+        ) {
             $request->session()->put('locale', $resolved);
         }
 

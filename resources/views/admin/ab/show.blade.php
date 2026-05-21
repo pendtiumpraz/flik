@@ -6,9 +6,9 @@
                 <h1 class="text-3xl font-bold mt-1" style="color:#C5A55A">{{ $experiment->name }}</h1>
                 <p class="text-xs text-gray-500 mt-1">{{ $experiment->slug }} · status:
                     <span class="px-2 py-0.5 rounded text-xs uppercase
-                        @if ($experiment->status === 'running') bg-emerald-500/20 text-emerald-300
-                        @elseif ($experiment->status === 'paused') bg-yellow-500/20 text-yellow-300
-                        @elseif ($experiment->status === 'completed') bg-zinc-500/20 text-gray-300
+                        @if (in_array($experiment->status, [\App\Models\AbExperiment::STATUS_RUNNING, \App\Models\AbExperiment::STATUS_ACTIVE], true)) bg-emerald-500/20 text-emerald-300
+                        @elseif ($experiment->status === \App\Models\AbExperiment::STATUS_PAUSED) bg-yellow-500/20 text-yellow-300
+                        @elseif ($experiment->status === \App\Models\AbExperiment::STATUS_COMPLETED) bg-zinc-500/20 text-gray-300
                         @else bg-blue-500/20 text-blue-300 @endif">{{ $experiment->status }}</span>
                 </p>
                 @if ($experiment->hypothesis)
@@ -39,7 +39,8 @@
             <div class="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
                 <span class="text-emerald-300 font-semibold">▲ Current leader:</span>
                 <span class="text-white">{{ $leader['variant'] }}</span> —
-                <span class="text-gray-300">{{ number_format($leader['conversion_rate'] * 100, 2) }}% conversion ({{ $leader['conversions'] }} / {{ $leader['assigned'] }})</span>
+                {{-- conversion_rate is already a percentage (0..100) per AbTestFramework::report() — do NOT multiply by 100 again. --}}
+                <span class="text-gray-300">{{ number_format($leader['conversion_rate'] ?? 0, 2) }}% conversion ({{ $leader['converted'] ?? $leader['conversions'] ?? 0 }} / {{ $leader['assigned'] ?? 0 }})</span>
             </div>
         @endif
 
@@ -58,10 +59,17 @@
                     @foreach ($report['variants'] ?? [] as $v)
                         <tr>
                             <td class="p-3 text-white font-medium">{{ $v['variant'] }}</td>
-                            <td class="p-3 text-right text-gray-400">{{ $v['weight'] ?? '—' }}</td>
-                            <td class="p-3 text-right text-gray-300">{{ number_format($v['assigned']) }}</td>
-                            <td class="p-3 text-right text-gray-300">{{ number_format($v['conversions']) }}</td>
-                            <td class="p-3 text-right font-semibold text-[#C5A55A]">{{ number_format(($v['conversion_rate'] ?? 0) * 100, 2) }}%</td>
+                            <td class="p-3 text-right text-gray-400">
+                                @if (isset($v['weight']) && $v['weight'] !== null)
+                                    {{ number_format(((float) $v['weight']) * 100, 1) }}%
+                                @else
+                                    —
+                                @endif
+                            </td>
+                            <td class="p-3 text-right text-gray-300">{{ number_format($v['assigned'] ?? 0) }}</td>
+                            <td class="p-3 text-right text-gray-300">{{ number_format($v['converted'] ?? $v['conversions'] ?? 0) }}</td>
+                            {{-- conversion_rate is already a percentage — single-format, no x100. --}}
+                            <td class="p-3 text-right font-semibold text-[#C5A55A]">{{ number_format($v['conversion_rate'] ?? 0, 2) }}%</td>
                         </tr>
                     @endforeach
                 </tbody>

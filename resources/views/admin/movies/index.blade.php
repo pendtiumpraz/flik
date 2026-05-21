@@ -305,6 +305,17 @@
                                                 Title A/B Alternatives
                                             </a>
                                         @endif
+
+                                        @if (\Illuminate\Support\Facades\Route::has('admin.movies.soundtrack.generate'))
+                                            <form method="POST" action="{{ route('admin.movies.soundtrack.generate', $movie) }}" style="margin:0">
+                                                @csrf
+                                                <button type="submit" class="dropdown-item" style="width:100%;text-align:left;background:none;border:0;cursor:pointer;color:inherit;font:inherit"
+                                                        onclick="return confirm('Generate AI soundtrack analysis for {{ addslashes($movie->title) }}?');">
+                                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3" stroke-width="2" fill="none"/><circle cx="18" cy="16" r="3" stroke-width="2" fill="none"/></svg>
+                                                    Soundtrack Analysis
+                                                </button>
+                                            </form>
+                                        @endif
                                     </div>
                                 </div>
                             </div>

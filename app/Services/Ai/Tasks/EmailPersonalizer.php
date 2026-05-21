@@ -75,7 +75,7 @@ class EmailPersonalizer
 
         $userPrompt = $this->buildUserPromptForSubject($profile, $intent, $template, $context);
 
-        $generated = $this->callAi($systemPrompt, $userPrompt, maxTokens: 80, temperature: 0.85);
+        $generated = $this->callAi($systemPrompt, $userPrompt, maxTokens: 80, temperature: 0.85, taskType: 'email.subject_' . $intent, subject: $user);
 
         $subject = $this->cleanSubject($generated)
             ?: $this->fallbackSubject($user, $intent, $template, $context);
@@ -113,7 +113,7 @@ class EmailPersonalizer
 
         $userPrompt = $this->buildUserPromptForBody($profile, $intent, $context);
 
-        $generated = $this->callAi($systemPrompt, $userPrompt, maxTokens: 480, temperature: 0.75);
+        $generated = $this->callAi($systemPrompt, $userPrompt, maxTokens: 480, temperature: 0.75, taskType: 'email.body_' . $intent, subject: $user);
 
         $body = $this->cleanBody($generated);
 
@@ -250,20 +250,31 @@ class EmailPersonalizer
     //  AI call + fallbacks
     // ──────────────────────────────────────────────────────────────────
 
-    protected function callAi(string $systemPrompt, string $userPrompt, int $maxTokens, float $temperature): string
-    {
+    protected function callAi(
+        string $systemPrompt,
+        string $userPrompt,
+        int $maxTokens,
+        float $temperature,
+        string $taskType = 'email.personalize',
+        ?\Illuminate\Database\Eloquent\Model $subject = null,
+    ): string {
         if (!$this->ai) {
             return '';
         }
 
         try {
-            $response = $this->ai->chat([
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user',   'content' => $userPrompt],
-            ], [
-                'max_tokens'  => $maxTokens,
-                'temperature' => $temperature,
-            ]);
+            $response = $this->ai->chat(
+                messages: [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user',   'content' => $userPrompt],
+                ],
+                options: [
+                    'max_tokens'  => $maxTokens,
+                    'temperature' => $temperature,
+                ],
+                taskType: $taskType,
+                subject: $subject,
+            );
 
             return trim((string) ($response['content'] ?? ''));
         } catch (\Throwable $e) {

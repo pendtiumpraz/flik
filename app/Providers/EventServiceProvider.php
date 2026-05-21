@@ -89,6 +89,22 @@ class EventServiceProvider extends ServiceProvider
             }
         });
 
+        // AI sentiment classification (FIX #7) — dispatched per-comment onto
+        // the ai-batch queue (analyzer is purpose-built for batching, but
+        // single-comment mode is fine; the chunk-of-1 cost is dominated by
+        // request framing not per-item tokens). Without this listener the
+        // /admin/sentiment dashboard stayed permanently empty.
+        \App\Models\Comment::created(function (\App\Models\Comment $comment) {
+            try {
+                \App\Jobs\AnalyzeCommentSentiment::dispatch($comment);
+            } catch (\Throwable $e) {
+                \Log::warning('Sentiment analysis dispatch failed', [
+                    'comment_id' => $comment->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
+
         // Admin bell: ping moderators on every new TOP-LEVEL comment.
         // The listener itself skips replies (parent_id !== null) and
         // escalates severity to 'warning' when the AI spoiler detector

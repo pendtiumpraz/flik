@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Models\Role;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
@@ -19,26 +20,38 @@ use Illuminate\View\View;
  * `config/admin_menu.php` (same file the sidebar renders from), so the matrix
  * is structurally impossible to drift from what users see.
  *
- * Role discovery order (best-effort, peer-swarm-tolerant):
- *   1. If the `roles` table exists (created by ROLE peer #1), pull labels +
- *      slugs from there so admin-defined roles render alongside the seeded set.
- *   2. Otherwise fall back to `User::ROLES` (the hardcoded staff taxonomy
- *      declared in app/Models/User.php).
+ * Schema reality (FIX #6, AUDIT #2 §2.3): the `roles` table has columns
+ * `name` + `display_name` (no `slug`), and the pivot is `permission_role`
+ * (not `role_permission`). The previous version queried the wrong columns
+ * and silently fell back to a `heuristicGate()` that referenced stale role
+ * constants — operators saw a misleading matrix. This rewrite reads the
+ * real schema directly.
  *
- * Permission resolution order per (role, permission) cell:
- *   1. If the `permissions` table + `role_permission` pivot exist AND the
- *      named permission is registered as a Gate, use the role->permissions
- *      relation defined by ROLE peer #2.
- *   2. Otherwise fall back to the Gate definitions registered in
- *      AuthServiceProvider for the named coarse abilities (admin / manage-*)
- *      so the matrix still tells the truth pre-rollout.
- *   3. Super-admin: always ✓ (matches Gate::before short-circuit).
+ * Role discovery:
+ *   - Read every row from `roles` ordered by priority then id.
+ *   - Map: name => display_name (or name if no display_name).
+ *
+ * Permission resolution per (role, permission) cell:
+ *   - super_admin → always ✓ (matches Gate::before short-circuit).
+ *   - permission == null → always ✓ (no fine-grained gate).
+ *   - otherwise → query the `permission_role` pivot joined to `permissions`
+ *     and `roles` by name. One query per cell is acceptable here because
+ *     the matrix is small (≤ 10 roles × ≤ 60 menu items) and admin-only,
+ *     but we still memoise the per-role permission set to skip repeated
+ *     joins inside a single render.
  *
  * Auth: `roles.manage` permission (with `admin` Gate fallback for the
  * pre-rollout window).
  */
 class MenuMatrixController extends Controller
 {
+    /**
+     * Per-render memo: role name => set of permission names.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private array $rolePermissionsCache = [];
+
     public function index(Request $request): View
     {
         $this->authorizeAccess($request);
@@ -57,9 +70,15 @@ class MenuMatrixController extends Controller
             ));
         }
 
+        // Build a name => id lookup so the view's "Edit role" link can
+        // resolve {role} via the default route-key binding (id) without
+        // an extra query per column header.
+        $roleIds = Role::query()->pluck('id', 'name')->all();
+
         return view('admin.menu-matrix.index', [
             'matrix' => $matrix,
             'roles' => $roles,
+            'roleIds' => $roleIds,
             'categories' => $availableCategories,
             'activeCategory' => $categoryFilter,
             'permissionsTableExists' => Schema::hasTable('permissions'),
@@ -93,44 +112,38 @@ class MenuMatrixController extends Controller
     }
 
     /**
-     * Returns a list of [slug => label] role descriptors. Pulls from the
-     * Roles table when ROLE peer #1's migration has run; otherwise reads
-     * the hardcoded User::ROLES staff taxonomy.
+     * Returns [role_name => display_label] from the `roles` table, ordered
+     * by priority (lowest first → super_admin appears leftmost). Returns an
+     * empty list when the table is missing — the view renders a single
+     * "no roles configured" column rather than crashing.
      *
-     * @return array<string, string> slug => human label
+     * @return array<string, string>
      */
     private function discoverRoles(): array
     {
-        if (Schema::hasTable('roles')) {
-            try {
-                $rows = \DB::table('roles')
-                    ->orderBy('id')
-                    ->get(['slug', 'name']);
-
-                $map = [];
-                foreach ($rows as $r) {
-                    $map[(string) $r->slug] = (string) ($r->name ?? $r->slug);
-                }
-                if ($map !== []) {
-                    return $map;
-                }
-            } catch (\Throwable $e) {
-                // Schema diverges from expected → fall through.
-            }
+        if (! Schema::hasTable('roles')) {
+            return [];
         }
 
-        return User::ROLES;
+        $rows = DB::table('roles')
+            ->orderBy('priority')
+            ->orderBy('id')
+            ->get(['name', 'display_name']);
+
+        $map = [];
+        foreach ($rows as $r) {
+            $name = (string) $r->name;
+            if ($name === '') {
+                continue;
+            }
+            $map[$name] = (string) ($r->display_name ?? $name);
+        }
+
+        return $map;
     }
 
     /**
-     * Build one row per menu item. Each row carries:
-     *   - section_label  (string)
-     *   - category       (string)
-     *   - label          (string)
-     *   - route          (?string)
-     *   - permission     (?string)
-     *   - icon           (?string)
-     *   - access         (array<string, bool>)  slug => allowed
+     * Build one row per menu item.
      *
      * @param  array<string, array<string, mixed>>  $sections
      * @param  array<string, string>  $roles
@@ -147,8 +160,8 @@ class MenuMatrixController extends Controller
             foreach (($section['items'] ?? []) as $item) {
                 $permission = $item['permission'] ?? null;
                 $access = [];
-                foreach ($roles as $slug => $_label) {
-                    $access[$slug] = $this->roleCanSee($slug, $permission);
+                foreach ($roles as $name => $_label) {
+                    $access[$name] = $this->roleCanSee($name, $permission);
                 }
 
                 $rows[] = [
@@ -167,117 +180,55 @@ class MenuMatrixController extends Controller
     }
 
     /**
-     * Truth table for "does role $slug see a link guarded by $permission?".
+     * Truth table for "does role $roleName see a link guarded by $permission?".
      *
-     * Layered resolution:
-     *   - permission null         → always visible (everyone in the admin
-     *                                gate can reach it).
-     *   - super_admin             → always visible (matches Gate::before
-     *                                short-circuit in AuthServiceProvider).
-     *   - peer ROLE #1/#2 live    → consult role_permission pivot via the
-     *                                role's permission relation.
-     *   - otherwise               → translate the named permission to one of
-     *                                the coarse Gates in AuthServiceProvider
-     *                                so the matrix tells the truth pre-rollout.
+     * Resolution order:
+     *   1. permission is null         → visible (everyone in the admin gate
+     *                                    can reach it).
+     *   2. role is super_admin        → visible (Gate::before short-circuit).
+     *   3. consult the permission_role pivot via permission name.
      */
-    private function roleCanSee(string $roleSlug, ?string $permission): bool
+    private function roleCanSee(string $roleName, ?string $permission): bool
     {
         if ($permission === null) {
             return true;
         }
-        if ($roleSlug === User::ROLE_SUPER_ADMIN) {
+        if ($roleName === 'super_admin') {
             return true;
         }
 
-        // Preferred path: query the pivot once ROLE peer #2 has shipped.
-        if (Schema::hasTable('permissions') && Schema::hasTable('role_permission') && Schema::hasTable('roles')) {
-            try {
-                $exists = \DB::table('roles as r')
-                    ->join('role_permission as rp', 'rp.role_id', '=', 'r.id')
-                    ->join('permissions as p', 'p.id', '=', 'rp.permission_id')
-                    ->where('r.slug', $roleSlug)
-                    ->where('p.name', $permission)
-                    ->exists();
-
-                return $exists;
-            } catch (\Throwable $e) {
-                // Schema mismatch → fall through to the heuristic.
-            }
-        }
-
-        // Pre-rollout heuristic: map the named permission to the closest
-        // coarse Gate already registered in AuthServiceProvider so the
-        // matrix is not empty during the swarm hand-off window.
-        return $this->heuristicGate($roleSlug, $permission);
-    }
-
-    /**
-     * Map a granular permission name (e.g. `movies.update`, `analytics.churn`)
-     * to one of the pre-existing coarse Gates so the matrix is meaningful
-     * before peer ROLE #2 wires every permission as its own Gate.
-     *
-     * The buckets here intentionally mirror the role specialties so the
-     * matrix produces sensible defaults: content_manager sees content +
-     * basic AI, customer_support sees users + comments, finance sees
-     * revenue/analytics, super_admin sees everything.
-     */
-    private function heuristicGate(string $roleSlug, string $permission): bool
-    {
-        // Content / catalog
-        $contentPrefixes = ['movies.', 'subtitles.'];
-        if ($this->startsWithAny($permission, $contentPrefixes)) {
-            return in_array($roleSlug, [User::ROLE_CONTENT_MANAGER], true);
-        }
-
-        // Comments + sentiment → customer support
-        if ($this->startsWithAny($permission, ['comments.'])) {
-            return in_array($roleSlug, [User::ROLE_CUSTOMER_SUPPORT, User::ROLE_CONTENT_MANAGER], true);
-        }
-
-        // Users + roles → support + super admin only
-        if ($this->startsWithAny($permission, ['users.', 'roles.'])) {
-            return $roleSlug === User::ROLE_CUSTOMER_SUPPORT;
-        }
-
-        // Analytics / revenue → finance
-        if ($this->startsWithAny($permission, ['analytics.'])) {
-            return $roleSlug === User::ROLE_FINANCE;
-        }
-
-        // Marketing — content manager runs campaigns
-        if ($this->startsWithAny($permission, ['marketing.'])) {
-            return $roleSlug === User::ROLE_CONTENT_MANAGER;
-        }
-
-        // AI providers / usage / tasks — content manager runs tasks,
-        // super-admin configures providers (already covered by short-circuit).
-        if ($permission === 'ai.tasks.run' || $permission === 'ai.usage.view') {
-            return $roleSlug === User::ROLE_CONTENT_MANAGER;
-        }
-        if ($permission === 'ai.providers.configure') {
-            return false; // super-admin only (handled by short-circuit)
-        }
-
-        // Security — super-admin only by default
-        if ($this->startsWithAny($permission, ['security.'])) {
+        if (! Schema::hasTable('permission_role')
+            || ! Schema::hasTable('permissions')
+            || ! Schema::hasTable('roles')
+        ) {
             return false;
         }
 
-        return false;
+        return in_array($permission, $this->permissionsForRole($roleName), true);
     }
 
     /**
-     * @param  array<int, string>  $prefixes
+     * Memoised per-render permission set for one role. Returns an empty
+     * array when the role doesn't exist or has no permissions attached.
+     *
+     * @return array<int, string>
      */
-    private function startsWithAny(string $value, array $prefixes): bool
+    private function permissionsForRole(string $roleName): array
     {
-        foreach ($prefixes as $prefix) {
-            if (str_starts_with($value, $prefix)) {
-                return true;
-            }
+        if (isset($this->rolePermissionsCache[$roleName])) {
+            return $this->rolePermissionsCache[$roleName];
         }
 
-        return false;
+        $names = DB::table('roles as r')
+            ->join('permission_role as pr', 'pr.role_id', '=', 'r.id')
+            ->join('permissions as p', 'p.id', '=', 'pr.permission_id')
+            ->where('r.name', $roleName)
+            ->pluck('p.name')
+            ->all();
+
+        $this->rolePermissionsCache[$roleName] = array_values(array_map('strval', $names));
+
+        return $this->rolePermissionsCache[$roleName];
     }
 
     /**

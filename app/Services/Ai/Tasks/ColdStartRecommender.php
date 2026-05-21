@@ -151,13 +151,17 @@ class ColdStartRecommender
             . "Respond with ONLY a JSON array of slug strings, no prose, no markdown.";
 
         try {
-            $response = $this->ai->chat([
-                ['role' => 'system', 'content' => 'You are a film curator. Respond with strict JSON only.'],
-                ['role' => 'user',   'content' => $userPrompt],
-            ], [
-                'max_tokens'  => 400,
-                'temperature' => 0.4,
-            ]);
+            $response = $this->ai->chat(
+                messages: [
+                    ['role' => 'system', 'content' => 'You are a film curator. Respond with strict JSON only.'],
+                    ['role' => 'user',   'content' => $userPrompt],
+                ],
+                options: [
+                    'max_tokens'  => 400,
+                    'temperature' => 0.4,
+                ],
+                taskType: 'recommend.cold_start',
+            );
 
             $content = trim((string) ($response['content'] ?? ''));
             if ($content === '') return null;

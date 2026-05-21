@@ -43,17 +43,36 @@ final class EmailVerificationController extends Controller
      */
     public function verify(EmailVerificationRequest $request): RedirectResponse
     {
+        $user = $request->user();
+
         // Already verified — short-circuit, idempotent.
-        if ($request->user()->hasVerifiedEmail()) {
-            return redirect()->intended('/movies?verified=1');
+        if ($user->hasVerifiedEmail()) {
+            return $this->postVerifyRedirect($request, '/movies?verified=1');
         }
 
-        if ($request->user()->markEmailAsVerified()) {
-            event(new Verified($request->user()));
+        if ($user->markEmailAsVerified()) {
+            event(new Verified($user));
         }
 
-        return redirect()->intended('/movies?verified=1')
+        return $this->postVerifyRedirect($request, '/movies?verified=1')
             ->with('success', 'Email kamu berhasil diverifikasi. Selamat menonton!');
+    }
+
+    /**
+     * Post-verification routing — push freshly-verified users into the
+     * onboarding quiz if they never completed it (gates the cold-start
+     * recommender). Established users keep the historical `/movies` flow.
+     */
+    private function postVerifyRedirect(Request $request, string $default): RedirectResponse
+    {
+        $user = $request->user();
+
+        if ($user !== null && method_exists($user, 'preferences') && !$user->preferences()->exists()) {
+            $request->session()->put('onboarding.pending', true);
+            return redirect()->route('onboarding.quiz');
+        }
+
+        return redirect()->intended($default);
     }
 
     /**

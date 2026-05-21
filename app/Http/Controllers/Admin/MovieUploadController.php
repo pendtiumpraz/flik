@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\View\View;
 use Throwable;
 
 /**
@@ -34,6 +35,22 @@ use Throwable;
  */
 class MovieUploadController extends Controller
 {
+    /**
+     * Render the chunked-upload + transcode UI for a movie.
+     *
+     * Backs `resources/views/admin/movies/upload.blade.php` (existing view
+     * referenced by route admin.movies.upload-master/start-transcode/
+     * encoding-status). Per docs/audit/04-drm-playback.md FIX #2 §6 the
+     * legacy AdminController::storeMovie/updateMovie video upload path was
+     * removed in favour of redirecting admins here for any video work.
+     */
+    public function showUploadPage(Movie $movie): View
+    {
+        return view('admin.movies.upload', [
+            'movie' => $movie,
+        ]);
+    }
+
     /**
      * Upload (or append a chunk of) the master file for a movie.
      *

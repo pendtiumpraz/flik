@@ -93,49 +93,27 @@ class AdminController extends Controller
             'vote_average' => 'nullable|numeric|min:0|max:10',
             'popularity' => 'nullable|numeric|min:0',
             'youtube_key' => 'nullable|string|max:50',
-            // The deep validation lives in FileUploadValidator below; the
-            // 'mimes' rule here is just a fast first-pass hint that maps
-            // to a friendlier error message via the request validator.
-            'video_file' => 'nullable|file|mimes:mp4,webm,mov,mkv|max:512000',
             'is_popular' => 'boolean',
             'is_trending' => 'boolean',
             'genres' => 'array',
         ]);
 
-        $movieData = collect($validated)->except('genres', 'video_file')->toArray();
+        // SECURITY: video uploads now MUST go through the DRM transcode
+        // pipeline (MovieUploadController + /admin/movies/{movie}/upload).
+        // The legacy path here stored unencrypted MP4 on the public disk
+        // and bypassed DRM entirely — removed per docs/audit/04-drm-playback.md
+        // FIX #2 §6. If the form still posts a video_file, refuse + redirect.
+        if ($request->hasFile('video_file')) {
+            return back()
+                ->withErrors([
+                    'video_file' => 'Video harus diupload melalui halaman Upload Master setelah film tersimpan (DRM/transcode pipeline). Hapus file di sini dan simpan dulu metadatanya.',
+                ])
+                ->withInput($request->except('video_file'));
+        }
+
+        $movieData = collect($validated)->except('genres')->toArray();
         $movieData['is_popular'] = $request->boolean('is_popular');
         $movieData['is_trending'] = $request->boolean('is_trending');
-
-        // Handle video upload — magic-byte sniff + extension check + size cap
-        // + filename safety + (optional) ClamAV scan, all centralised in
-        // FileUploadValidator so the same rules are enforced for every
-        // upload surface.
-        if ($request->hasFile('video_file')) {
-            $upload = $request->file('video_file');
-
-            $check = $uploads->validateVideo($upload);
-            if (! $check['ok']) {
-                return back()->withErrors(['video_file' => $check['errors']])->withInput();
-            }
-
-            if (! $scanner->scan($check['safe_path'] ?? $upload->getRealPath())) {
-                return back()->withErrors(['video_file' => 'File ditolak oleh anti-malware scanner.'])->withInput();
-            }
-
-            // Always rename to a UUID-based safe filename — never persist
-            // the client-supplied name, which is hostile input.
-            // Operator precedence note: `'movie_' . ($x ?? 'video')` —
-            // the parens matter; without them PHP concatenates first and
-            // the `??` never fires.
-            $safeName = SafeFilename::generate(
-                $upload->getClientOriginalName(),
-                'movie_'.($movieData['title'] ?? 'video')
-            );
-
-            $path = $upload->storeAs('videos', $safeName, 'public');
-            $movieData['video_path'] = $path;
-            $movieData['video_disk'] = 'public';
-        }
 
         $movie = Movie::create($movieData);
 
@@ -143,8 +121,17 @@ class AdminController extends Controller
             $movie->genres()->sync($request->input('genres'));
         }
 
-        return redirect()->route('admin.movies.index')
-            ->with('success', "Film \"{$movie->title}\" berhasil ditambahkan!");
+        // Redirect to the Upload Master page so the admin can immediately
+        // start the DRM/transcode pipeline. If that route is not yet
+        // registered (legacy environments), fall back to the index.
+        $next = \Illuminate\Support\Facades\Route::has('admin.movies.upload-page')
+            ? redirect()->route('admin.movies.upload-page', $movie)
+            : redirect()->route('admin.movies.index');
+
+        return $next->with(
+            'success',
+            "Film \"{$movie->title}\" berhasil ditambahkan. Sekarang upload master video untuk memulai encoding."
+        );
     }
 
     public function editMovie(Movie $movie)
@@ -170,45 +157,23 @@ class AdminController extends Controller
             'vote_average' => 'nullable|numeric|min:0|max:10',
             'popularity' => 'nullable|numeric|min:0',
             'youtube_key' => 'nullable|string|max:50',
-            'video_file' => 'nullable|file|mimes:mp4,webm,mov,mkv|max:512000',
             'is_popular' => 'boolean',
             'is_trending' => 'boolean',
             'genres' => 'array',
         ]);
 
-        $movieData = collect($validated)->except('genres', 'video_file')->toArray();
+        // SECURITY: same removal as storeMovie() — see FIX #2 §6.
+        if ($request->hasFile('video_file')) {
+            return back()
+                ->withErrors([
+                    'video_file' => 'Video harus diupload melalui halaman Upload Master (DRM/transcode pipeline). Klik tombol "Upload Master" untuk pindah ke pipeline yang benar.',
+                ])
+                ->withInput($request->except('video_file'));
+        }
+
+        $movieData = collect($validated)->except('genres')->toArray();
         $movieData['is_popular'] = $request->boolean('is_popular');
         $movieData['is_trending'] = $request->boolean('is_trending');
-
-        // Handle video upload — see storeMovie() for the rationale; we
-        // mirror the same defence-in-depth pipeline here.
-        if ($request->hasFile('video_file')) {
-            $upload = $request->file('video_file');
-
-            $check = $uploads->validateVideo($upload);
-            if (! $check['ok']) {
-                return back()->withErrors(['video_file' => $check['errors']])->withInput();
-            }
-
-            if (! $scanner->scan($check['safe_path'] ?? $upload->getRealPath())) {
-                return back()->withErrors(['video_file' => 'File ditolak oleh anti-malware scanner.'])->withInput();
-            }
-
-            // Delete old video if exists. Done AFTER validation so a bad
-            // upload doesn't destroy the existing-good file.
-            if ($movie->video_path) {
-                Storage::disk($movie->video_disk ?? 'public')->delete($movie->video_path);
-            }
-
-            $safeName = SafeFilename::generate(
-                $upload->getClientOriginalName(),
-                'movie_'.($movie->slug ?: 'video')
-            );
-
-            $path = $upload->storeAs('videos', $safeName, 'public');
-            $movieData['video_path'] = $path;
-            $movieData['video_disk'] = 'public';
-        }
 
         $movie->update($movieData);
 
@@ -402,14 +367,47 @@ class AdminController extends Controller
 
     public function toggleAdmin(User $user)
     {
-        // Prevent removing own admin
-        if ($user->id === auth()->id()) {
-            return redirect()->route('admin.users.index')
-                ->with('error', 'Tidak bisa mengubah status admin sendiri!');
-        }
+        // FIX #6 (AUDIT #2 §2.5) — hard guard against self-revocation. A
+        // super_admin who flipped their own is_admin=false would lose
+        // admin access mid-request and lock themselves out (this column
+        // is the legacy single-source-of-truth for the `admin` Gate via
+        // `getIsAdminAttribute`). 403 with a clear message instead of
+        // the older soft redirect — abort_if is the canonical Laravel
+        // pattern and produces a consistent response across JSON/HTML.
+        abort_if(
+            $user->id === auth()->id() && $user->is_admin,
+            403,
+            'Cannot revoke your own admin status — ask another super_admin.'
+        );
 
-        $user->update(['is_admin' => ! $user->is_admin]);
+        // SECURITY: `is_admin` is NOT in $fillable (mass-assignment audit
+        // — see User::$fillable note). Use forceFill so the toggle
+        // actually persists; mirrors AdminController::unlockLogin /
+        // SessionsController and the documented internal-callers list.
+        $user->forceFill(['is_admin' => ! $user->is_admin])->save();
         $status = $user->is_admin ? 'admin' : 'user biasa';
+
+        // FIX #6 (AUDIT #2 §2.6) — privilege change MUST be audited.
+        // Routed through ::security() (ADMIN_ACTION) so it lights up
+        // /admin/audit-logs and the daily security digest. Wrapped in
+        // try/catch so a logging glitch never breaks the admin flow.
+        try {
+            app(AuditLogger::class)->security(
+                event: SecurityEvents::ADMIN_ACTION,
+                subject: $user,
+                meta: [
+                    'action' => 'toggle_is_admin',
+                    'new_value' => (bool) $user->is_admin,
+                    'target_user_id' => $user->id,
+                    'target_email' => $user->email,
+                ],
+            );
+        } catch (\Throwable $e) {
+            \Log::warning('AdminController: audit write failed for toggleAdmin', [
+                'target_user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return redirect()->route('admin.users.index')
             ->with('success', "\"{$user->name}\" sekarang {$status}.");

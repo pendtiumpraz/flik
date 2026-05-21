@@ -13,6 +13,16 @@
 @endphp
 
 <x-layout :title="$seoTitle" :description="$seoDescription" :ogImage="$seoOgImage">
+    {{-- AI-generated SEO meta (FIX #7) — pushes <title>, description,
+         keywords, OG, and Twitter Card tags into the layout <head> via
+         @stack('head'). The component reads seo_title/seo_description/
+         seo_keywords directly from the movie row (populated by
+         SeoMetaGenerator) and falls back to title+overview when those
+         columns are still NULL. --}}
+    @push('head')
+        <x-movie-seo :movie="$movieModel" />
+    @endpush
+
     <x-seo.movie-jsonld :movie="$movieModel" />
     <div class="min-h-screen bg-black pt-16">
         <!-- Hero / Player Section -->
@@ -295,6 +305,12 @@
 
                 {{-- Cinematography / colour analysis (renders nothing without data) --}}
                 <x-movies.cinematography :data="$movieModel->cinematography" />
+
+                {{-- AI Soundtrack Analysis (FIX #7) — collapsible card; self-hides
+                     when movies.soundtrack_analysis is NULL. Populated by the
+                     admin "Generate soundtrack analysis" action → AnalyzeSoundtrack
+                     job → SoundtrackAnalyzer. --}}
+                <x-movies.soundtrack-analysis :movie="$movieModel" />
 
                 {{-- Highlight Reel CTA — only when at least one ready reel exists --}}
                 @if($movieModel->highlightReels()->where('status', 'ready')->exists())

@@ -174,7 +174,7 @@ class SessionsController extends Controller
     /**
      * @return \Illuminate\Routing\Redirector|\Illuminate\Http\RedirectResponse
      */
-    public function destroy()
+    public function destroy(Request $request)
     {
         $user = auth()->user();
 
@@ -189,7 +189,14 @@ class SessionsController extends Controller
         }
 
         auth()->logout();
-        session()->forget(['2fa.passed', '2fa.pending_user_id', '2fa.remember']);
+        $request->session()->forget(['2fa.passed', '2fa.pending_user_id', '2fa.remember']);
+
+        // FIX #6 (AUDIT #1) — invalidate the session ID + rotate the CSRF
+        // token so a previously-issued cookie cannot be replayed on a not-
+        // yet-expired anonymous session. Laravel's Auth::logout() only
+        // clears the user binding; the session ID itself survives.
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return redirect('/')->with('success', 'you\'re out');
     }

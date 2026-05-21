@@ -59,14 +59,16 @@ class SoundtrackAnalyzer
 
         try {
             $response = $this->ai->chat(
-                [
+                messages: [
                     ['role' => 'system', 'content' => $systemPrompt],
                     ['role' => 'user',   'content' => $userPrompt],
                 ],
-                [
+                options: [
                     'max_tokens'  => 900,
                     'temperature' => 0.5,
                 ],
+                taskType: 'soundtrack.analyze',
+                subject: $movie,
             );
         } catch (\Throwable $e) {
             Log::error('SoundtrackAnalyzer: AI call failed', [

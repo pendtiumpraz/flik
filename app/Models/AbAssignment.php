@@ -21,7 +21,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null                      $session_id
  * @property string                           $variant
  * @property bool                             $converted
+ * @property \Illuminate\Support\Carbon|null  $assigned_at
  * @property \Illuminate\Support\Carbon|null  $converted_at
+ * @property float|null                       $conversion_value
  */
 class AbAssignment extends Model
 {
@@ -33,12 +35,16 @@ class AbAssignment extends Model
         'session_id',
         'variant',
         'converted',
+        'assigned_at',
         'converted_at',
+        'conversion_value',
     ];
 
     protected $casts = [
-        'converted'    => 'boolean',
-        'converted_at' => 'datetime',
+        'converted'        => 'boolean',
+        'assigned_at'      => 'datetime',
+        'converted_at'     => 'datetime',
+        'conversion_value' => 'decimal:2',
     ];
 
     // ── Relations ─────────────────────────────────────────────

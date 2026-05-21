@@ -61,14 +61,40 @@ class FunnelAnalyzer
     ];
 
     /**
-     * Build the full Visited → Subscribed funnel for the last `$days` days.
+     * Alias for {@see self::signupToSubscribed()} — kept for compatibility
+     * with `FunnelDashboardController` which historically called this name.
+     * Both call sites resolve to the same payload.
      *
      * @return array<int, array{
      *   stage: string,
      *   label: string,
      *   count: int,
      *   conversion_pct: float,
-     *   from_top_pct: float
+     *   from_top_pct: float,
+     *   percent_from_previous: float,
+     *   percent_from_top: float
+     * }>
+     */
+    public function engagementFunnel(int $days = 30): array
+    {
+        return $this->signupToSubscribed($days);
+    }
+
+    /**
+     * Build the full Visited → Subscribed funnel for the last `$days` days.
+     *
+     * Returns both the canonical keys (`conversion_pct`, `from_top_pct`) and
+     * legacy aliases (`percent_from_previous`, `percent_from_top`) so older
+     * views / callers consuming either shape resolve without breakage.
+     *
+     * @return array<int, array{
+     *   stage: string,
+     *   label: string,
+     *   count: int,
+     *   conversion_pct: float,
+     *   from_top_pct: float,
+     *   percent_from_previous: float,
+     *   percent_from_top: float
      * }>
      */
     public function signupToSubscribed(int $days = 30): array
@@ -237,11 +263,17 @@ class FunnelAnalyzer
                 : ($prev > 0 ? round(($count / $prev) * 100, 1) : 0.0);
 
             $out[] = [
-                'stage'          => $row['stage'],
-                'label'          => $row['label'],
-                'count'          => $count,
-                'conversion_pct' => $convPct,
-                'from_top_pct'   => $fromTop,
+                'stage'                 => $row['stage'],
+                'label'                 => $row['label'],
+                'count'                 => $count,
+                'conversion_pct'        => $convPct,
+                'from_top_pct'          => $fromTop,
+                // Legacy alias keys consumed by the dashboard view + the
+                // drop-off alert loop in FunnelDashboardController. Kept in
+                // lockstep with the canonical keys above so existing callers
+                // don't need to be updated when we ship new ones.
+                'percent_from_previous' => $convPct,
+                'percent_from_top'      => $fromTop,
             ];
 
             $prev = $count;

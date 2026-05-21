@@ -24,6 +24,26 @@ declare(strict_types=1);
 
 return [
 
+    /*
+    |--------------------------------------------------------------------------
+    | PII Pepper
+    |--------------------------------------------------------------------------
+    |
+    | Application-wide pepper appended to PII (national_id) before hashing
+    | with SHA-256. Consumed by App\Models\User::hashNationalId(). Sourced
+    | here via config() rather than env() directly so the value survives
+    | `php artisan config:cache` — env() returns null in cached-config
+    | mode, which would silently degrade the pepper to APP_KEY and make
+    | rotation impossible without a redeploy (audit 16 PRIVACY-6).
+    |
+    | Rotation procedure: change PII_PEPPER, clear config cache, then run
+    | `php artisan flik:security:reencrypt-pii --only=national_id` to
+    | re-hash all rows with the new pepper.
+    |
+    */
+
+    'pii_pepper' => env('PII_PEPPER', null),
+
     'password' => [
         // Minimum total characters. Increase, never decrease, in production.
         'min_length' => env('PASSWORD_MIN_LENGTH', 10),
@@ -292,10 +312,6 @@ return [
             // Comments may legitimately contain `<script>` or SQL-shaped
             // text — HtmlSanitizer + Comment moderation handle them.
             'comment.*',
-            // Admin pitch-deck markdown / movie descriptions can include
-            // code samples and quoted PHP. The admin gate is its own
-            // strong perimeter.
-            'admin.*',
             // AI chatbot input may legitimately ask about SQL injection,
             // include code examples, or paste error logs.
             'chat.*',
@@ -303,8 +319,45 @@ return [
             // unauthenticated (e.g. before route name resolution).
             'comment',
             'comment/*',
-            'admin/*',
             'chat',
+
+            // ── Admin surfaces that legitimately accept code-like /
+            // markdown / JSON content. Audit 15 W-1 fix: the previous
+            // wildcard 'admin.*' / 'admin/*' exempted EVERY admin POST
+            // (including /admin/users, /admin/movies CRUD, /admin/banners
+            // etc.) which silently disabled the second perimeter for an
+            // authenticated admin with malicious intent. The list below
+            // is the smaller set of admin routes where blocking SQL/PHP
+            // markers would false-positive on legitimate content.
+
+            // Pitch-deck Markdown body — explicitly intended to host code
+            // samples and quoted PHP/SQL in narrative form.
+            'admin.pitch-deck',
+            'admin.pitch-deck.*',
+
+            // Blog post body (Markdown/HTML, may include code blocks).
+            'admin.blog-posts.*',
+            'admin.blog.posts.*',
+            'admin.blog.ai.*',
+
+            // Help center article body (HTML/Markdown, may include code).
+            'admin.help-articles.*',
+            'admin.help.articles.*',
+            'admin.help.ai.*',
+
+            // Feature flag strategy_config is a JSON blob (rule trees can
+            // look SQL-shaped under string match).
+            'admin.feature-flags.*',
+
+            // Site settings store JSON values that may contain operator-
+            // pasted snippets (e.g. analytics tags, CSP overrides).
+            'admin.settings.*',
+
+            // AI provider config — operators paste JSON `extra` blobs
+            // (model params) that may contain quoted strings the WAF
+            // would otherwise treat as SQL/script signatures.
+            'admin.ai.*',
+            'admin.ai-providers.*',
         ],
         'ip_ban_threshold' => (int) env('WAF_IP_BAN_THRESHOLD', 5),
         'ip_ban_minutes' => (int) env('WAF_IP_BAN_MINUTES', 60),

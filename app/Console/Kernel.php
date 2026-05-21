@@ -42,6 +42,38 @@ class Kernel extends ConsoleKernel
         // Detect intro/outro markers for movies missing them (weekly Saturday)
         $schedule->command('flik:detect:intro-outro --queue --limit=50')->weeklyOn(6, '03:00')->withoutOverlapping()->onOneServer();
 
+        // X-Ray (J1) scene-actor hotspots — fills movie_scene_actors for
+        // films that have cast but no annotations yet. Solves audit-06
+        // F-1: the player polls /api/xray every 5s and would otherwise
+        // get empty payloads forever. Weekly Sunday 02:00 catches new
+        // uploads within ~7 days.
+        $schedule->command('flik:ai:scene-actors --all')
+            ->weeklyOn(0, '02:00')
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        // "Save for Friday Night" reminders — sweep every 5 min for
+        // schedules firing within the next hour. The command is idempotent
+        // (reminder_sent_at stamp prevents double-sends). Guarded with
+        // class_exists so the schedule resolves even if the command file
+        // is absent on an older branch.
+        if (class_exists(\App\Console\Commands\SendScheduleReminders::class)) {
+            $schedule->command('flik:schedule:remind')
+                ->everyFiveMinutes()
+                ->withoutOverlapping()
+                ->onOneServer();
+        }
+
+        // Audit log retention — Privacy Policy promises 12 months for
+        // general events. is_security=true rows are kept longer by default
+        // (legal/compliance evidence under UU ITE / UU PDP carve-outs).
+        // Weekly Sunday 04:00 so it doesn't clash with the daily backup
+        // (01:00) or the X-Ray sweep (02:00).
+        $schedule->command('flik:audit:prune --days=365')
+            ->weeklyOn(0, '04:00')
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // Security daily digest — 08:00 Asia/Jakarta. Sends to super_admins
         // even when SECURITY_ALERTS_ENABLED is false (digest is the
         // always-on summary; the realtime alerter is opt-in/severity-gated).

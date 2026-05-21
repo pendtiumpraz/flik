@@ -525,17 +525,22 @@ class User extends Authenticatable implements MustVerifyEmail
      * Canonicalize + hash a national ID with the app pepper.
      *
      * Pepper sources (in order of preference):
-     *   1. `PII_PEPPER` env (rotation-friendly: change pepper, re-hash all rows)
-     *   2. APP_KEY (default fallback so the app works out of the box)
+     *   1. `security.pii_pepper` config (backed by PII_PEPPER env).
+     *      Reading via config() instead of env() means the pepper survives
+     *      `php artisan config:cache` — previously broke silently because
+     *      env() returns null in cached-config mode and the pepper
+     *      degraded to APP_KEY, making rotation impossible without a
+     *      redeploy. Fixed in audit 16 PRIVACY-6.
+     *   2. APP_KEY (default fallback so the app works out of the box).
      *
      * Using a pepper means a stolen DB cannot be brute-forced against a
-     * dictionary of NIKs without ALSO stealing the .env file.
+     * dictionary of NIKs without ALSO stealing the .env (or cached config).
      */
     public static function hashNationalId(string $value): string
     {
         $canonical = strtolower(preg_replace('/\s+/', '', $value) ?? $value);
 
-        $pepper = (string) (env('PII_PEPPER') ?: Config::get('app.key', ''));
+        $pepper = (string) (Config::get('security.pii_pepper') ?: Config::get('app.key', ''));
 
         return hash('sha256', $canonical.'|'.$pepper);
     }
@@ -596,6 +601,19 @@ class User extends Authenticatable implements MustVerifyEmail
     public function notifications()
     {
         return $this->hasMany(Notification::class)->latest();
+    }
+
+    /**
+     * Per-user onboarding answers (user_preferences row).
+     *
+     * `hasOne` is correct here — the migration enforces UNIQUE(user_id).
+     * Stays nullable for users who never completed the 3-question quiz;
+     * the post-registration redirect + home-page dismiss banner read
+     * existence of this row to decide whether to push them through.
+     */
+    public function preferences()
+    {
+        return $this->hasOne(UserPreference::class);
     }
 
     // ── Helpers ───────────────────────────────────────────────

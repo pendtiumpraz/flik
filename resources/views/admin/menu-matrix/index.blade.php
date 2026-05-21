@@ -87,8 +87,8 @@
                             <div style="font-size:10px;color:#555;margin-top:2px;font-family:monospace;text-transform:none;letter-spacing:0">
                                 {{ $slug }}
                             </div>
-                            @if(\Illuminate\Support\Facades\Route::has('admin.roles.edit'))
-                                <a href="{{ route('admin.roles.edit', $slug) }}"
+                            @if(\Illuminate\Support\Facades\Route::has('admin.roles.edit') && !empty($roleIds[$slug] ?? null))
+                                <a href="{{ route('admin.roles.edit', $roleIds[$slug]) }}"
                                    style="display:inline-block;margin-top:6px;font-size:11px;color:#888;text-decoration:none;border-bottom:1px dashed #444"
                                    title="Edit {{ $label }} role permissions">
                                     Edit role

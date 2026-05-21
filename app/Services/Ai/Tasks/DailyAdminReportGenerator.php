@@ -282,11 +282,12 @@ class DailyAdminReportGenerator
             . "Data:\n```json\n" . json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n```";
 
         $response = $this->ai->chat(
-            [
+            messages: [
                 ['role' => 'system', 'content' => $system],
                 ['role' => 'user',   'content' => $user],
             ],
-            ['max_tokens' => 800, 'temperature' => 0.6]
+            options: ['max_tokens' => 800, 'temperature' => 0.6],
+            taskType: 'admin.daily_report',
         );
 
         return trim((string) ($response['content'] ?? ''));

@@ -83,10 +83,15 @@ class MovieReviewer
             ['role' => 'user',   'content' => $this->buildUserPrompt($context)],
         ];
 
-        $response = $this->ai->chat($messages, [
-            'max_tokens'  => $profile['max_tokens'],
-            'temperature' => $profile['temperature'],
-        ]);
+        $response = $this->ai->chat(
+            messages: $messages,
+            options: [
+                'max_tokens'  => $profile['max_tokens'],
+                'temperature' => $profile['temperature'],
+            ],
+            taskType: 'review.' . $perspective,
+            subject: $movie,
+        );
 
         $raw = trim((string) ($response['content'] ?? ''));
         if ($raw === '') {

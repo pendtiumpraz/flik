@@ -15,6 +15,7 @@
             <ul class="ml-10 hidden flex-row items-center gap-6 text-sm lg:flex">
                 <li><a href="{{ route('velflix.index') }}" class="font-medium text-white hover:text-[#C5A55A] transition-colors">{{ __('Home') }}</a></li>
                 <li><a href="{{ route('velflix.index') }}" class="text-gray-300 hover:text-[#C5A55A] transition-colors">{{ __('Films') }}</a></li>
+                <li><a href="{{ route('blog.index') }}" class="text-gray-300 hover:text-[#C5A55A] transition-colors">{{ __('Blog') }}</a></li>
 
                 <!-- Discover dropdown (AI discovery features) -->
                 <li x-data="{ openDiscover: false }" class="relative">
@@ -195,6 +196,23 @@
                                 <x-icon name="trophy" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
                                 <span>Rewards</span>
                             </a>
+                            {{-- Refer-a-friend + Redeem Gift entry points.
+                                 Guarded with Route::has() so the menu degrades
+                                 cleanly if the payment stack is partially
+                                 deployed (e.g. routes ungrouped during
+                                 maintenance). --}}
+                            @if(Route::has('referral.dashboard'))
+                                <a href="{{ route('referral.dashboard') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                    <x-icon name="user" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                    <span>Referrals</span>
+                                </a>
+                            @endif
+                            @if(Route::has('gift.redeem-form'))
+                                <a href="{{ route('gift.redeem-form') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
+                                    <x-icon name="gift" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
+                                    <span>Redeem Gift</span>
+                                </a>
+                            @endif
                             <a href="{{ route('plans.index') }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] transition-colors group">
                                 <x-icon name="gem" :size="16" class="text-[#C5A55A]/80 group-hover:text-[#C5A55A]" />
                                 <span>Upgrade Plan</span>
@@ -253,6 +271,9 @@
                 </a>
                 <a href="{{ route('velflix.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
                     <x-icon name="film" :size="18" class="text-[#C5A55A]/80" /> Films
+                </a>
+                <a href="{{ route('blog.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                    <x-icon name="sparkles" :size="18" class="text-[#C5A55A]/80" /> Blog
                 </a>
                 <a href="{{ route('watchlist.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
                     <x-icon name="bookmark" :size="18" class="text-[#C5A55A]/80" /> My List
@@ -315,6 +336,18 @@
                 <a href="{{ route('plans.index') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
                     <x-icon name="gem" :size="18" class="text-[#C5A55A]/80" /> Plans
                 </a>
+                {{-- Refer-a-friend + Redeem Gift (mobile). Route::has() guards
+                     mirror the desktop dropdown above. --}}
+                @if(Route::has('referral.dashboard'))
+                    <a href="{{ route('referral.dashboard') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                        <x-icon name="user" :size="18" class="text-[#C5A55A]/80" /> Referrals
+                    </a>
+                @endif
+                @if(Route::has('gift.redeem-form'))
+                    <a href="{{ route('gift.redeem-form') }}" class="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-200 hover:bg-[#C5A55A]/10 hover:text-[#C5A55A] rounded-lg transition-colors">
+                        <x-icon name="gift" :size="18" class="text-[#C5A55A]/80" /> Redeem Gift
+                    </a>
+                @endif
 
                 <div class="pt-2 mt-2 border-t border-gray-800/60 space-y-0.5">
                     <a href="{{ $user->publicProfileUrl() ?? route('profile.show') }}"

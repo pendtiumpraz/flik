@@ -8,9 +8,7 @@ use App\Models\AbAssignment;
 use App\Models\AbExperiment;
 use App\Models\User;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use RuntimeException;
 
 /**
  * Lightweight A/B testing framework (D6).
@@ -86,10 +84,13 @@ class AbTestFramework
 
         try {
             AbAssignment::create([
-                'experiment_id' => $experiment->id,
-                'user_id'       => $user->id,
-                'variant'       => $variant,
-                'assigned_at'   => Carbon::now(),
+                // The schema FK is `ab_experiment_id` (see
+                // `ab_assignments` migration). Earlier drafts used a bare
+                // `experiment_id` alias that never existed on the table.
+                'ab_experiment_id' => $experiment->id,
+                'user_id'          => $user->id,
+                'variant'          => $variant,
+                'assigned_at'      => Carbon::now(),
             ]);
         } catch (\Throwable $e) {
             // Race condition: another request inserted concurrently. Re-read
@@ -145,6 +146,7 @@ class AbTestFramework
         }
 
         $assignment->forceFill([
+            'converted'        => true,
             'converted_at'     => Carbon::now(),
             'conversion_value' => $value,
         ])->save();
@@ -153,6 +155,11 @@ class AbTestFramework
     /**
      * Aggregate per-variant report for one experiment.
      *
+     * Emits BOTH the canonical `converted` key and a legacy `conversions`
+     * alias so older view code (`ab/show.blade.php`) can read either.
+     * `conversion_rate` is a PERCENTAGE (0..100) — the view must NOT
+     * multiply by 100 again.
+     *
      * @return array{
      *   experiment: array{slug:string, name:string, status:string, winner:?string},
      *   total_assigned: int,
@@ -160,12 +167,15 @@ class AbTestFramework
      *   overall_conversion_rate: float,
      *   variants: array<int, array{
      *     variant:string,
+     *     weight:float,
      *     assigned:int,
      *     converted:int,
+     *     conversions:int,
      *     conversion_rate:float,
      *     avg_value:float,
      *     total_value:float
-     *   }>
+     *   }>,
+     *   significance: ?array{method:string, chi_square:float, p_lt_0_05:bool, baseline:string, challenger:string, baseline_rate:float, challenger_rate:float, sample_size:int}
      * }
      */
     public function report(string $experimentSlug): array
@@ -184,6 +194,12 @@ class AbTestFramework
             ->groupBy('variant')
             ->get()
             ->keyBy('variant');
+
+        // Weight lookup — falls back to `null` so the view can show "—".
+        $weightByKey = [];
+        foreach ($experiment->normalizedVariants() as $v) {
+            $weightByKey[$v['key']] = $v['weight'];
+        }
 
         // Seed empty buckets for every defined variant so the report shape
         // is stable even before traffic flows.
@@ -212,8 +228,13 @@ class AbTestFramework
 
             $variants[] = [
                 'variant'         => $key,
+                'weight'          => isset($weightByKey[$key])
+                    ? round((float) $weightByKey[$key], 4)
+                    : null,
                 'assigned'        => $assigned,
                 'converted'       => $converted,
+                // Legacy alias for older views that read `conversions`.
+                'conversions'     => $converted,
                 'conversion_rate' => $rate,
                 'avg_value'       => $avg,
                 'total_value'     => round($totalVal, 2),
@@ -235,7 +256,91 @@ class AbTestFramework
             'overall_conversion_rate' => $totalAssigned > 0
                 ? round(($totalConverted / $totalAssigned) * 100, 2)
                 : 0.0,
-            'variants' => $variants,
+            'variants'     => $variants,
+            'significance' => $this->computeSignificance($variants),
+        ];
+    }
+
+    /**
+     * Two-variant Chi-square (Pearson) for control vs. challenger.
+     *
+     * Picks the first two variants with `assigned > 0`, builds the 2x2
+     * contingency table (converted / not-converted), and returns the
+     * Chi-square statistic + a coarse `p < 0.05` flag (critical value at
+     * df=1, alpha=0.05 is 3.841).
+     *
+     * Returns `null` when:
+     *   - fewer than 2 variants have traffic;
+     *   - any cell expected count drops below 5 (Chi-square invalid);
+     *   - either variant has zero assignments.
+     *
+     * The view should hide the panel when this key is null.
+     *
+     * @param array<int, array<string, mixed>> $variants
+     * @return array<string, mixed>|null
+     */
+    protected function computeSignificance(array $variants): ?array
+    {
+        $usable = array_values(array_filter(
+            $variants,
+            static fn (array $v): bool => (int) ($v['assigned'] ?? 0) > 0,
+        ));
+
+        if (count($usable) < 2) {
+            return null;
+        }
+
+        $a = $usable[0];
+        $b = $usable[1];
+
+        $aAssigned  = (int) $a['assigned'];
+        $bAssigned  = (int) $b['assigned'];
+        $aConverted = (int) $a['converted'];
+        $bConverted = (int) $b['converted'];
+
+        $aNot = $aAssigned - $aConverted;
+        $bNot = $bAssigned - $bConverted;
+
+        $rowConverted = $aConverted + $bConverted;
+        $rowNot       = $aNot + $bNot;
+        $colA         = $aAssigned;
+        $colB         = $bAssigned;
+        $n            = $aAssigned + $bAssigned;
+
+        if ($n <= 0 || $colA <= 0 || $colB <= 0) {
+            return null;
+        }
+
+        // Expected cell counts under H0 (no association).
+        $eAConverted = ($rowConverted * $colA) / $n;
+        $eANot       = ($rowNot * $colA) / $n;
+        $eBConverted = ($rowConverted * $colB) / $n;
+        $eBNot       = ($rowNot * $colB) / $n;
+
+        // Chi-square is unreliable when expected counts drop below 5.
+        $min = min($eAConverted, $eANot, $eBConverted, $eBNot);
+        if ($min < 5) {
+            return null;
+        }
+
+        $chi = 0.0;
+        $chi += (($aConverted - $eAConverted) ** 2) / $eAConverted;
+        $chi += (($aNot - $eANot) ** 2) / $eANot;
+        $chi += (($bConverted - $eBConverted) ** 2) / $eBConverted;
+        $chi += (($bNot - $eBNot) ** 2) / $eBNot;
+
+        // Pearson Chi-square critical value at df=1, alpha=0.05 = 3.841.
+        $significant = $chi >= 3.841;
+
+        return [
+            'method'           => 'pearson_chi_square_2x2',
+            'chi_square'       => round($chi, 3),
+            'p_lt_0_05'        => $significant,
+            'baseline'         => (string) $a['variant'],
+            'challenger'       => (string) $b['variant'],
+            'baseline_rate'    => (float) $a['conversion_rate'],
+            'challenger_rate'  => (float) $b['conversion_rate'],
+            'sample_size'      => $n,
         ];
     }
 

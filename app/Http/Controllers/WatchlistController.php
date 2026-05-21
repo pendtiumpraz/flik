@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Watchlist;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 
 class WatchlistController extends Controller
@@ -32,10 +33,22 @@ class WatchlistController extends Controller
             $existing->delete();
             $added = false;
         } else {
-            Watchlist::create([
-                'user_id' => $userId,
-                'movie_id' => $movieId,
-            ]);
+            try {
+                Watchlist::create([
+                    'user_id' => $userId,
+                    'movie_id' => $movieId,
+                ]);
+            } catch (QueryException $e) {
+                // Unique-key race: two tabs raced past the where()->first()
+                // check above. The DB unique index on (user_id, movie_id)
+                // is the source of truth — treat as already-added rather
+                // than 500ing. Toggle remains conceptually idempotent.
+                if ((int) ($e->errorInfo[1] ?? 0) !== 1062 // MySQL duplicate-key
+                    && ! str_contains(strtolower($e->getMessage()), 'unique')
+                ) {
+                    throw $e;
+                }
+            }
             $added = true;
         }
 

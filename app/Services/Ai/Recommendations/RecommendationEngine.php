@@ -5,11 +5,13 @@ namespace App\Services\Ai\Recommendations;
 use App\Models\Movie;
 use App\Models\Rating;
 use App\Models\User;
+use App\Models\UserPreference;
 use App\Models\UserRecommendation;
 use App\Models\WatchHistory;
 use App\Models\Watchlist;
 use App\Services\Ai\AiClient;
 use App\Services\Ai\FilmKnowledgeService;
+use App\Services\Ai\Tasks\ColdStartRecommender;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -374,13 +376,18 @@ class RecommendationEngine
             . json_encode($films, JSON_UNESCAPED_UNICODE);
 
         try {
-            $result = $this->ai->chat([
-                ['role' => 'system', 'content' => 'Kamu film curator. Output JSON object only, no prose.'],
-                ['role' => 'user', 'content' => $prompt],
-            ], [
-                'max_tokens'  => 800,
-                'temperature' => 0.4,
-            ]);
+            $result = $this->ai->chat(
+                messages: [
+                    ['role' => 'system', 'content' => 'Kamu film curator. Output JSON object only, no prose.'],
+                    ['role' => 'user', 'content' => $prompt],
+                ],
+                options: [
+                    'max_tokens'  => 800,
+                    'temperature' => 0.4,
+                ],
+                taskType: 'recommend.ai_rerank',
+                subject: $user,
+            );
 
             $content = trim($result['content'] ?? '');
             // Strip code fences if present
@@ -471,10 +478,40 @@ class RecommendationEngine
     // ────────────────────────────────────────────────────────────
 
     /**
-     * No signal yet → return popular & trending films.
+     * No signal yet → prefer onboarding-quiz answers (ColdStartRecommender),
+     * fall through to popularity when the user skipped the quiz.
+     *
+     * Bridge: UserPreference stores genre slugs/names; ColdStartRecommender
+     * already handles both — it does the slug/name lookup against
+     * Genre.slug / Genre.name internally (see ColdStartRecommender::recommendForNewUser).
      */
     protected function coldStartFallback(User $user, int $count, string $batchId): Collection
     {
+        $prefs = UserPreference::where('user_id', $user->id)->first();
+
+        if ($prefs !== null) {
+            $hasSignal = ! empty($prefs->favorite_genres) || ! empty($prefs->favorite_eras);
+
+            if ($hasSignal) {
+                try {
+                    /** @var ColdStartRecommender $recommender */
+                    $recommender = app(ColdStartRecommender::class);
+                    $movies = $recommender->recommendForNewUser($prefs, $count);
+
+                    if ($movies->isNotEmpty()) {
+                        $this->persistColdStart($user, $movies, $batchId, 'Karena kamu suka ' . $this->reasonFromPrefs($prefs));
+                        return $movies;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('RecommendationEngine: ColdStartRecommender failed, falling back to popularity', [
+                        'user_id' => $user->id,
+                        'error'   => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        // Pure popularity fallback (no quiz, or quiz produced no matches).
         $movies = Movie::with('genres')
             ->orderByDesc('is_trending')
             ->orderByDesc('popularity')
@@ -483,16 +520,29 @@ class RecommendationEngine
 
         if ($movies->isEmpty()) return collect();
 
-        // Persist as a "popular fallback" batch
+        $this->persistColdStart($user, $movies, $batchId, 'Lagi populer di FLiK');
+
+        return $movies;
+    }
+
+    /**
+     * Shared persistence path for cold-start payloads.
+     *
+     * @param  Collection<int, Movie>  $movies
+     */
+    protected function persistColdStart(User $user, Collection $movies, string $batchId, string $reason): void
+    {
+        if ($movies->isEmpty()) return;
+
         $now = now();
         $rank = 0;
-        $rows = $movies->map(function (Movie $m) use ($user, $batchId, $now, &$rank) {
+        $rows = $movies->map(function (Movie $m) use ($user, $batchId, $now, $reason, &$rank) {
             $rank++;
             return [
                 'user_id'      => $user->id,
                 'movie_id'     => $m->id,
                 'score'        => round(max(0.1, 10 - $rank * 0.3), 3),
-                'reason'       => 'Lagi populer di FLiK',
+                'reason'       => $reason,
                 'source'       => UserRecommendation::SOURCE_CONTENT_BASED,
                 'batch_id'     => $batchId,
                 'generated_at' => $now,
@@ -503,9 +553,28 @@ class RecommendationEngine
 
         DB::transaction(function () use ($user, $rows) {
             UserRecommendation::where('user_id', $user->id)->delete();
-            UserRecommendation::insert($rows);
+            foreach (array_chunk($rows, 100) as $chunk) {
+                UserRecommendation::insert($chunk);
+            }
         });
+    }
 
-        return $movies;
+    /**
+     * Build a short Indonesian reason string from the user's onboarding answers.
+     */
+    protected function reasonFromPrefs(UserPreference $prefs): string
+    {
+        $genres = is_array($prefs->favorite_genres) ? $prefs->favorite_genres : [];
+        $eras   = is_array($prefs->favorite_eras) ? $prefs->favorite_eras : [];
+
+        $bits = [];
+        if (!empty($genres)) {
+            $bits[] = 'genre ' . implode(', ', array_slice(array_map('ucfirst', $genres), 0, 2));
+        }
+        if (!empty($eras)) {
+            $bits[] = 'era ' . implode(', ', array_slice($eras, 0, 2));
+        }
+
+        return $bits ? implode(' & ', $bits) : 'pilihanmu';
     }
 }

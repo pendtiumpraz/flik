@@ -287,6 +287,10 @@ Route::middleware('auth')->group(function () {
     // Standalone player view for a single episode of a series. Lives
     // alongside /watch/progress so the player's heartbeat ajax post
     // stays unchanged — the new request just adds `episode_id`.
+    // `geoblock` reads the route's `{movie}` param. The episode route binds
+    // {episode} not {movie}, so geo enforcement is handled INSIDE the
+    // controller (which looks up $episode->movie and applies the same gate).
+    // See audit FIX #2 §3.1 / §5.
     Route::get('/watch/episode/{episode}', [\App\Http\Controllers\EpisodeWatchController::class, 'show'])
         ->name('episodes.watch');
 
@@ -330,7 +334,9 @@ Route::middleware('auth')->group(function () {
 
     // Movie Trivia Quiz Game (O5)
     Route::get('/movie/{movie}/quiz', [\App\Http\Controllers\QuizController::class, 'start'])->name('quiz.start');
-    Route::post('/movie/{movie}/quiz', [\App\Http\Controllers\QuizController::class, 'submit'])->name('quiz.submit');
+    Route::post('/movie/{movie}/quiz', [\App\Http\Controllers\QuizController::class, 'submit'])
+        ->middleware('throttle:6,1') // 6/min/IP — deters brute-forcing the correct answers (audit 09 / E-7)
+        ->name('quiz.submit');
     Route::get('/movie/{movie}/quiz/leaderboard', [\App\Http\Controllers\QuizController::class, 'leaderboard'])->name('quiz.leaderboard');
 
     // ━━━ Refer-a-friend dashboard + Gift redeem (auth-only surface) ━━━
@@ -448,8 +454,30 @@ Route::post('/api/movies/{movie}/plot-explain', [\App\Http\Controllers\PlotExpla
     ->name('movies.plot-explain');
 
 // ━━━ DRM Key Endpoint (no auth — JWT-protected, fetched by Shaka Player) ━━━
+//
+// JWT scope guard + per-key replay binding live inside PlaybackController::key.
+// Geo enforcement is inline (legacy) and matches `geoblock` semantics; see
+// docs/audit/04-drm-playback.md FIX #2 §3.1.
 Route::get('/drm/key/{sessionToken}/{keyId}', [\App\Http\Controllers\PlaybackController::class, 'key'])
     ->name('drm.key');
+
+// ━━━ DRM media playlist + segment streaming (signed-URL gated) ━━━
+//
+// PlaybackManifestGenerator emits these URLs via URL::temporarySignedRoute,
+// so the `signed` middleware revalidates the signature on every fetch. The
+// player never gets to forge a playlist URL for a different movie/rendition.
+// `geoblock` denies countries outside the movie's geo_allow list (HTTP 451).
+// See docs/audit/04-drm-playback.md FIX #2 §2.4 / §3.1.
+Route::get('/drm/playlist/{movie:slug}/{rendition}.m3u8', [\App\Http\Controllers\PlaybackController::class, 'playlist'])
+    ->middleware(['signed', 'geoblock'])
+    ->where('rendition', '[A-Za-z0-9_\-]+')
+    ->name('drm.playlist');
+
+Route::get('/drm/segment/{movie:slug}/{rendition}/{filename}', [\App\Http\Controllers\PlaybackController::class, 'segment'])
+    ->middleware(['signed', 'geoblock'])
+    ->where('rendition', '[A-Za-z0-9_\-]+')
+    ->where('filename', 'segment_[0-9]+\.ts')
+    ->name('drm.segment');
 
 // ━━━ Signed-URL media accessors (no auth — gated by `signed` middleware) ━━━
 // Backs Movie::getPosterUrlAttribute() for any poster/backdrop/slider that
@@ -527,7 +555,19 @@ Route::get('/blog/{post:slug}', [\App\Http\Controllers\BlogController::class, 's
 //
 // Routes without a more specific permission (the dashboard landing
 // page + pitch deck reader) stay on the bare `can:admin` gate.
-Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group(function () {
+//
+// 2FA enforcement (FIX #6, AUDIT #1 priority): every admin route is
+// gated by the `2fa` middleware (alias → TwoFactorVerified). The
+// middleware is a no-op for users who have NOT enabled 2FA, so
+// existing admin accounts without TOTP keep working today. Once an
+// admin enables 2FA via /profile, every subsequent admin request
+// must clear the challenge — closing the OAuth/programmatic-login
+// bypass identified in docs/audit/01-auth-login.md.
+//
+// Policy: super_admins MUST enable 2FA. Enforced procedurally for
+// now (admins-MUST-enable-2FA migration policy) until a hard-block
+// is shipped.
+Route::middleware(['auth', '2fa', 'can:admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [\App\Http\Controllers\AdminController::class, 'dashboard'])->name('dashboard');
 
     // ─── Movies CRUD ─────────────────────────────────────────────
@@ -731,6 +771,12 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
     Route::post('/movies/{movie}/marketing-ai/social', [\App\Http\Controllers\Admin\MarketingAiController::class, 'generateSocial'])
         ->middleware('can:marketing.social')->name('movies.marketing-ai.social.generate');
 
+    // Per-movie AI: soundtrack analyzer (FIX #7). Queues AnalyzeSoundtrack
+    // on ai-batch; result is rendered on the public detail page when
+    // movies.soundtrack_analysis is populated.
+    Route::post('/movies/{movie}/soundtrack', [\App\Http\Controllers\Admin\MovieAiController::class, 'soundtrack'])
+        ->middleware('can:ai.tasks.run')->name('movies.soundtrack.generate');
+
     // Comment Moderation Queue
     Route::get('/comments/queue', [\App\Http\Controllers\Admin\CommentModerationController::class, 'queue'])
         ->middleware('can:comments.moderate')->name('comments.queue');
@@ -743,7 +789,12 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
 
     // ━━━ SWARM 25 ROUTES ━━━
 
-    // Movie video upload + transcoding control
+    // Movie video upload + transcoding control. The GET upload page is the
+    // canonical destination after creating a movie via the metadata form —
+    // legacy AdminController::store/updateMovie now redirects here for any
+    // video work. See docs/audit/04-drm-playback.md FIX #2 §6.
+    Route::get('/movies/{movie}/upload', [\App\Http\Controllers\Admin\MovieUploadController::class, 'showUploadPage'])
+        ->middleware('can:movies.upload_master')->name('movies.upload-page');
     Route::post('/movies/{movie}/upload-master', [\App\Http\Controllers\Admin\MovieUploadController::class, 'uploadMaster'])
         ->middleware('can:movies.upload_master')->name('movies.upload-master');
     Route::post('/movies/{movie}/start-transcode', [\App\Http\Controllers\Admin\MovieUploadController::class, 'startTranscode'])
@@ -957,6 +1008,44 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
         ->where('section', '[a-z]+')
         ->name('health.check');
 
+    // ━━━ Feature Flags (runtime rollout toggles) ━━━
+    // Backed by App\Models\FeatureFlag + App\Services\Features\FeatureManager.
+    // Every action gated on `system.feature_flags` (granted to admin +
+    // super_admin via RolePermissionSeeder). Per-action middleware mirrors
+    // the controller's $this->authorize() calls so a request without the
+    // permission short-circuits BEFORE the controller is even resolved.
+    //
+    // Explicit Route::bind so the URL stays the prettier `{flag}` while the
+    // controller signature keeps the readable `FeatureFlag $featureFlag` —
+    // implicit binding requires param-name match, so we wire it manually.
+    Route::bind('flag', function (string $value) {
+        return \App\Models\FeatureFlag::query()->findOrFail((int) $value);
+    });
+    Route::get('/feature-flags', [\App\Http\Controllers\Admin\FeatureFlagController::class, 'index'])
+        ->middleware('can:system.feature_flags')->name('feature-flags.index');
+    Route::get('/feature-flags/create', [\App\Http\Controllers\Admin\FeatureFlagController::class, 'create'])
+        ->middleware('can:system.feature_flags')->name('feature-flags.create');
+    Route::post('/feature-flags', [\App\Http\Controllers\Admin\FeatureFlagController::class, 'store'])
+        ->middleware('can:system.feature_flags')->name('feature-flags.store');
+    Route::get('/feature-flags/{flag}/edit', [\App\Http\Controllers\Admin\FeatureFlagController::class, 'edit'])
+        ->middleware('can:system.feature_flags')->name('feature-flags.edit');
+    Route::put('/feature-flags/{flag}', [\App\Http\Controllers\Admin\FeatureFlagController::class, 'update'])
+        ->middleware('can:system.feature_flags')->name('feature-flags.update');
+    Route::delete('/feature-flags/{flag}', [\App\Http\Controllers\Admin\FeatureFlagController::class, 'destroy'])
+        ->middleware('can:system.feature_flags')->name('feature-flags.destroy');
+
+    // ━━━ Settings Registry (runtime-editable key/value store) ━━━
+    // Backed by App\Models\Setting + setting()/Setting::get helpers.
+    // Single bulk-update endpoint per the controller contract — the index
+    // form posts every dirty setting back at once. Restore-defaults reverts
+    // every seeded key to its canonical value (destructive on purpose).
+    Route::get('/settings', [\App\Http\Controllers\Admin\SettingsController::class, 'index'])
+        ->middleware('can:system.settings')->name('settings.index');
+    Route::post('/settings', [\App\Http\Controllers\Admin\SettingsController::class, 'update'])
+        ->middleware('can:system.settings')->name('settings.update');
+    Route::post('/settings/restore-defaults', [\App\Http\Controllers\Admin\SettingsController::class, 'seed'])
+        ->middleware('can:system.settings')->name('settings.restore-defaults');
+
     // ━━━ Editorial Blog (admin CRUD + AI assist) ━━━
     // Gated on `blog.manage` (seeded under the `content` category). The
     // legacy `Gate::before` admin fallback in AuthServiceProvider keeps
@@ -1017,6 +1106,27 @@ Route::middleware(['auth', 'can:admin'])->prefix('admin')->name('admin.')->group
         ->parameters(['categories' => 'category'])
         ->middleware('can:help.manage')
         ->names('help.categories');
+
+    // ━━━ Gift Subscriptions (admin read-only inventory) ━━━
+    // Read-only listing — refunds are issued directly on the Midtrans
+    // dashboard so the gateway stays the source of truth. The admin
+    // controller exposes only an index() action today; a refund() helper
+    // is on the roadmap but unimplemented (see GiftSubscriptionAdminController
+    // docblock + audits/11-payment.md). Gated on the bare `can:admin`
+    // umbrella — every billing-flavoured admin role passes through, and
+    // there's no destructive write to require a sharper permission for.
+    Route::get('/gifts', [\App\Http\Controllers\Admin\GiftSubscriptionAdminController::class, 'index'])
+        ->name('gifts.index');
+
+    // ━━━ Refer-a-friend program (admin reporting) ━━━
+    // index()  — filterable conversion ledger
+    // report() — KPI cards + top-referrers leaderboard
+    // Both read-only. Same `can:admin` umbrella applies — finance + marketing
+    // peers need the funnel snapshot without a dedicated permission slug.
+    Route::get('/referrals', [\App\Http\Controllers\Admin\ReferralAdminController::class, 'index'])
+        ->name('referrals.index');
+    Route::get('/referrals/report', [\App\Http\Controllers\Admin\ReferralAdminController::class, 'report'])
+        ->name('referrals.report');
 });
 
 // ━━━ User-facing AI Features ━━━
@@ -1025,6 +1135,9 @@ Route::middleware('auth')->group(function () {
     // Onboarding (cold-start)
     Route::get('/onboarding', [\App\Http\Controllers\OnboardingController::class, 'quiz'])->name('onboarding.quiz');
     Route::post('/onboarding', [\App\Http\Controllers\OnboardingController::class, 'submit'])->name('onboarding.submit');
+    // Suppresses the home-page "Tell us what you like" nudge banner for the
+    // remainder of the session (per-session, not persisted to user row).
+    Route::post('/onboarding/dismiss', [\App\Http\Controllers\OnboardingController::class, 'dismiss'])->name('onboarding.dismiss');
 
     // Mood Discovery — POST kicks off a real LLM call so it goes through
     // the 'ai-batch' limiter (50/hr/user). The GET form view is cheap and
@@ -1101,9 +1214,18 @@ Route::middleware('auth')->group(function () {
         ->name('search.person');
 
     // ── Encrypted playback (DRM-protected) ──
-    Route::get('/playback/{movie}/config', [\App\Http\Controllers\PlaybackController::class, 'config'])->name('playback.config');
-    Route::get('/playback/{movie}/manifest.m3u8', [\App\Http\Controllers\PlaybackController::class, 'manifest'])->name('playback.manifest');
-    Route::post('/playback/{movie}/heartbeat', [\App\Http\Controllers\PlaybackController::class, 'heartbeat'])->name('playback.heartbeat');
+    // `geoblock` ensures the request country is in $movie->geo_allow before
+    // any DRM session is minted or any manifest is emitted. Per audit FIX #2
+    // §3.1 — middleware was registered but never mounted before.
+    Route::get('/playback/{movie}/config', [\App\Http\Controllers\PlaybackController::class, 'config'])
+        ->middleware('geoblock')
+        ->name('playback.config');
+    Route::get('/playback/{movie}/manifest.m3u8', [\App\Http\Controllers\PlaybackController::class, 'manifest'])
+        ->middleware('geoblock')
+        ->name('playback.manifest');
+    Route::post('/playback/{movie}/heartbeat', [\App\Http\Controllers\PlaybackController::class, 'heartbeat'])
+        ->middleware('geoblock')
+        ->name('playback.heartbeat');
 });
 
 // ━━━ Public Profile + Social Layer (peer SOCIAL #1) ━━━

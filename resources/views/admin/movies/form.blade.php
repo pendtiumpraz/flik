@@ -109,16 +109,38 @@
                 </div>
             </div>
 
-            <!-- Video Upload -->
+            <!-- Video Master (DRM/Transcode pipeline) -->
+            {{-- DRM hardening per docs/audit/04-drm-playback.md FIX #2 §6.
+                 The legacy inline upload field used to store unencrypted MP4
+                 on the public disk, bypassing DRM. Removed; admins now upload
+                 the master via the dedicated MovieUploadController page which
+                 dispatches TranscodeMovie → EncryptHlsSegments → UploadToBunny. --}}
             <div class="form-group">
-                <label>📹 Video File (MP4, WebM, MOV — max 500MB)</label>
-                <input type="file" name="video_file" class="form-input" accept=".mp4,.webm,.mov,.avi" style="padding:10px">
-                @if($movie && $movie->video_path)
-                    <div style="margin-top:8px;padding:8px 12px;background:#252525;border-radius:6px;font-size:12px;color:#888">
-                        ✅ Video saat ini: <strong style="color:#C5A55A">{{ basename($movie->video_path) }}</strong>
-                        <span style="color:#555">({{ $movie->video_disk }})</span>
-                    </div>
-                @endif
+                <label>📹 Master Video (DRM-protected pipeline)</label>
+                <div style="background:#1f1d1a;border:1px solid rgba(197,165,90,0.25);border-radius:8px;padding:14px 16px;font-size:13px;color:#cbb98a;line-height:1.6">
+                    @if($movie)
+                        @if($movie->encoding_status === 'ready')
+                            <strong style="color:#7be78a">✓ Master sudah di-encode</strong> — pipeline DRM/HLS aktif. Upload ulang untuk mengganti.
+                        @elseif($movie->encoding_status === 'processing')
+                            <strong style="color:#f0b942">⏳ Sedang encoding</strong> — buka halaman upload untuk memantau progres.
+                        @elseif($movie->encoding_status === 'failed')
+                            <strong style="color:#ef4444">✗ Encoding gagal</strong> — buka halaman upload untuk mencoba ulang.
+                        @else
+                            <strong>Belum ada master.</strong> Simpan dulu metadata di sini, lalu buka halaman upload untuk mengirim file master.
+                        @endif
+                        <div style="margin-top:10px">
+                            @if(\Illuminate\Support\Facades\Route::has('admin.movies.upload-page'))
+                                <a href="{{ route('admin.movies.upload-page', $movie) }}"
+                                   class="btn btn-gold btn-sm"
+                                   style="font-size:12px;padding:8px 14px;border-radius:6px;text-decoration:none">
+                                    Upload Master Video →
+                                </a>
+                            @endif
+                        </div>
+                    @else
+                        Simpan film dulu, lalu upload master video melalui pipeline DRM/transcode pada halaman berikutnya.
+                    @endif
+                </div>
             </div>
 
             <!-- Flags -->

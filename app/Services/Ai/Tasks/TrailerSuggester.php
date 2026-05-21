@@ -98,7 +98,7 @@ class TrailerSuggester
 
         // Refine via AI when subtitle text is available for the window.
         $shortlist = array_map(
-            fn (array $c) => $this->refineWithAi($c, $subtitleCues),
+            fn (array $c) => $this->refineWithAi($c, $subtitleCues, $movie),
             $shortlist,
         );
 
@@ -404,7 +404,7 @@ class TrailerSuggester
      * @param  array<int, array{start:float,end:float,text:string}>  $allCues
      * @return array<string,mixed>
      */
-    protected function refineWithAi(array $candidate, array $allCues): array
+    protected function refineWithAi(array $candidate, array $allCues, ?\App\Models\Movie $movie = null): array
     {
         $text = $candidate['text'] ?? '';
         if ($text === '' && !empty($allCues)) {
@@ -419,23 +419,28 @@ class TrailerSuggester
         }
 
         try {
-            $response = $this->ai->chat([
-                [
-                    'role'    => 'system',
-                    'content' => 'You rate film scenes for trailer-worthiness. ' .
-                                 'Reply with ONE JSON object: {"score": <1-10 float>, "reason": "<short>"}. ' .
-                                 'No prose, no markdown.',
+            $response = $this->ai->chat(
+                messages: [
+                    [
+                        'role'    => 'system',
+                        'content' => 'You rate film scenes for trailer-worthiness. ' .
+                                     'Reply with ONE JSON object: {"score": <1-10 float>, "reason": "<short>"}. ' .
+                                     'No prose, no markdown.',
+                    ],
+                    [
+                        'role'    => 'user',
+                        'content' => "Scene dialog (about 30 seconds):\n\n" .
+                                     mb_substr($text, 0, 1200) .
+                                     "\n\nHow trailer-worthy is this scene?",
+                    ],
                 ],
-                [
-                    'role'    => 'user',
-                    'content' => "Scene dialog (about 30 seconds):\n\n" .
-                                 mb_substr($text, 0, 1200) .
-                                 "\n\nHow trailer-worthy is this scene?",
+                options: [
+                    'max_tokens'  => 120,
+                    'temperature' => 0.2,
                 ],
-            ], [
-                'max_tokens'  => 120,
-                'temperature' => 0.2,
-            ]);
+                taskType: 'trailer.scene_score',
+                subject: $movie,
+            );
 
             $parsed = $this->parseScoreJson($response['content'] ?? '');
             if ($parsed !== null) {

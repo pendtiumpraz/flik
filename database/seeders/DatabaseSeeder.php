@@ -68,6 +68,10 @@ class DatabaseSeeder extends Seeder
             // re-run (only first insert writes the canonical defaults).
             FeatureFlagSeeder::class,
             SettingSeeder::class,
+            // Editorial blog starter content — 3 categories + 2 sample posts.
+            // Idempotent (firstOrCreate by slug) so re-seeding never duplicates.
+            // Runs BEFORE HelpSeeder so both surfaces are populated in one pass.
+            BlogSeeder::class,
             // Help Center starter content — 4 categories + 6 articles.
             // Idempotent (firstOrCreate by slug) so re-seeding never duplicates.
             HelpSeeder::class,

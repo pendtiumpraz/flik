@@ -2,6 +2,37 @@
     <div class="bg-black min-h-screen pt-16">
         <div class="container mx-auto px-4 md:px-6 lg:px-8 max-w-[1600px] py-6 md:py-8">
 
+            {{-- ━━━ Onboarding nudge banner (FIX #7) ━━━
+                 Shown to authed users who never completed the 3-question
+                 quiz. Dismiss is per-session (Cache key) so users who click
+                 "Lewati" don't see it again until they log out / clear
+                 storage. Reading session() instead of querying preferences()
+                 keeps this O(0) DB on home page renders. --}}
+            @auth
+                @if(session('onboarding.pending') && !auth()->user()->preferences()->exists())
+                    <div x-data="{ shown: true }" x-show="shown" x-cloak
+                         class="mb-6 rounded-xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center gap-3"
+                         style="background: linear-gradient(135deg, rgba(197,165,90,0.18) 0%, rgba(20,18,16,0.85) 70%); border: 1px solid rgba(197,165,90,0.35)">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm md:text-base text-white font-semibold">Rekomendasi belum personal?</div>
+                            <div class="text-xs md:text-sm text-gray-300 mt-0.5">Jawab 3 pertanyaan singkat — kami pilihkan film yang pas dengan seleramu.</div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <a href="{{ route('onboarding.quiz') }}"
+                               class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold text-black hover:opacity-95 transition-opacity"
+                               style="background: linear-gradient(135deg, #C5A55A, #E8D5A3)">
+                                Mulai &rarr;
+                            </a>
+                            <button type="button"
+                                    @click="shown = false; fetch('{{ route('onboarding.dismiss') }}', { method: 'POST', headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '' } }).catch(() => {});"
+                                    class="text-xs text-gray-400 hover:text-gray-200 px-2 py-2">
+                                Lewati
+                            </button>
+                        </div>
+                    </div>
+                @endif
+            @endauth
+
             <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
             <!-- SECTION 1: Hero Slider (3/4) + Quick Filter Sidebar (1/4) -->
             <!-- Equal height via items-stretch + h-full on children -->
@@ -178,8 +209,7 @@
         </div>
     </div>
 
-    <!-- Floating Chatbot Widget -->
-    <x-home.chatbot-widget />
+    {{-- Chatbot mounted globally in <x-layout> now — every authed page gets it --}}
 
     <x-footer />
 

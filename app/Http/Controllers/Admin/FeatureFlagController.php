@@ -42,6 +42,22 @@ class FeatureFlagController extends Controller
     }
 
     /**
+     * Render the "new flag" form. The form posts to {@see store()} which
+     * only takes the identity fields (key/name/description); strategy +
+     * config are configured AFTER creation on the edit screen — keeps the
+     * accidental-deploy footgun closed (a freshly-created flag is always
+     * `off` until an operator deliberately opts it in).
+     */
+    public function create(): View
+    {
+        $this->authorize('system.feature_flags');
+
+        return view('admin.feature-flags.create', [
+            'strategies' => FeatureFlag::STRATEGIES,
+        ]);
+    }
+
+    /**
      * Persist a brand-new flag. Defaults to off + 'off' strategy so an
      * accidentally-saved row never goes live silently.
      */

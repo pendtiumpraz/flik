@@ -195,6 +195,93 @@
                         View My Permissions
                     </a>
                 </div>
+
+                {{-- Two-Factor Authentication (TOTP) — wired in FIX #6.
+                     Status badge reflects User::hasTwoFactorEnabled() (true when
+                     two_factor_confirmed_at is set AND a secret is stored).
+                     When enabled: shows a "Disable 2FA" form requiring the
+                     current password (Alpine modal). When disabled: shows a
+                     "Setup 2FA" link to the QR/recovery-codes wizard. --}}
+                <div x-data="{ confirmDisable2fa: false }"
+                     class="p-6 flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between"
+                     style="border-top:1px solid #2a2a2a">
+                    <div>
+                        <p class="text-sm font-semibold text-white flex items-center gap-2">
+                            <span>🔐 Two-Factor Authentication</span>
+                            @if($user->hasTwoFactorEnabled())
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide"
+                                      style="background:rgba(34,197,94,0.15);color:#22c55e">
+                                    ✓ Enabled
+                                </span>
+                            @else
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide"
+                                      style="background:rgba(239,68,68,0.15);color:#ef4444">
+                                    Disabled
+                                </span>
+                            @endif
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1">
+                            @if($user->hasTwoFactorEnabled())
+                                Akun kamu dilindungi kode TOTP. Simpan kode pemulihan di tempat aman.
+                            @else
+                                Tambah lapisan kedua dengan aplikasi authenticator (Google Authenticator, Authy, dll). <strong style="color:#fca5a5">Wajib</strong> untuk akun admin.
+                            @endif
+                        </p>
+                    </div>
+
+                    @if($user->hasTwoFactorEnabled())
+                        <button type="button"
+                                @click="confirmDisable2fa = true"
+                                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"
+                                style="background:transparent;border:1px solid #ef4444;color:#ef4444">
+                            <x-icon name="x" :size="16" />
+                            Disable 2FA
+                        </button>
+
+                        {{-- Confirm modal — requires current password (matches
+                             TwoFactorController::disable's validation). --}}
+                        <div x-show="confirmDisable2fa"
+                             x-cloak
+                             @keydown.escape.window="confirmDisable2fa = false"
+                             class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                             style="background:rgba(0,0,0,0.7)">
+                            <div @click.outside="confirmDisable2fa = false"
+                                 class="w-full max-w-md rounded-2xl p-6"
+                                 style="background:#1a1a1a;border:1px solid #2a2a2a">
+                                <h4 class="font-heading text-lg font-bold text-white">Nonaktifkan 2FA?</h4>
+                                <p class="text-sm text-gray-400 mt-2">
+                                    Akun kamu akan lebih rentan tanpa lapisan kedua. Masukkan password sekarang untuk konfirmasi.
+                                </p>
+                                <form method="POST" action="{{ route('2fa.disable') }}" class="mt-4 space-y-3">
+                                    @csrf
+                                    <input type="password" name="password" required autocomplete="current-password"
+                                           placeholder="Password saat ini"
+                                           class="w-full p-3 rounded-lg bg-black border text-white text-sm focus:outline-none"
+                                           style="border-color:#2a2a2a">
+                                    <div class="flex gap-3 justify-end">
+                                        <button type="button" @click="confirmDisable2fa = false"
+                                                class="px-4 py-2 rounded-lg text-sm font-semibold text-gray-300"
+                                                style="background:#252525">
+                                            Batal
+                                        </button>
+                                        <button type="submit"
+                                                class="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                                                style="background:#ef4444">
+                                            Ya, Nonaktifkan
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    @else
+                        <a href="{{ route('2fa.setup') }}"
+                           class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-black whitespace-nowrap"
+                           style="background:#C5A55A">
+                            <x-icon name="shield" :size="16" />
+                            Setup 2FA
+                        </a>
+                    @endif
+                </div>
             </div>
 
             <!-- Edit Profile -->

@@ -228,10 +228,15 @@ class TwoFactorController extends Controller
         }
 
         // Promote the pending session to a fully authenticated one.
+        // FIX #6: regenerate the session ID BEFORE writing the 2fa.passed
+        // flag so the post-challenge session uses a fresh ID (session
+        // fixation defence — the pre-challenge ID was created while we
+        // only had a pending password match, never a fully-authenticated
+        // user).
         Auth::login($user, (bool) $request->session()->pull('2fa.remember', false));
         $request->session()->forget('2fa.pending_user_id');
-        $request->session()->put('2fa.passed', true);
         $request->session()->regenerate();
+        $request->session()->put('2fa.passed', true);
 
         $this->safeAudit(SecurityEvents::TWO_FACTOR_VERIFIED, $user, [
             'email' => $user->email,

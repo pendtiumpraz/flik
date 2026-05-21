@@ -6,6 +6,7 @@ namespace App\Services\Security;
 
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Support\SecurityEvents;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -55,46 +56,21 @@ class SecurityAlertService
     /**
      * Map a SecurityEvents constant value to its severity bucket.
      *
-     * The event name is matched against well-known prefixes/keywords. We
-     * intentionally do NOT depend on the SecurityEvents class existing
-     * yet — the peer task (#24) may land later. Until then we work with
-     * raw string constants so this service is independently shippable.
+     * Delegates to {@see SecurityEvents::severity()} which is the single
+     * source of truth — keeps Slack/Discord severity gating, the
+     * /admin/audit-logs row colouring, and the daily digest in lockstep.
+     *
+     * Historical note: this method previously hard-coded a parallel
+     * lookup table whose string keys did NOT match the values declared
+     * in SecurityEvents::*. As a result every event collapsed to "low",
+     * the configured `min_severity='high'` floor filtered them all out,
+     * and Slack/Discord alerts were silently never delivered — even
+     * for critical incidents like ACCOUNT_DELETED or DRM_KEY_DENIED.
+     * Always delegate; never duplicate.
      */
     public function severity(string $event): string
     {
-        // Critical — confidentiality breach or active attack
-        $critical = [
-            'security.privilege.escalation_attempt', // PRIVILEGE_ESCALATION_ATTEMPT
-            'security.account.deleted_by_admin',     // ACCOUNT_DELETED (admin-initiated)
-            'security.geo.suspicious_velocity',      // SUSPICIOUS_GEO_VELOCITY
-            'security.drm.key_denied_mass',          // DRM_KEY_DENIED (mass)
-        ];
-        if (in_array($event, $critical, true)) {
-            return 'critical';
-        }
-
-        // High — strong signal of automated attack or compromise
-        $high = [
-            'security.auth.lockout_mass',            // LOGIN_LOCKED_OUT (mass)
-            'security.ssrf.blocked',                 // SSRF_BLOCKED
-            'security.upload.malware_signature',     // FILE_UPLOAD_REJECTED (malware)
-            'security.csp.violation_batch',          // CSP_VIOLATION batch
-        ];
-        if (in_array($event, $high, true)) {
-            return 'high';
-        }
-
-        // Medium — anomaly worth a human glance, not page-worthy
-        $medium = [
-            'security.auth.new_country_login',       // NEW_COUNTRY_LOGIN
-            'security.ratelimit.sustained',          // RATE_LIMIT_HIT (sustained)
-        ];
-        if (in_array($event, $medium, true)) {
-            return 'medium';
-        }
-
-        // Low — informational; aggregate in daily digest
-        return 'low';
+        return SecurityEvents::severity($event);
     }
 
     /**

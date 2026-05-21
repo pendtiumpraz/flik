@@ -10,13 +10,14 @@
     );
     $seoOgImage = $episode->still_url ?: $movie?->backdrop_url ?: $movie?->poster_url;
 
-    // Pick the best playable URL — episode video first, fall back to
-    // parent series video for early-stage data where episodes share
-    // the master file.
-    $videoSrc = $episode->video_path
-        ? (str_starts_with($episode->video_path, 'http') ? $episode->video_path : asset('storage/' . $episode->video_path))
-        : ($movie?->video_full_url ?? null);
-
+    // DRM-first: only render the player when EITHER the controller minted a
+    // DRM bundle (encoded HLS available + concurrent-stream slot acquired)
+    // OR the parent movie still has an encoded video_path AND admins have
+    // explicitly enabled the unencrypted episode fallback. See
+    // docs/audit/04-drm-playback.md FIX #2 §5 — previously this view served
+    // the raw mp4 with no DRM, leaking the master file for every series.
+    $hasHls = !empty($drmBundle);
+    $allowRawFallback = (bool) config('drm.allow_episode_raw_mp4', false);
     $youtubeKey = $movie?->youtube_key;
 @endphp
 
@@ -59,37 +60,78 @@
                             csrf: document.querySelector('meta[name=csrf-token]')?.content || '',
                        })">
                     <div class="relative bg-black" style="padding-top: 56.25%">
-                        @if($videoSrc)
-                            <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet">
-                            <video id="flik-episode-player"
-                                   class="video-js vjs-fluid vjs-big-play-centered absolute top-0 left-0 w-full h-full"
+                        @if($hasHls)
+                            {{-- ━━━ Shaka Player (DRM/HLS pipeline) ━━━ --}}
+                            <video id="flik-episode-shaka-player"
+                                   class="absolute top-0 left-0 w-full h-full bg-black"
                                    controls preload="auto"
                                    x-ref="player"
                                    poster="{{ $seoOgImage }}"
-                                   data-setup='{"playbackRates": [0.5, 1, 1.25, 1.5, 2]}'>
-                                <source src="{{ $videoSrc }}" type="video/mp4">
-                            </video>
-                            <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
-                            <style>
-                                .video-js .vjs-play-progress { background: #C5A55A; }
-                                .video-js .vjs-volume-level { background: #C5A55A; }
-                                .video-js .vjs-big-play-button {
-                                    background: rgba(197,165,90,0.85); border: none; border-radius: 50%;
-                                    width: 80px; height: 80px; line-height: 80px;
-                                    font-size: 32px; margin-top: -40px; margin-left: -40px;
-                                }
-                                .video-js .vjs-big-play-button:hover { background: #C5A55A; }
-                                .video-js .vjs-control-bar { background: rgba(0,0,0,0.85); }
-                            </style>
+                                   data-manifest-url="{{ $drmBundle['manifest_url'] }}"
+                                   data-session-token="{{ $drmBundle['session_token'] }}"
+                                   data-heartbeat-url="{{ $drmBundle['heartbeat_url'] }}"></video>
+                            <div
+                                x-data="{
+                                    player: null,
+                                    error: null,
+                                    async init() {
+                                        await this.waitForShaka();
+                                        const videoEl = document.getElementById('flik-episode-shaka-player');
+                                        if (!videoEl || typeof window.FlikPlayer !== 'function') return;
+                                        try {
+                                            this.player = new window.FlikPlayer(
+                                                'flik-episode-shaka-player',
+                                                '{{ $movie?->slug }}'
+                                            );
+                                            await this.player.initialize();
+                                        } catch (e) {
+                                            console.error('[FLiK] episode player init failed', e);
+                                            this.error = e.message || 'Playback unavailable';
+                                        }
+                                    },
+                                    waitForShaka() {
+                                        return new Promise((resolve) => {
+                                            if (typeof window.shaka !== 'undefined') return resolve();
+                                            let tries = 0;
+                                            const id = setInterval(() => {
+                                                if (typeof window.shaka !== 'undefined' || tries++ > 100) {
+                                                    clearInterval(id);
+                                                    resolve();
+                                                }
+                                            }, 100);
+                                        });
+                                    },
+                                }"
+                                x-init="init()"
+                                @beforeunload.window="player?.destroy();"
+                            >
+                                <template x-if="error">
+                                    <div class="absolute inset-0 flex items-center justify-center bg-[#0a0a0a]/90 z-30 pointer-events-none">
+                                        <div class="text-center text-gray-400 px-4">
+                                            <div class="text-sm" x-text="error"></div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            {{-- Inline fingerprint script so the heartbeat
+                                 endpoint can validate device claims. --}}
+                            <script>{!! $drmBundle['fingerprint_script'] !!}</script>
                         @elseif($youtubeKey)
                             <iframe class="absolute inset-0 w-full h-full"
                                     src="https://www.youtube.com/embed/{{ $youtubeKey }}"
                                     style="border:0;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
                         @else
+                            {{-- DRM safety net: refuse to serve unencrypted master.
+                                 Per audit FIX #2 §5 the previous raw-mp4 path
+                                 leaked the master file for every series. --}}
                             <div class="absolute inset-0 flex items-center justify-center bg-[#0a0a0a]">
-                                <div class="text-center text-gray-500">
+                                <div class="text-center text-gray-500 max-w-md px-6">
                                     <x-icon name="play" :size="48" class="mx-auto mb-3 text-gray-700" />
-                                    <span class="text-sm">Episode belum punya file video.</span>
+                                    <p class="text-sm text-gray-300 font-medium">Episode belum di-encode untuk diputar</p>
+                                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">
+                                        Untuk keamanan konten, hanya episode yang telah selesai melalui pipeline transcoding/HLS yang dapat diputar.
+                                        Cek kembali sebentar lagi atau hubungi admin jika ini berlangsung lama.
+                                    </p>
                                 </div>
                             </div>
                         @endif

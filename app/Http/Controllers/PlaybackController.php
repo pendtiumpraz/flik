@@ -12,11 +12,13 @@ use App\Services\Drm\DeviceFingerprinter;
 use App\Services\Drm\DrmKeyService;
 use App\Services\Drm\DrmTokenService;
 use App\Services\Drm\PlaybackManifestGenerator;
+use App\Services\Geo\GeoIpResolver;
+use App\Services\Storage\BunnyStorageService;
 use App\Support\SecurityEvents;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 /**
@@ -30,6 +32,10 @@ use Throwable;
  *                    geo + replay validation. Public route, JWT-protected.
  *   4. heartbeat() — refreshes the concurrent-stream lock and revalidates
  *                    device fingerprint; player calls this every ~30s.
+ *   5. playlist()  — serves a per-rendition HLS media playlist; signed URL,
+ *                    geo-blocked. Audit FIX #2 §2.4.
+ *   6. segment()   — serves an individual .ts segment; signed URL,
+ *                    geo-blocked. Audit FIX #2 §2.4.
  *
  * The controller is intentionally thin: every security decision lives in
  * the matching service class so unit tests can target one concern at a time.
@@ -360,23 +366,164 @@ class PlaybackController extends Controller
             }
         }
 
-        // Optional GeoIpResolver — resolved through the container if bound.
-        if (app()->bound('App\\Services\\GeoIpResolver')) {
-            try {
-                /** @var object{resolve:callable}|null $resolver */
-                $resolver = app('App\\Services\\GeoIpResolver');
-                if ($resolver !== null && method_exists($resolver, 'resolve')) {
-                    $country = $resolver->resolve($request->ip());
-                    if (is_string($country) && strlen($country) === 2) {
-                        return strtoupper($country);
-                    }
-                }
-            } catch (\Throwable $e) {
-                // Geo resolution must never fail the request; fall through.
+        // Fall back to the real GeoIpResolver service. The previous
+        // hard-coded class name `App\Services\GeoIpResolver` was a typo
+        // (the class lives at App\Services\Geo\GeoIpResolver) — see
+        // docs/audit/04-drm-playback.md FIX #2 §4.7.
+        try {
+            $resolver = app(GeoIpResolver::class);
+            $country = $resolver->country((string) $request->ip());
+            if (is_string($country) && strlen($country) === 2) {
+                return strtoupper($country);
             }
+        } catch (\Throwable $e) {
+            // Geo resolution must never fail the request; fall through.
         }
 
         return null;
+    }
+
+    /**
+     * Stream a per-rendition media playlist (.m3u8).
+     *
+     * Mounted at: GET /drm/playlist/{movie:slug}/{rendition}.m3u8
+     * Auth: ValidateSignature (Laravel `signed` middleware on the route).
+     *
+     * The signed URL is minted by PlaybackManifestGenerator with a short TTL
+     * — anyone with the URL can read the playlist but cannot probe arbitrary
+     * movie/rendition combinations.
+     *
+     * When the movie's renditions are on Bunny we redirect to the signed
+     * Bunny URL (saves origin egress). When they're local we stream the
+     * file from disk with the correct HLS Content-Type.
+     * See audit doc FIX #2 §2.4.
+     */
+    public function playlist(
+        Request $request,
+        Movie $movie,
+        string $rendition,
+        BunnyStorageService $bunny,
+    ): Response|StreamedResponse {
+        $renditions = is_array($movie->encoding_renditions) ? $movie->encoding_renditions : [];
+        $match = null;
+        foreach ($renditions as $r) {
+            if (($r['name'] ?? null) === $rendition) {
+                $match = $r;
+                break;
+            }
+        }
+
+        if ($match === null) {
+            return response('Rendition not found.', 404);
+        }
+
+        // Prefer the CDN copy when the manifest path points at Bunny.
+        $remoteManifest = (string) ($match['manifest'] ?? '');
+        if ($remoteManifest !== '' && $movie->cdn_disk === 'bunny' && $bunny->enabled()) {
+            $signed = $bunny->signedUrl($remoteManifest, 300);
+            if ($signed !== '') {
+                return redirect()->away($signed);
+            }
+        }
+
+        // Local fallback — stream playlist.m3u8 (or encrypted.m3u8) from disk.
+        $localDir = (string) ($match['hls_dir'] ?? '');
+        if ($localDir === '' || ! is_dir($localDir)) {
+            return response('Playlist not yet available.', 503);
+        }
+
+        $candidate = $localDir . DIRECTORY_SEPARATOR . 'encrypted.m3u8';
+        if (! is_file($candidate)) {
+            $candidate = $localDir . DIRECTORY_SEPARATOR . 'playlist.m3u8';
+        }
+        if (! is_file($candidate)) {
+            return response('Playlist file missing on disk.', 404);
+        }
+
+        return response(file_get_contents($candidate) ?: '', 200, [
+            'Content-Type' => 'application/vnd.apple.mpegurl',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    /**
+     * Stream an individual .ts segment.
+     *
+     * Mounted at: GET /drm/segment/{movie:slug}/{rendition}/{filename}
+     * Auth: ValidateSignature on the route.
+     *
+     * Filename must be a basename (no slashes). When the rendition lives on
+     * Bunny we 302 to a signed CDN URL; otherwise we stream the file from the
+     * local HLS dir with Content-Type: video/mp2t.
+     * See audit doc FIX #2 §2.4.
+     */
+    public function segment(
+        Request $request,
+        Movie $movie,
+        string $rendition,
+        string $filename,
+        BunnyStorageService $bunny,
+    ): Response|StreamedResponse {
+        // Defensive: prevent path traversal. Segments are flat `segment_NNN.ts`.
+        if (str_contains($filename, '/') || str_contains($filename, '\\') || str_contains($filename, '..')) {
+            return response('Bad segment name.', 400);
+        }
+
+        $renditions = is_array($movie->encoding_renditions) ? $movie->encoding_renditions : [];
+        $match = null;
+        foreach ($renditions as $r) {
+            if (($r['name'] ?? null) === $rendition) {
+                $match = $r;
+                break;
+            }
+        }
+
+        if ($match === null) {
+            return response('Rendition not found.', 404);
+        }
+
+        // CDN path: 302 to a short-TTL signed Bunny URL so the player pulls
+        // segments directly from the edge.
+        if ($movie->cdn_disk === 'bunny' && $bunny->enabled()) {
+            $remotePrefix = trim(dirname((string) ($match['manifest'] ?? '')), '/');
+            if ($remotePrefix !== '' && $remotePrefix !== '.') {
+                $signed = $bunny->signedUrl($remotePrefix . '/' . $filename, 300);
+                if ($signed !== '') {
+                    return redirect()->away($signed);
+                }
+            }
+        }
+
+        // Local fallback.
+        $localDir = (string) ($match['hls_dir'] ?? '');
+        if ($localDir === '' || ! is_dir($localDir)) {
+            return response('Segment store not yet available.', 503);
+        }
+
+        $segmentPath = $localDir . DIRECTORY_SEPARATOR . $filename;
+        if (! is_file($segmentPath)) {
+            return response('Segment not found.', 404);
+        }
+
+        return response()->stream(
+            function () use ($segmentPath): void {
+                $fp = @fopen($segmentPath, 'rb');
+                if ($fp === false) {
+                    return;
+                }
+                while (! feof($fp)) {
+                    echo fread($fp, 8192);
+                }
+                fclose($fp);
+            },
+            200,
+            [
+                'Content-Type' => 'video/mp2t',
+                'Cache-Control' => 'private, max-age=300',
+                'X-Content-Type-Options' => 'nosniff',
+            ],
+        );
     }
 
     /**

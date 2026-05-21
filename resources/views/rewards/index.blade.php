@@ -88,38 +88,22 @@
                                     <x-icon name="calendar" :size="18" class="text-[#C5A55A]" />
                                     <h2 class="font-heading text-base md:text-lg font-bold text-white">Daily Check-in</h2>
                                 </div>
-                                <span class="text-[10px] uppercase tracking-wider text-gray-500">Day {{ $streakDay }}/7</span>
+                                <span class="text-[10px] uppercase tracking-wider text-gray-500">Streak: {{ $streakDay }} hari</span>
                             </div>
 
-                            <!-- Day Calendar — 7 days -->
-                            <div class="grid grid-cols-7 gap-1.5 md:gap-2 mb-5">
-                                @foreach($rewards as $day => $coins)
-                                @php
-                                    $isPast = $day < $streakDay;
-                                    $isToday = $day == $streakDay;
-                                    $isFuture = $day > $streakDay;
-                                @endphp
-                                <div class="relative text-center p-2 md:p-3 rounded-lg transition-all"
-                                     style="
-                                        background: {{ $isPast ? 'rgba(197,165,90,0.10)' : ($isToday ? 'rgba(197,165,90,0.18)' : 'rgba(255,255,255,0.02)') }};
-                                        border: 1px solid {{ $isToday ? 'rgba(197,165,90,0.5)' : ($isPast ? 'rgba(197,165,90,0.2)' : 'rgba(255,255,255,0.04)') }};
-                                     ">
-                                    <div class="text-[9px] md:text-[10px] uppercase tracking-wider text-gray-500">D{{ $day }}</div>
-                                    <div class="my-1 md:my-1.5 flex justify-center">
-                                        @if($day == 7)
-                                            <x-icon name="gift" :size="16" class="{{ $isPast || $isToday ? 'text-[#C5A55A]' : 'text-gray-600' }}" />
-                                        @else
-                                            <x-icon name="coin" :size="14" class="{{ $isPast || $isToday ? 'text-[#C5A55A]' : 'text-gray-600' }}" />
-                                        @endif
+                            {{-- Flat daily bonus — separate from watch-streak milestones (StreakService). --}}
+                            <div class="mb-5 p-4 rounded-lg flex items-center gap-4"
+                                 style="background: rgba(197,165,90,0.06); border: 1px solid rgba(197,165,90,0.2)">
+                                <x-icon name="gift" :size="28" class="text-[#C5A55A]" />
+                                <div class="flex-1">
+                                    <div class="text-sm font-semibold text-white">Bonus harian check-in</div>
+                                    <div class="text-[11px] text-gray-400 mt-0.5">
+                                        +{{ $dailyCoinReward }} coins &middot; +{{ $dailyXpReward }} XP setiap hari
                                     </div>
-                                    <div class="text-[10px] md:text-xs font-bold {{ $isPast || $isToday ? 'text-[#C5A55A]' : 'text-gray-600' }}">{{ $coins }}</div>
-                                    @if($isPast)
-                                        <div class="absolute top-1 right-1">
-                                            <x-icon name="check" :size="10" class="text-[#C5A55A]" :stroke="3" />
-                                        </div>
-                                    @endif
+                                    <div class="text-[10px] text-gray-500 mt-1">
+                                        Watch-streak otomatis bertambah saat kamu menonton film.
+                                    </div>
                                 </div>
-                                @endforeach
                             </div>
 
                             @if($claimedToday)
@@ -132,7 +116,7 @@
                                     @csrf
                                     <button type="submit" class="w-full py-3 rounded-lg text-sm font-bold text-black transition-all hover:opacity-95 hover:scale-[1.005] flex items-center justify-center gap-2" style="background: linear-gradient(90deg, #C5A55A, #E8D5A3)">
                                         <x-icon name="gift" :size="16" />
-                                        Klaim Reward Day {{ $streakDay }} <span class="opacity-75">(+{{ $rewards[min($streakDay, 7)] }} coins)</span>
+                                        Klaim Bonus Hari Ini <span class="opacity-75">(+{{ $dailyCoinReward }} coins · +{{ $dailyXpReward }} XP)</span>
                                     </button>
                                 </form>
                             @endif

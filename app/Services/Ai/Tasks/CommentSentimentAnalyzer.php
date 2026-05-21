@@ -71,6 +71,8 @@ SYS;
                     'max_tokens' => 100,
                     'temperature' => 0.0,
                 ],
+                taskType: 'comment.sentiment_single',
+                subject: $comment,
             );
 
             $parsed = $this->parseSingle($response['content'] ?? '');
@@ -148,6 +150,10 @@ SYS;
                     'max_tokens' => min(4000, 80 + ($count * 40)),
                     'temperature' => 0.0,
                 ],
+                taskType: 'comment.sentiment_bulk',
+                // No single subject — bulk run covers many comments. The
+                // chunked dispatch keeps any single failure bounded; the
+                // log row is enough for "which run".
             );
 
             $results = $this->parseBulk($response['content'] ?? '', $count);

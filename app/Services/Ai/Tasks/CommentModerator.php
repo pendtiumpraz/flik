@@ -61,7 +61,9 @@ SYS;
                 options: [
                     'max_tokens' => 200,
                     'temperature' => 0.0,
-                ]
+                ],
+                taskType: 'comment.moderate',
+                subject: $comment,
             );
 
             $parsed = $this->parseResult($response['content'] ?? '');

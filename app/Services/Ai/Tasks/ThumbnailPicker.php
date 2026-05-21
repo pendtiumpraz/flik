@@ -5,6 +5,7 @@ namespace App\Services\Ai\Tasks;
 use App\Exceptions\SsrfException;
 use App\Models\AiProvider;
 use App\Models\Movie;
+use App\Services\Ai\UsageTracker;
 use App\Services\Security\SsrfGuard;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -30,6 +31,14 @@ class ThumbnailPicker
      * Default subdirectory under storage/app where keyframes are written.
      */
     protected const TEMP_SUBDIR = 'thumbnail-tmp';
+
+    public function __construct(
+        protected ?UsageTracker $tracker = null,
+    ) {
+        // Container auto-wires UsageTracker; the nullable default keeps the
+        // service constructable in tests / artisan tinker without container.
+        $this->tracker = $tracker ?? app(UsageTracker::class);
+    }
 
     /**
      * Extract N evenly-spaced keyframes from the movie's video.
@@ -203,6 +212,8 @@ class ThumbnailPicker
             ],
         ];
 
+        $startedAt = microtime(true);
+
         try {
             (new SsrfGuard())->assertUrlAllowed($endpoint);
 
@@ -214,6 +225,8 @@ class ThumbnailPicker
                 ])
                 ->post($endpoint, $payload);
 
+            $latencyMs = (int) round((microtime(true) - $startedAt) * 1000);
+
             if (!$response->successful()) {
                 Log::warning('ThumbnailPicker: Gemini scoring failed', [
                     'movie_id' => $movie->id,
@@ -221,13 +234,41 @@ class ThumbnailPicker
                     'status' => $response->status(),
                     'body' => substr($response->body(), 0, 200),
                 ]);
+
+                // FIX #7 — log the failed call so /admin/ai-usage sees
+                // ThumbnailPicker spend (even on errors). Best-effort.
+                $this->trackUsage(
+                    provider: $provider,
+                    movie: $movie,
+                    inTokens: 0,
+                    outTokens: 0,
+                    latencyMs: $latencyMs,
+                    success: false,
+                    error: 'HTTP ' . $response->status() . ' ' . mb_substr($response->body(), 0, 200),
+                );
+
                 return null;
             }
 
-            $provider->update(['last_used_at' => now()]);
-
             $data = $response->json();
             $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
+
+            // Token usage — Gemini returns these in `usageMetadata`. Fall back
+            // to a deterministic estimate (image input ≈ 258 tokens for the
+            // standard Gemini Flash vision tier; output is the 1-16 token
+            // reply). This keeps cost accounting honest even when the upstream
+            // shape changes.
+            $inTokens  = (int) ($data['usageMetadata']['promptTokenCount'] ?? 258);
+            $outTokens = (int) ($data['usageMetadata']['candidatesTokenCount'] ?? max(1, (int) round(mb_strlen($text) / 4)));
+
+            $this->trackUsage(
+                provider: $provider,
+                movie: $movie,
+                inTokens: $inTokens,
+                outTokens: $outTokens,
+                latencyMs: $latencyMs,
+                success: true,
+            );
 
             return $this->parseScore($text);
         } catch (SsrfException $e) {
@@ -235,6 +276,15 @@ class ThumbnailPicker
                 'movie_id' => $movie->id,
                 'error'    => $e->getMessage(),
             ]);
+            $this->trackUsage(
+                provider: $provider,
+                movie: $movie,
+                inTokens: 0,
+                outTokens: 0,
+                latencyMs: (int) round((microtime(true) - $startedAt) * 1000),
+                success: false,
+                error: 'SSRF blocked: ' . $e->getMessage(),
+            );
             return null;
         } catch (\Throwable $e) {
             Log::warning('ThumbnailPicker: Gemini exception while scoring frame', [
@@ -242,7 +292,49 @@ class ThumbnailPicker
                 'frame' => basename($framePath),
                 'error' => $e->getMessage(),
             ]);
+            $this->trackUsage(
+                provider: $provider,
+                movie: $movie,
+                inTokens: 0,
+                outTokens: 0,
+                latencyMs: (int) round((microtime(true) - $startedAt) * 1000),
+                success: false,
+                error: $e->getMessage(),
+            );
             return null;
+        }
+    }
+
+    /**
+     * Best-effort UsageTracker write. Never throws — a logging failure must
+     * not stop thumbnail picking. Wraps the underlying track() call in its
+     * own try/catch on top of UsageTracker's internal guard.
+     */
+    protected function trackUsage(
+        AiProvider $provider,
+        Movie $movie,
+        int $inTokens,
+        int $outTokens,
+        int $latencyMs,
+        bool $success,
+        ?string $error = null,
+    ): void {
+        try {
+            $this->tracker?->track(
+                provider: $provider,
+                taskType: 'vision.thumbnail_pick',
+                inTokens: $inTokens,
+                outTokens: $outTokens,
+                latencyMs: $latencyMs,
+                success: $success,
+                error: $error,
+                subject: $movie,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('ThumbnailPicker: usage tracker write failed', [
+                'movie_id' => $movie->id,
+                'error'    => $e->getMessage(),
+            ]);
         }
     }
 

@@ -455,6 +455,30 @@ class WatchPartyController extends Controller
     }
 
     /**
+     * Generic broadcast wrapper for events that don't share the WatchPartySync
+     * shape (e.g. {@see WatchPartyChat}). Mirrors {@see safeBroadcast} — silent
+     * no-op when Pusher isn't configured, errors logged on failure.
+     *
+     * Keeps the strict WatchPartySync-typed safeBroadcast() intact for the
+     * playback sync path so a typo there is still a compile-time error.
+     */
+    private function safeBroadcastEvent(\Illuminate\Contracts\Broadcasting\ShouldBroadcast $event): void
+    {
+        if (! $this->pusherConfigured()) {
+            return;
+        }
+
+        try {
+            broadcast($event);
+        } catch (\Throwable $e) {
+            \Log::warning('WatchParty broadcast event failed', [
+                'event' => $event::class,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Return JSON for AJAX callers, redirect for HTML form callers.
      */
     private function respond(Request $request, array $payload, int $status = 200): JsonResponse|RedirectResponse

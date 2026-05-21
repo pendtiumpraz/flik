@@ -37,14 +37,16 @@ class MovieSummaryGenerator
         $userPrompt = $this->buildUserPrompt($movie);
 
         $response = $this->ai->chat(
-            [
+            messages: [
                 ['role' => 'system', 'content' => $systemPrompt],
                 ['role' => 'user',   'content' => $userPrompt],
             ],
-            [
+            options: [
                 'max_tokens'  => 220,
                 'temperature' => 0.7,
-            ]
+            ],
+            taskType: 'summary.short_generate',
+            subject: $movie,
         );
 
         $summary = $this->sanitize($response['content'] ?? '');

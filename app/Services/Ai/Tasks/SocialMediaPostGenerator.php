@@ -53,6 +53,8 @@ class SocialMediaPostGenerator
                 'temperature' => 0.9,
                 'max_tokens'  => $platform === 'twitter' ? 250 : 800,
             ],
+            taskType: 'marketing.social_' . $platform,
+            subject: $movie,
         );
 
         return $this->parseAndClamp($response['content'] ?? '', $movie, $platform);

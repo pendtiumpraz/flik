@@ -199,6 +199,15 @@ class PaymentController extends Controller
         try {
             $notification = new \Midtrans\Notification();
 
+            // Belt-and-braces signature verification. The SDK already
+            // computes sha512(order_id + status_code + gross_amount +
+            // server_key) and rejects via `isVerified()`; calling it
+            // explicitly hardens the path against a mocked Notification
+            // class slipping in via tests or a library swap.
+            // See docs/audit/11-payment.md "Midtrans webhook signature
+            // is NEVER verified explicitly" — this resolves that flag.
+            abort_unless($notification->isVerified(), 403, 'Invalid Midtrans signature');
+
             $orderId = $notification->order_id;
             $status = $notification->transaction_status;
             $fraudStatus = $notification->fraud_status;

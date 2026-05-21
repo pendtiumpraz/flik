@@ -72,7 +72,7 @@ class QuoteExtractor
         // ~2000 cues is roughly a 2-hour feature; if larger, sample uniformly.
         $numberedCues = $this->buildNumberedCues($cues, 2000);
 
-        $picks = $this->askAiToPickQuotes($numberedCues['text'], $count);
+        $picks = $this->askAiToPickQuotes($numberedCues['text'], $count, $movie);
 
         if (empty($picks)) {
             Log::info('QuoteExtractor: AI returned no usable picks, falling back', [
@@ -188,7 +188,7 @@ class QuoteExtractor
      *
      * @return array<int, array{cue_index:int, quote:string, why:string}>
      */
-    protected function askAiToPickQuotes(string $numberedCues, int $count): array
+    protected function askAiToPickQuotes(string $numberedCues, int $count, ?\App\Models\Movie $movie = null): array
     {
         $messages = [
             [
@@ -205,10 +205,15 @@ class QuoteExtractor
         ];
 
         try {
-            $result = $this->ai->chat($messages, [
-                'max_tokens' => 1200,
-                'temperature' => 0.4,
-            ]);
+            $result = $this->ai->chat(
+                messages: $messages,
+                options: [
+                    'max_tokens' => 1200,
+                    'temperature' => 0.4,
+                ],
+                taskType: 'quote.extract',
+                subject: $movie,
+            );
         } catch (\Throwable $e) {
             Log::error('QuoteExtractor: AI call failed', ['error' => $e->getMessage()]);
 

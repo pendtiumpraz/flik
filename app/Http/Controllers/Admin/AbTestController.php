@@ -67,14 +67,15 @@ class AbTestController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'name'             => ['required', 'string', 'max:200'],
-            'slug'             => ['nullable', 'string', 'max:200', Rule::unique('ab_experiments', 'slug')],
-            'hypothesis'       => ['nullable', 'string', 'max:5000'],
-            'variant_keys'     => ['required', 'array', 'min:2'],
-            'variant_keys.*'   => ['required', 'string', 'max:50'],
-            'variant_weights'  => ['required', 'array', 'min:2'],
+            'name'              => ['required', 'string', 'max:200', Rule::unique('ab_experiments', 'name')],
+            'slug'              => ['nullable', 'string', 'max:120', Rule::unique('ab_experiments', 'slug')],
+            'hypothesis'        => ['nullable', 'string', 'max:5000'],
+            'primary_metric'    => ['nullable', 'string', 'max:120'],
+            'variant_keys'      => ['required', 'array', 'min:2'],
+            'variant_keys.*'    => ['required', 'string', 'max:50'],
+            'variant_weights'   => ['required', 'array', 'min:2'],
             'variant_weights.*' => ['required', 'numeric', 'min:0'],
-            'start_now'        => ['nullable', 'boolean'],
+            'start_now'         => ['nullable', 'boolean'],
         ]);
 
         $variants = [];
@@ -97,15 +98,31 @@ class AbTestController extends Controller
 
         $startNow = (bool) ($validated['start_now'] ?? false);
 
+        // `primary_metric` is NOT NULL on the original schema — fall back to
+        // a sensible default so the admin can ship an experiment without
+        // having to enter a metric label upfront.
+        $primaryMetric = $validated['primary_metric'] ?? 'conversion';
+
+        // `traffic_split` is a parallel array of normalised weights derived
+        // from the object-shape `$variants`. Persisting both shapes keeps
+        // older read-paths (which only inspect `traffic_split`) working.
+        $totalWeight = array_sum(array_column($variants, 'weight'));
+        $trafficSplit = [];
+        foreach ($variants as $v) {
+            $trafficSplit[] = $totalWeight > 0 ? $v['weight'] / $totalWeight : (1.0 / count($variants));
+        }
+
         $experiment = AbExperiment::create([
-            'slug'       => $slug,
-            'name'       => $validated['name'],
-            'hypothesis' => $validated['hypothesis'] ?? null,
-            'variants'   => $variants,
-            'status'     => $startNow
+            'slug'           => $slug,
+            'name'           => $validated['name'],
+            'hypothesis'     => $validated['hypothesis'] ?? null,
+            'variants'       => $variants,
+            'traffic_split'  => $trafficSplit,
+            'primary_metric' => $primaryMetric,
+            'status'         => $startNow
                 ? AbExperiment::STATUS_RUNNING
                 : AbExperiment::STATUS_DRAFT,
-            'started_at' => $startNow ? Carbon::now() : null,
+            'started_at'     => $startNow ? Carbon::now() : null,
         ]);
 
         return redirect()
@@ -164,7 +181,7 @@ class AbTestController extends Controller
                 break;
 
             case 'pause':
-                if ($experiment->status !== AbExperiment::STATUS_RUNNING) {
+                if (! $experiment->isRunning()) {
                     return back()->with('error', 'Only running experiments can be paused.');
                 }
                 $experiment->forceFill(['status' => AbExperiment::STATUS_PAUSED])->save();

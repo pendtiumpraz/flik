@@ -36,6 +36,14 @@ class BunnyStorageService implements CdnStorageContract
 
     protected ?string $pullZoneTokenKey;
 
+    /**
+     * Whether Bunny is fully configured. When false, all I/O primitives
+     * short-circuit gracefully (return false/null/empty) instead of
+     * exploding — keeps dev/test environments without Bunny credentials
+     * usable. See audit doc FIX #2 §4.4.
+     */
+    protected bool $enabled;
+
     public function __construct()
     {
         $this->storageZone      = (string) (config('services.bunny.storage_zone') ?? env('BUNNY_STORAGE_ZONE', ''));
@@ -44,11 +52,22 @@ class BunnyStorageService implements CdnStorageContract
         $this->pullZoneUrl      = rtrim((string) (config('services.bunny.pull_zone_url') ?? env('BUNNY_PULL_ZONE_URL', '')), '/');
         $this->pullZoneTokenKey = config('services.bunny.pull_zone_token_key') ?? env('BUNNY_TOKEN_KEY');
 
-        if ($this->storageZone === '' || $this->storageKey === '') {
-            throw new \RuntimeException(
-                'BunnyStorageService requires BUNNY_STORAGE_ZONE and BUNNY_STORAGE_KEY to be configured.'
+        $this->enabled = $this->storageZone !== '' && $this->storageKey !== '';
+
+        if (! $this->enabled) {
+            // Log once-per-boot, not per-call, so we don't spam logs in dev.
+            Log::channel($this->logChannel())->warning(
+                'BunnyStorageService disabled — BUNNY_STORAGE_ZONE / BUNNY_STORAGE_KEY not configured. Uploads will no-op.'
             );
         }
+    }
+
+    /**
+     * Whether the Bunny driver is configured + ready to perform I/O.
+     */
+    public function enabled(): bool
+    {
+        return $this->enabled;
     }
 
     /**
@@ -56,6 +75,10 @@ class BunnyStorageService implements CdnStorageContract
      */
     public function put(string $path, string $contents, array $headers = []): bool
     {
+        if (! $this->enabled) {
+            return false;
+        }
+
         $url = $this->storageUrl($path);
 
         try {
@@ -98,6 +121,10 @@ class BunnyStorageService implements CdnStorageContract
      */
     public function putStream(string $path, $resource): bool
     {
+        if (! $this->enabled) {
+            return false;
+        }
+
         if (! is_resource($resource)) {
             Log::channel($this->logChannel())->error('Bunny putStream() received non-resource', [
                 'path' => $path,
@@ -142,6 +169,10 @@ class BunnyStorageService implements CdnStorageContract
 
     public function delete(string $path): bool
     {
+        if (! $this->enabled) {
+            return false;
+        }
+
         try {
             $response = Http::withHeaders([
                 'AccessKey' => $this->storageKey,
@@ -174,6 +205,10 @@ class BunnyStorageService implements CdnStorageContract
 
     public function exists(string $path): bool
     {
+        if (! $this->enabled) {
+            return false;
+        }
+
         try {
             // Bunny doesn't have HEAD on objects; use a 0-byte ranged GET.
             $response = Http::withHeaders([
@@ -208,12 +243,10 @@ class BunnyStorageService implements CdnStorageContract
      */
     public function signedUrl(string $path, int $ttlSeconds = 3600): string
     {
-        if (empty($this->pullZoneUrl)) {
-            throw new \RuntimeException('BunnyStorageService::signedUrl requires BUNNY_PULL_ZONE_URL.');
-        }
-
-        if (empty($this->pullZoneTokenKey)) {
-            throw new \RuntimeException('BunnyStorageService::signedUrl requires BUNNY_TOKEN_KEY (pull-zone token auth key).');
+        if (! $this->enabled || empty($this->pullZoneUrl) || empty($this->pullZoneTokenKey)) {
+            // Soft fail — return empty string so callers can branch on it
+            // without try/catch. See audit doc FIX #2 §4.4.
+            return '';
         }
 
         $signedPath = '/' . ltrim($path, '/');
@@ -227,8 +260,8 @@ class BunnyStorageService implements CdnStorageContract
 
     public function publicUrl(string $path): string
     {
-        if (empty($this->pullZoneUrl)) {
-            throw new \RuntimeException('BunnyStorageService::publicUrl requires BUNNY_PULL_ZONE_URL.');
+        if (! $this->enabled || empty($this->pullZoneUrl)) {
+            return '';
         }
 
         return $this->pullZoneUrl . '/' . ltrim($path, '/');
@@ -244,6 +277,10 @@ class BunnyStorageService implements CdnStorageContract
      */
     public function listFiles(string $prefix = ''): array
     {
+        if (! $this->enabled) {
+            return [];
+        }
+
         $prefix = trim($prefix, '/');
         $url = sprintf(
             'https://%s/%s/%s',
@@ -280,6 +317,159 @@ class BunnyStorageService implements CdnStorageContract
 
             return [];
         }
+    }
+
+    /**
+     * Recursively upload every file under $localDir to $remotePrefix on the
+     * storage zone. Returns the count of files successfully uploaded.
+     *
+     * Used by UploadToBunny job to push a full HLS rendition tree
+     * (playlist.m3u8 + segment_*.ts + encrypted.m3u8) in one call. See
+     * audit doc FIX #2 §2.3 — this method is required by the pipeline.
+     *
+     * Content-Type is sniffed from the extension so the player gets the
+     * right MIME on each fetch:
+     *   .m3u8 → application/vnd.apple.mpegurl
+     *   .ts   → video/mp2t
+     *   .key  → application/octet-stream (the bare key file should NOT be
+     *           uploaded; callers must filter it out — see UploadToBunny).
+     */
+    public function uploadDirectory(string $localDir, string $remotePrefix): int
+    {
+        if (! $this->enabled) {
+            return 0;
+        }
+
+        if (! is_dir($localDir)) {
+            Log::channel($this->logChannel())->warning('Bunny uploadDirectory: localDir not found', [
+                'local_dir' => $localDir,
+            ]);
+
+            return 0;
+        }
+
+        $uploaded = 0;
+        $remotePrefix = trim($remotePrefix, '/');
+
+        // RecursiveDirectoryIterator skips dot files by default; we still
+        // skip key.bin / enc.keyinfo defensively — those must NEVER leave
+        // the worker box.
+        $denylist = ['key.bin', 'enc.keyinfo'];
+
+        $iter = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($localDir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::LEAVES_ONLY,
+        );
+
+        foreach ($iter as $file) {
+            /** @var \SplFileInfo $file */
+            if (! $file->isFile()) {
+                continue;
+            }
+            if (in_array($file->getFilename(), $denylist, true)) {
+                continue;
+            }
+
+            $relative = ltrim(
+                str_replace('\\', '/', substr($file->getPathname(), strlen($localDir))),
+                '/',
+            );
+            $remotePath = $remotePrefix === ''
+                ? $relative
+                : $remotePrefix . '/' . $relative;
+
+            $contentType = $this->guessContentType($file->getFilename());
+            $stream = @fopen($file->getPathname(), 'rb');
+            if ($stream === false) {
+                Log::channel($this->logChannel())->warning('Bunny uploadDirectory: failed to open file', [
+                    'path' => $file->getPathname(),
+                ]);
+                continue;
+            }
+
+            try {
+                // Stream the file so memory stays flat for large .ts segments.
+                $ok = $this->putStreamWithType($remotePath, $stream, $contentType);
+            } finally {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }
+
+            if ($ok) {
+                $uploaded++;
+            }
+        }
+
+        return $uploaded;
+    }
+
+    /**
+     * Internal putStream() variant that honours a specific Content-Type.
+     * Mirrors put() but takes a stream — same semantics as putStream() with
+     * an explicit MIME override (so .m3u8 / .ts get correct types).
+     *
+     * @param  resource  $resource
+     */
+    protected function putStreamWithType(string $path, $resource, string $contentType): bool
+    {
+        if (! $this->enabled || ! is_resource($resource)) {
+            return false;
+        }
+
+        $url = $this->storageUrl($path);
+
+        try {
+            $response = Http::withHeaders([
+                'AccessKey'    => $this->storageKey,
+                'Content-Type' => $contentType,
+                'Accept'       => 'application/json',
+            ])
+                ->withOptions(['body' => $resource])
+                ->timeout(0)
+                ->put($url);
+
+            if (! $response->successful()) {
+                Log::channel($this->logChannel())->warning('Bunny putStreamWithType() failed', [
+                    'path'   => $path,
+                    'status' => $response->status(),
+                    'body'   => substr($response->body(), 0, 500),
+                ]);
+
+                return false;
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::channel($this->logChannel())->error('Bunny putStreamWithType() exception', [
+                'path'    => $path,
+                'message' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * Sniff Content-Type from filename. Conservative — falls back to
+     * application/octet-stream for unknown extensions.
+     */
+    protected function guessContentType(string $filename): string
+    {
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+        return match ($ext) {
+            'm3u8' => 'application/vnd.apple.mpegurl',
+            'ts'   => 'video/mp2t',
+            'mp4'  => 'video/mp4',
+            'webm' => 'video/webm',
+            'mov'  => 'video/quicktime',
+            'mkv'  => 'video/x-matroska',
+            'vtt'  => 'text/vtt',
+            'srt'  => 'application/x-subrip',
+            'json' => 'application/json',
+            default => 'application/octet-stream',
+        };
     }
 
     /**

@@ -85,6 +85,29 @@ class RegisterController extends Controller
 
         auth()->login($user);
 
+        // FIX #6 (AUDIT #1) — regenerate the session ID so the post-registration
+        // session is not the same one held by an anonymous attacker who pre-
+        // visited the registration page (session fixation defence). Also mark
+        // the session as 2FA-passed so the TwoFactorVerified middleware never
+        // bounces a brand-new user (they cannot have configured TOTP yet).
+        request()->session()->regenerate();
+        request()->session()->put('2fa.passed', true);
+
+        // FIX #7 — funnel brand-new users into the 3-question onboarding quiz
+        // so ColdStartRecommender has something to chew on the first time
+        // /api/recommendations is hit. A user who already has preferences
+        // (re-registration via a previous flow / OAuth bootstrap) is sent
+        // straight to verification. The "onboarding.pending" session flag
+        // is also read by the home page dismiss-able banner for users who
+        // skipped the quiz from the verification screen.
+        $needsOnboarding = !$user->preferences()->exists();
+        if ($needsOnboarding) {
+            request()->session()->put('onboarding.pending', true);
+
+            return redirect()->route('onboarding.quiz')
+                ->with('success', 'Akun dibuat! Jawab 3 pertanyaan untuk rekomendasi yang pas — atau lewati untuk verifikasi email dulu.');
+        }
+
         return redirect()->route('verification.notice')
             ->with('success', 'Akun dibuat. Cek email kamu untuk verifikasi.');
     }

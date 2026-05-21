@@ -53,6 +53,8 @@ class PromoBannerGenerator
                 'temperature' => 0.85,
                 'max_tokens'  => 300,
             ],
+            taskType: 'marketing.banner_' . $tone,
+            subject: $movie,
         );
 
         return $this->parseAndClamp($response['content'] ?? '', $movie, $tone);
