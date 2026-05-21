@@ -194,7 +194,7 @@
                             <input type="checkbox" class="bulk-checkbox"
                                    value="{{ $movie->id }}"
                                    :checked="isSelected({{ $movie->id }})"
-                                   @change="toggle({{ $movie->id }}, $event.target.checked, {{ \Js::from(['title' => $movie->title]) }})">
+                                   @change="toggle({{ $movie->id }}, $event.target.checked, {{ \Illuminate\Support\Js::from(['title' => $movie->title]) }})">
                         </td>
                         <td style="color:#555">{{ $movie->id }}</td>
                         <td>
