@@ -34,7 +34,24 @@ class TwoFactorVerified
             return $next($request);
         }
 
-        if (!$user->hasTwoFactorEnabled()) {
+        // Defensive: hasTwoFactorEnabled() may not exist OR the
+        // two_factor_* columns may be missing if the 2FA migration hasn't
+        // run yet. Catch every failure mode so admin routes never 500
+        // just because 2FA infrastructure is half-deployed.
+        $hasTwoFactor = false;
+        try {
+            if (method_exists($user, 'hasTwoFactorEnabled')) {
+                $hasTwoFactor = (bool) $user->hasTwoFactorEnabled();
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('TwoFactorVerified: hasTwoFactorEnabled() failed — passing through', [
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            return $next($request);
+        }
+
+        if (!$hasTwoFactor) {
             return $next($request);
         }
 
