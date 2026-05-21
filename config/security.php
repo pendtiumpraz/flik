@@ -242,6 +242,14 @@ return [
                 'script-src' => [
                     "'self'",
                     "'unsafe-inline'",
+                    // REQUIRED by Alpine.js — it uses new Function() to evaluate
+                    // x-data / x-show / x-on expressions. Without 'unsafe-eval'
+                    // EVERY x-data crashes with "Alpine Expression Error: …
+                    // violates CSP" and every dropdown/x-show defaults to
+                    // visible. The alternative is @alpinejs/csp build which
+                    // requires ahead-of-time precompiled expressions across
+                    // ALL Blade views — out of scope for a hotfix.
+                    "'unsafe-eval'",
                     'cdn.jsdelivr.net',
                     'cdn.tailwindcss.com',
                     'cdnjs.cloudflare.com',
