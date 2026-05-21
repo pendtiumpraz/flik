@@ -641,7 +641,11 @@ Route::middleware(['auth', '2fa', 'can:admin'])->prefix('admin')->name('admin.')
         ->middleware('can:movies.update')->name('cast.enrich-bio');
 
     // ─── Architecture Docs (client-facing HLA) ──────────────────
-    Route::get('/docs', [\App\Http\Controllers\Admin\DocsController::class, 'index'])
+    // Password-gated (every reload re-prompts). Default password: ott2026
+    // Configurable via /admin/settings → key `pages.protected_password`.
+    // Allow GET+POST so the gate form can POST back to the same URL.
+    Route::match(['get', 'post'], '/docs', [\App\Http\Controllers\Admin\DocsController::class, 'index'])
+        ->middleware('page-password')
         ->name('docs.index');
 
     // ─── Users ───────────────────────────────────────────────────
@@ -733,8 +737,12 @@ Route::middleware(['auth', '2fa', 'can:admin'])->prefix('admin')->name('admin.')
         ->middleware('can:ai.providers.configure')->name('ai.destroy');
 
     // ─── Pitch Deck (no extra permission — bare `can:admin` only) ──
-    Route::get('/pitch-deck', [\App\Http\Controllers\AdminController::class, 'pitchDeck'])->name('pitch-deck');
-    Route::get('/pitch-deck.md', [\App\Http\Controllers\AdminController::class, 'pitchDeckMarkdown'])->name('pitch-deck.md');
+    // Pitch deck — password-gated like /admin/docs (default password ott2026,
+    // configurable via /admin/settings → pages.protected_password).
+    Route::match(['get', 'post'], '/pitch-deck', [\App\Http\Controllers\AdminController::class, 'pitchDeck'])
+        ->middleware('page-password')->name('pitch-deck');
+    Route::match(['get', 'post'], '/pitch-deck.md', [\App\Http\Controllers\AdminController::class, 'pitchDeckMarkdown'])
+        ->middleware('page-password')->name('pitch-deck.md');
 
     // ━━━ SWARM AI FEATURES INTEGRATION ━━━
 

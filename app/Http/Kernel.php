@@ -108,6 +108,10 @@ class Kernel extends HttpKernel
         // Defence-in-depth IDOR guard. Usage: ->middleware('owns:schedule')
         // — the param name MUST match the route binding ({schedule}).
         'owns' => \App\Http\Middleware\EnsureOwnership::class,
+        // Per-page password gate (no session memo — re-prompts every reload).
+        // Used on sensitive admin pages (architecture docs, pitch deck).
+        // Password lives in `settings` table key `pages.protected_password`.
+        'page-password' => \App\Http\Middleware\PagePasswordGate::class,
         // Service-to-service API key auth. Reads Authorization: Bearer flk_...
         // or X-Api-Key. On success, the verified ApiKey is exposed via
         // $request->attributes->get('api_key').

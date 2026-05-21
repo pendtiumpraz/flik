@@ -287,20 +287,31 @@
     {{-- ━━━━━━━━━━━━━━━━━━━ TABLE OF CONTENTS ━━━━━━━━━━━━━━━━━━━ --}}
     <div class="toc">
         <h3>📑 Daftar Isi</h3>
-        <ol>
-            <li><a href="#sec-overview">Overview System</a></li>
-            <li><a href="#sec-stack">Tech Stack 7-Layer</a></li>
-            <li><a href="#sec-user-journey">User Journey</a></li>
-            <li><a href="#sec-upload">Content Upload & Distribution</a></li>
-            <li><a href="#sec-drm">DRM & Playback Flow</a></li>
-            <li><a href="#sec-ai">AI Feature Stack</a></li>
-            <li><a href="#sec-payment">Payment Flow</a></li>
-            <li><a href="#sec-notif">Notification System</a></li>
-            <li><a href="#sec-security">Security & Compliance</a></li>
-            <li><a href="#sec-data">Data Flow Overview</a></li>
-            <li><a href="#sec-tech-why">⚖ Tech Choices & Why (15 tab)</a></li>
-            <li><a href="#sec-deploy">Deployment & Ops</a></li>
+        <ol style="list-style:none;padding-left:0">
+            <li><a href="#sec-overview"><span class="toc-ico">🌐</span> Overview System</a></li>
+            <li><a href="#sec-stack"><span class="toc-ico">🧱</span> Tech Stack 7-Layer</a></li>
+            <li><a href="#sec-user-journey"><span class="toc-ico">🚶</span> User Journey</a></li>
+            <li><a href="#sec-upload"><span class="toc-ico">🎬</span> Content Upload &amp; Distribution</a></li>
+            <li><a href="#sec-drm"><span class="toc-ico">🔐</span> DRM &amp; Playback Flow</a></li>
+            <li><a href="#sec-ai"><span class="toc-ico">🤖</span> AI Feature Stack</a></li>
+            <li><a href="#sec-payment"><span class="toc-ico">💳</span> Payment Flow</a></li>
+            <li><a href="#sec-notif"><span class="toc-ico">🔔</span> Notification System</a></li>
+            <li><a href="#sec-security"><span class="toc-ico">🛡️</span> Security &amp; Compliance</a></li>
+            <li><a href="#sec-data"><span class="toc-ico">🗄️</span> Data Flow Overview</a></li>
+            <li><a href="#sec-tech-why"><span class="toc-ico">⚖️</span> Tech Choices &amp; Why <span style="color:#C5A55A;font-size:11px">(15 tab)</span></a></li>
+            <li><a href="#sec-deploy"><span class="toc-ico">🚀</span> Deployment &amp; Ops</a></li>
         </ol>
+        <style>
+            .toc ol li a { display:flex; align-items:center; gap:10px; padding:6px 0; }
+            .toc-ico {
+                display:inline-flex; align-items:center; justify-content:center;
+                width:28px; height:28px;
+                background:rgba(197,165,90,0.08);
+                border-radius:7px;
+                font-size:14px;
+                flex-shrink:0;
+            }
+        </style>
     </div>
 
     {{-- ━━━━━━━━━━━━━━━━━━━ §1 OVERVIEW ━━━━━━━━━━━━━━━━━━━ --}}
