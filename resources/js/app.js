@@ -1,13 +1,14 @@
-import './bootstrap';
-
-// ━━━ Alpine.js bundled via Vite — SINGLE SOURCE OF TRUTH ━━━
-// All CDN <script> tags removed from layouts. This is the only Alpine init.
+// ━━━ Alpine.js FIRST — before anything that could throw ━━━
+// Static imports MUST come before any code. ESM hoists them, but ordering
+// here helps reasoning: Alpine init runs immediately after these resolve.
 import Alpine from 'alpinejs';
 import collapse from '@alpinejs/collapse';
+import './bootstrap';
 
 window.Alpine = Alpine;
 Alpine.plugin(collapse);
 Alpine.start();
+console.log('[FLiK] Alpine started, version:', Alpine.version);
 
 // ━━━ Player modules (Shaka wrapper + auto-skip + X-Ray overlay) ━━━
 // Each player file already self-registers on `window` for non-module callers,
