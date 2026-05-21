@@ -643,6 +643,14 @@ Route::middleware(['auth', '2fa', 'can:admin'])->prefix('admin')->name('admin.')
     // ─── Users ───────────────────────────────────────────────────
     Route::get('/users', [\App\Http\Controllers\AdminController::class, 'users'])
         ->middleware('can:users.view')->name('users.index');
+    Route::get('/users/create', [\App\Http\Controllers\AdminController::class, 'createUser'])
+        ->middleware('can:users.update')->name('users.create');
+    Route::post('/users', [\App\Http\Controllers\AdminController::class, 'storeUser'])
+        ->middleware('can:users.update')->name('users.store');
+    Route::get('/users/{user}/edit', [\App\Http\Controllers\AdminController::class, 'editUser'])
+        ->middleware('can:users.update')->name('users.edit');
+    Route::put('/users/{user}', [\App\Http\Controllers\AdminController::class, 'updateUser'])
+        ->middleware('can:users.update')->name('users.update');
     Route::put('/users/{user}/toggle-admin', [\App\Http\Controllers\AdminController::class, 'toggleAdmin'])
         ->middleware('can:users.update')->name('users.toggleAdmin');
     Route::delete('/users/{user}', [\App\Http\Controllers\AdminController::class, 'destroyUser'])

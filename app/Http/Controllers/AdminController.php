@@ -273,6 +273,82 @@ class AdminController extends Controller
 
     // ── USER MANAGEMENT ───────────────────────────────────────
 
+    public function createUser()
+    {
+        return view('admin.users.create');
+    }
+
+    public function storeUser(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'username' => 'nullable|string|min:3|max:255|unique:users,username',
+            'email' => 'required|email|max:255|unique:users,email',
+            'password' => 'required|string|min:8|max:255|confirmed',
+            'is_admin' => 'sometimes|boolean',
+            'email_verified' => 'sometimes|boolean',
+        ]);
+
+        $user = new User;
+        $user->name = $data['name'];
+        $user->username = $data['username'] ?? null;
+        $user->email = $data['email'];
+        $user->password = $data['password']; // User::setPasswordAttribute auto-bcrypts
+        if (!empty($data['email_verified'])) {
+            $user->email_verified_at = now();
+        }
+        $user->save();
+        if (!empty($data['is_admin'])) {
+            $user->forceFill(['is_admin' => true])->save();
+        }
+
+        return redirect()->route('admin.users.index')
+            ->with('success', "User \"{$user->name}\" berhasil dibuat.");
+    }
+
+    public function editUser(User $user)
+    {
+        return view('admin.users.edit', compact('user'));
+    }
+
+    public function updateUser(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'username' => ['nullable', 'string', 'min:3', 'max:255',
+                \Illuminate\Validation\Rule::unique('users', 'username')->ignore($user->id)],
+            'email' => ['required', 'email', 'max:255',
+                \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id)],
+            'password' => 'nullable|string|min:8|max:255|confirmed',
+            'is_admin' => 'sometimes|boolean',
+            'email_verified' => 'sometimes|boolean',
+        ]);
+
+        $user->name = $data['name'];
+        $user->username = $data['username'] ?? null;
+        $user->email = $data['email'];
+        if (!empty($data['password'])) {
+            $user->password = $data['password'];
+        }
+        if (array_key_exists('email_verified', $data)) {
+            $user->email_verified_at = !empty($data['email_verified']) ? now() : null;
+        }
+        $user->save();
+        // is_admin is $guarded — set via forceFill, only if request provided it
+        // AND it's not the actor revoking their own admin (mirror toggleAdmin guard)
+        if ($request->has('is_admin')) {
+            $newAdmin = (bool) $data['is_admin'];
+            if ($user->id === auth()->id() && $user->is_admin && !$newAdmin) {
+                return redirect()->route('admin.users.edit', $user)
+                    ->with('error', 'Tidak bisa cabut admin status milik sendiri.');
+            }
+            $user->forceFill(['is_admin' => $newAdmin])->save();
+        }
+
+        return redirect()->route('admin.users.index')
+            ->with('success', "User \"{$user->name}\" berhasil diupdate.");
+    }
+
     public function users()
     {
         // Eager-load `roles` so the index view can render the per-user role

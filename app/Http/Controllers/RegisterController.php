@@ -100,15 +100,34 @@ class RegisterController extends Controller
         // straight to verification. The "onboarding.pending" session flag
         // is also read by the home page dismiss-able banner for users who
         // skipped the quiz from the verification screen.
-        $needsOnboarding = !$user->preferences()->exists();
+        // Defensive: preferences relation can throw if the user_preferences
+        // migration hasn't run on this env. Treat any failure as "no
+        // preferences yet" and proceed to the onboarding redirect.
+        $needsOnboarding = true;
+        try {
+            $needsOnboarding = !$user->preferences()->exists();
+        } catch (\Throwable $e) {
+            \Log::warning('RegisterController: preferences()->exists() failed — assuming new user', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         if ($needsOnboarding) {
             request()->session()->put('onboarding.pending', true);
 
-            return redirect()->route('onboarding.quiz')
-                ->with('success', 'Akun dibuat! Jawab 3 pertanyaan untuk rekomendasi yang pas — atau lewati untuk verifikasi email dulu.');
+            // Onboarding route may not be registered yet on some envs —
+            // fall back to /verification.notice rather than 500.
+            if (\Illuminate\Support\Facades\Route::has('onboarding.quiz')) {
+                return redirect()->route('onboarding.quiz')
+                    ->with('success', 'Akun dibuat! Jawab 3 pertanyaan untuk rekomendasi yang pas — atau lewati untuk verifikasi email dulu.');
+            }
         }
 
-        return redirect()->route('verification.notice')
-            ->with('success', 'Akun dibuat. Cek email kamu untuk verifikasi.');
+        if (\Illuminate\Support\Facades\Route::has('verification.notice')) {
+            return redirect()->route('verification.notice')
+                ->with('success', 'Akun dibuat. Cek email kamu untuk verifikasi.');
+        }
+        return redirect('/')->with('success', 'Akun dibuat. Selamat datang di FLiK!');
     }
 }
