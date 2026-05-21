@@ -78,8 +78,12 @@ class User extends Authenticatable implements MustVerifyEmail
         'password_changed_at' => 'datetime',
         'is_admin' => 'boolean',
         // 2FA — encrypted-at-rest via Laravel's encrypter casts.
-        'two_factor_secret' => 'encrypted',
-        'two_factor_recovery_codes' => 'encrypted:array',
+        // NOTE: two_factor_secret + two_factor_recovery_codes intentionally
+        // NOT cast as 'encrypted' here — we override the accessors above
+        // with defensive try/catch versions so a MAC-invalid blob (APP_KEY
+        // drift) returns null instead of crashing every request.
+        // The columns on disk ARE encrypted via the setter still; only
+        // the read path is hardened.
         'two_factor_confirmed_at' => 'datetime',
 
         // PII encryption (Laravel encrypter — AES-256-CBC keyed by APP_KEY).
@@ -87,8 +91,8 @@ class User extends Authenticatable implements MustVerifyEmail
         // (`where('email', ...)`) and admin search would break otherwise.
         // For lookup-by-PII use a separate searchable hash column
         // (see `national_id_hash` + `findByNationalId`).
-        'phone' => 'encrypted',
-        'address' => 'encrypted',
+        // 'phone' + 'address' similarly handled via defensive accessor
+        // overrides (see getPhoneAttribute / getAddressAttribute below).
         'birth_date' => 'date', // plaintext on disk — used by age verification queries
 
         // Public-profile flags — keep them booleans on the read side so
@@ -100,11 +104,128 @@ class User extends Authenticatable implements MustVerifyEmail
     /**
      * Convenience flag — true once the user has completed the TOTP setup
      * and the login flow must show the challenge screen.
+     *
+     * Defensive: any encrypted-cast field can throw DecryptException("The
+     * MAC is invalid") if APP_KEY has rotated since the row was written.
+     * We catch + treat as "2FA disabled" so a stale encrypted blob never
+     * 500s the whole app. Run `php artisan flik:security:reencrypt-pii`
+     * to repair OR have the user re-setup 2FA.
      */
     public function hasTwoFactorEnabled(): bool
     {
-        return $this->two_factor_confirmed_at !== null
-            && ! empty($this->two_factor_secret);
+        if ($this->two_factor_confirmed_at === null) {
+            return false;
+        }
+
+        try {
+            return ! empty($this->two_factor_secret);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+            \Illuminate\Support\Facades\Log::warning('User::hasTwoFactorEnabled — encrypted column decrypt failed', [
+                'user_id' => $this->id,
+                'message' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Defensive override — any read of `phone` returns null instead of
+     * throwing if the encrypted blob can't be decrypted under the
+     * current APP_KEY.
+     */
+    public function getPhoneAttribute($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        try {
+            return \Illuminate\Support\Facades\Crypt::decryptString($value);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Defensive override — same pattern for `address`.
+     */
+    public function getAddressAttribute($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        try {
+            return \Illuminate\Support\Facades\Crypt::decryptString($value);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Defensive override — same pattern for `two_factor_secret`.
+     * Returning null here is the SAFE failure mode: hasTwoFactorEnabled()
+     * will see empty + treat 2FA as disabled, login proceeds normally.
+     */
+    public function getTwoFactorSecretAttribute($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        try {
+            return \Illuminate\Support\Facades\Crypt::decryptString($value);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Defensive override — same pattern for `two_factor_recovery_codes`.
+     * encrypted:array cast — returns empty array on decrypt failure.
+     */
+    public function getTwoFactorRecoveryCodesAttribute($value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+        try {
+            return json_decode(\Illuminate\Support\Facades\Crypt::decryptString($value), true) ?: [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    // ━━━ Encrypt-on-write setters (we removed the 'encrypted' casts above
+    // so the read side can be defensive; these setters preserve the
+    // encrypt-at-rest invariant for new writes.) ━━━
+
+    public function setPhoneAttribute(?string $value): void
+    {
+        $this->attributes['phone'] = $value === null || $value === ''
+            ? null
+            : \Illuminate\Support\Facades\Crypt::encryptString($value);
+    }
+
+    public function setAddressAttribute(?string $value): void
+    {
+        $this->attributes['address'] = $value === null || $value === ''
+            ? null
+            : \Illuminate\Support\Facades\Crypt::encryptString($value);
+    }
+
+    public function setTwoFactorSecretAttribute(?string $value): void
+    {
+        $this->attributes['two_factor_secret'] = $value === null || $value === ''
+            ? null
+            : \Illuminate\Support\Facades\Crypt::encryptString($value);
+    }
+
+    public function setTwoFactorRecoveryCodesAttribute($value): void
+    {
+        if ($value === null || $value === '' || $value === []) {
+            $this->attributes['two_factor_recovery_codes'] = null;
+            return;
+        }
+        $json = is_string($value) ? $value : json_encode($value);
+        $this->attributes['two_factor_recovery_codes'] = \Illuminate\Support\Facades\Crypt::encryptString($json);
     }
 
     // ── Roles ─────────────────────────────────────────────────
