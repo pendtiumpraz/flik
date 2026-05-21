@@ -379,6 +379,15 @@ function adminNotifBell() {
             const t = String(text).trim();
             return t.length > 90 ? `${t.slice(0, 90)}…` : t;
         },
+        // categoryIcon — proxies to global window.notifCategoryIcon which the
+        // bell component registers via @push('scripts'). Falls back to a
+        // generic info dot if the helper hasn't loaded yet.
+        categoryIcon(category) {
+            if (typeof window.notifCategoryIcon === 'function') {
+                return window.notifCategoryIcon(category);
+            }
+            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
+        },
     };
 }
 
