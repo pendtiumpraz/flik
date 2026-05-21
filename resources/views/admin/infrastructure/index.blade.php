@@ -122,7 +122,31 @@
         ⚠ <strong>Hati-hati:</strong> Beberapa setting butuh queue worker restart untuk effect penuh (DRM provider change, storage disk change). API key salah → fitur terkait akan gagal. Pastikan test di staging dulu.
     </div>
 
-    <form method="POST" action="{{ route('admin.infrastructure.update') }}" x-data="{ tab: '{{ array_key_first($tabs) }}' }">
+    @php
+        // Build the Alpine state object: tab + ALL select-driver values so the
+        // form can conditionally show/hide rows based on the current pick.
+        // Walk the catalogue + extract every 'select' input that other rows
+        // reference via show_when — those are the "drivers" that other rows
+        // depend on.
+        $drivers = [];
+        foreach ($tabs as $items) {
+            foreach ($items as $item) {
+                if (!empty($item['show_when']) && is_array($item['show_when'])) {
+                    foreach (array_keys($item['show_when']) as $depKey) {
+                        $drivers[$depKey] = $current[$depKey] ?? '';
+                    }
+                }
+            }
+        }
+        $alpineState = ['tab' => array_key_first($tabs)];
+        foreach ($drivers as $key => $val) {
+            // Alpine key: replace dots with underscores to make valid JS identifier
+            $alpineState[str_replace('.', '_', $key)] = (string) $val;
+        }
+    @endphp
+
+    <form method="POST" action="{{ route('admin.infrastructure.update') }}"
+          x-data='@json($alpineState)'>
         @csrf
 
         <div class="infra-card">
@@ -169,9 +193,26 @@
                                 $inputName = str_replace('.', '_', $key);
                                 $value = $current[$key] ?? ($item['default'] ?? '');
                                 $isSecret = !empty($item['secret']);
+
+                                // Build x-show expression from show_when array.
+                                // Example: ['payment.provider' => ['midtrans']]
+                                //   → x-show="['midtrans'].includes(payment_provider)"
+                                // Multi-condition: ['drm.provider' => ['widevine', 'fairplay']]
+                                //   → x-show="['widevine','fairplay'].includes(drm_provider)"
+                                $xShow = null;
+                                if (!empty($item['show_when']) && is_array($item['show_when'])) {
+                                    $conds = [];
+                                    foreach ($item['show_when'] as $depKey => $allowed) {
+                                        $depVar = str_replace('.', '_', $depKey);
+                                        $allowedList = is_array($allowed) ? $allowed : [$allowed];
+                                        $jsArr = json_encode($allowedList);
+                                        $conds[] = "{$jsArr}.includes({$depVar})";
+                                    }
+                                    $xShow = implode(' && ', $conds);
+                                }
                             @endphp
 
-                            <div class="infra-row">
+                            <div class="infra-row" @if($xShow) x-show="{{ $xShow }}" x-transition.opacity x-cloak @endif>
                                 <div class="infra-label-block">
                                     <span class="infra-label">{{ $item['label'] }}</span>
                                     <span class="infra-key">{{ $key }}</span>
@@ -182,7 +223,13 @@
                                 <div>
                                     @switch($item['type'])
                                         @case('select')
-                                            <select name="{{ $inputName }}" class="infra-input infra-select">
+                                            @php
+                                                // If this is a "driver" key (referenced by other rows' show_when),
+                                                // bind it to Alpine state so dependent rows re-evaluate on change.
+                                                $isDriver = array_key_exists($key, $drivers);
+                                            @endphp
+                                            <select name="{{ $inputName }}" class="infra-input infra-select"
+                                                    @if($isDriver) x-model="{{ $inputName }}" @endif>
                                                 @foreach($item['options'] as $optVal => $optLabel)
                                                     <option value="{{ $optVal }}" @selected($value === $optVal)>{{ $optLabel }}</option>
                                                 @endforeach

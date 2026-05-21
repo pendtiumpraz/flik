@@ -46,9 +46,11 @@ class InfrastructureController extends Controller
                     'multi-cenc' => 'Multi-DRM CENC (Widevine + PlayReady + FairPlay)',
                 ], 'default' => 'aes-128', 'help' => 'Switch only after license server is configured below.'],
                 ['key' => 'drm.license_server_url', 'label' => 'License Server URL', 'type' => 'url',
-                    'default' => '', 'help' => 'Required for widevine/playready/fairplay/multi-cenc (PallyCon, ezDRM, BuyDRM).', 'secret' => true],
+                    'default' => '', 'help' => 'Required for widevine/playready/fairplay/multi-cenc (PallyCon, ezDRM, BuyDRM).',
+                    'show_when' => ['drm.provider' => ['widevine', 'fairplay', 'playready', 'multi-cenc']]],
                 ['key' => 'drm.license_token_secret', 'label' => 'License Token Secret', 'type' => 'password',
-                    'default' => '', 'help' => 'Shared secret for signing DRM license tokens.', 'secret' => true],
+                    'default' => '', 'help' => 'Shared secret for signing DRM license tokens.', 'secret' => true,
+                    'show_when' => ['drm.provider' => ['widevine', 'fairplay', 'playready', 'multi-cenc']]],
                 ['key' => 'drm.allow_episode_raw_mp4', 'label' => 'Allow raw mp4 fallback for episodes', 'type' => 'bool',
                     'default' => '0', 'help' => 'Dev only — keep OFF in production. When on, episode playback skips DRM if HLS not ready.'],
                 ['key' => 'drm.concurrent_lock_ttl', 'label' => 'Concurrent Lock TTL (seconds)', 'type' => 'int',
@@ -67,11 +69,49 @@ class InfrastructureController extends Controller
                     'r2'          => 'Cloudflare R2',
                     'spaces'      => 'DigitalOcean Spaces',
                 ], 'default' => 'bunny', 'help' => 'Where encoded HLS segments live + serve from.'],
-                ['key' => 'cdn.bunny.storage_zone', 'label' => 'Bunny Storage Zone', 'type' => 'text', 'default' => ''],
-                ['key' => 'cdn.bunny.access_key', 'label' => 'Bunny Storage Access Key', 'type' => 'password', 'default' => '', 'secret' => true],
-                ['key' => 'cdn.bunny.pull_zone_url', 'label' => 'Bunny Pull Zone URL', 'type' => 'url', 'default' => 'https://flik.b-cdn.net'],
+                ['key' => 'cdn.bunny.storage_zone', 'label' => 'Bunny Storage Zone', 'type' => 'text', 'default' => '',
+                    'show_when' => ['cdn.driver' => ['bunny']]],
+                ['key' => 'cdn.bunny.access_key', 'label' => 'Bunny Storage Access Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['cdn.driver' => ['bunny']]],
+                ['key' => 'cdn.bunny.pull_zone_url', 'label' => 'Bunny Pull Zone URL', 'type' => 'url', 'default' => 'https://flik.b-cdn.net',
+                    'show_when' => ['cdn.driver' => ['bunny']]],
                 ['key' => 'cdn.bunny.token_key', 'label' => 'Bunny Token Authentication Key', 'type' => 'password', 'default' => '', 'secret' => true,
-                    'help' => 'For signed URL — leak-resistant segment delivery.'],
+                    'help' => 'For signed URL — leak-resistant segment delivery.',
+                    'show_when' => ['cdn.driver' => ['bunny']]],
+
+                // S3 fields
+                ['key' => 'cdn.s3.region', 'label' => 'AWS Region', 'type' => 'text', 'default' => 'ap-southeast-1',
+                    'show_when' => ['cdn.driver' => ['s3']]],
+                ['key' => 'cdn.s3.bucket', 'label' => 'S3 Bucket Name', 'type' => 'text', 'default' => '',
+                    'show_when' => ['cdn.driver' => ['s3']]],
+                ['key' => 'cdn.s3.access_key', 'label' => 'AWS Access Key ID', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['cdn.driver' => ['s3']]],
+                ['key' => 'cdn.s3.secret_key', 'label' => 'AWS Secret Access Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['cdn.driver' => ['s3']]],
+                ['key' => 'cdn.s3.cloudfront_domain', 'label' => 'CloudFront Domain (optional)', 'type' => 'text', 'default' => '',
+                    'help' => 'Misal: d1234.cloudfront.net — kosongkan kalau pakai S3 langsung.',
+                    'show_when' => ['cdn.driver' => ['s3']]],
+
+                // Cloudflare R2
+                ['key' => 'cdn.r2.account_id', 'label' => 'Cloudflare Account ID', 'type' => 'text', 'default' => '',
+                    'show_when' => ['cdn.driver' => ['r2']]],
+                ['key' => 'cdn.r2.access_key', 'label' => 'R2 Access Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['cdn.driver' => ['r2']]],
+                ['key' => 'cdn.r2.secret_key', 'label' => 'R2 Secret Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['cdn.driver' => ['r2']]],
+                ['key' => 'cdn.r2.bucket', 'label' => 'R2 Bucket Name', 'type' => 'text', 'default' => '',
+                    'show_when' => ['cdn.driver' => ['r2']]],
+
+                // DO Spaces
+                ['key' => 'cdn.spaces.region', 'label' => 'DO Spaces Region', 'type' => 'text', 'default' => 'sgp1',
+                    'show_when' => ['cdn.driver' => ['spaces']]],
+                ['key' => 'cdn.spaces.bucket', 'label' => 'Spaces Bucket', 'type' => 'text', 'default' => '',
+                    'show_when' => ['cdn.driver' => ['spaces']]],
+                ['key' => 'cdn.spaces.access_key', 'label' => 'Spaces Access Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['cdn.driver' => ['spaces']]],
+                ['key' => 'cdn.spaces.secret_key', 'label' => 'Spaces Secret', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['cdn.driver' => ['spaces']]],
+
                 ['key' => 'cdn.signed_url_ttl_minutes', 'label' => 'Signed Segment URL TTL (minutes)', 'type' => 'int',
                     'default' => '120', 'help' => 'How long a segment URL stays valid before user must re-request.'],
             ],
@@ -105,13 +145,32 @@ class InfrastructureController extends Controller
                     'ably'     => 'Ably (managed SaaS)',
                     'polling'  => 'Polling only (no realtime — fallback)',
                 ], 'default' => 'pusher'],
-                ['key' => 'realtime.pusher.app_id', 'label' => 'Pusher App ID', 'type' => 'text', 'default' => ''],
-                ['key' => 'realtime.pusher.app_key', 'label' => 'Pusher App Key', 'type' => 'text', 'default' => ''],
-                ['key' => 'realtime.pusher.app_secret', 'label' => 'Pusher App Secret', 'type' => 'password', 'default' => '', 'secret' => true],
+                ['key' => 'realtime.pusher.app_id', 'label' => 'Pusher App ID', 'type' => 'text', 'default' => '',
+                    'show_when' => ['realtime.driver' => ['pusher']]],
+                ['key' => 'realtime.pusher.app_key', 'label' => 'Pusher App Key', 'type' => 'text', 'default' => '',
+                    'show_when' => ['realtime.driver' => ['pusher']]],
+                ['key' => 'realtime.pusher.app_secret', 'label' => 'Pusher App Secret', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['realtime.driver' => ['pusher']]],
                 ['key' => 'realtime.pusher.cluster', 'label' => 'Pusher Cluster', 'type' => 'text', 'default' => 'ap1',
-                    'help' => 'ap1=Singapore (closest to ID), ap2=Mumbai, us2=N. Virginia.'],
+                    'help' => 'ap1=Singapore (closest to ID), ap2=Mumbai, us2=N. Virginia.',
+                    'show_when' => ['realtime.driver' => ['pusher', 'reverb', 'soketi']]],
+
+                // Reverb / Soketi self-host
+                ['key' => 'realtime.reverb.host', 'label' => 'Reverb/Soketi Host', 'type' => 'text', 'default' => '',
+                    'help' => 'Misal: websocket.flik.id atau localhost:8080',
+                    'show_when' => ['realtime.driver' => ['reverb', 'soketi']]],
+                ['key' => 'realtime.reverb.port', 'label' => 'Reverb/Soketi Port', 'type' => 'int', 'default' => '8080',
+                    'show_when' => ['realtime.driver' => ['reverb', 'soketi']]],
+                ['key' => 'realtime.reverb.scheme', 'label' => 'Scheme', 'type' => 'select', 'options' => ['https' => 'HTTPS (wss)', 'http' => 'HTTP (ws)'], 'default' => 'https',
+                    'show_when' => ['realtime.driver' => ['reverb', 'soketi']]],
+
+                // Ably
+                ['key' => 'realtime.ably.api_key', 'label' => 'Ably API Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['realtime.driver' => ['ably']]],
+
                 ['key' => 'realtime.polling_interval_seconds', 'label' => 'Polling Interval (s) for Fallback', 'type' => 'int',
-                    'default' => '30'],
+                    'default' => '30', 'help' => 'Berlaku saat driver=polling atau Pusher gagal connect.',
+                    'show_when' => ['realtime.driver' => ['polling']]],
             ],
 
             'payment' => [
@@ -122,11 +181,40 @@ class InfrastructureController extends Controller
                     'stripe'   => 'Stripe (global, no GoPay/OVO)',
                     'none'     => 'Disabled (free-plan only)',
                 ], 'default' => 'midtrans'],
+                // Midtrans fields
                 ['key' => 'payment.midtrans.is_production', 'label' => 'Midtrans Production Mode', 'type' => 'bool',
-                    'default' => '0', 'help' => 'OFF = sandbox (test mode). Turn ON only after merchant verified.'],
-                ['key' => 'payment.midtrans.server_key', 'label' => 'Midtrans Server Key', 'type' => 'password', 'default' => '', 'secret' => true],
-                ['key' => 'payment.midtrans.client_key', 'label' => 'Midtrans Client Key', 'type' => 'text', 'default' => ''],
-                ['key' => 'payment.midtrans.merchant_id', 'label' => 'Midtrans Merchant ID', 'type' => 'text', 'default' => ''],
+                    'default' => '0', 'help' => 'OFF = sandbox (test mode). Turn ON only after merchant verified.',
+                    'show_when' => ['payment.provider' => ['midtrans']]],
+                ['key' => 'payment.midtrans.server_key', 'label' => 'Midtrans Server Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['payment.provider' => ['midtrans']]],
+                ['key' => 'payment.midtrans.client_key', 'label' => 'Midtrans Client Key', 'type' => 'text', 'default' => '',
+                    'show_when' => ['payment.provider' => ['midtrans']]],
+                ['key' => 'payment.midtrans.merchant_id', 'label' => 'Midtrans Merchant ID', 'type' => 'text', 'default' => '',
+                    'show_when' => ['payment.provider' => ['midtrans']]],
+
+                // Xendit fields
+                ['key' => 'payment.xendit.secret_key', 'label' => 'Xendit Secret Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['payment.provider' => ['xendit']]],
+                ['key' => 'payment.xendit.webhook_token', 'label' => 'Xendit Webhook Verification Token', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['payment.provider' => ['xendit']]],
+                ['key' => 'payment.xendit.callback_url', 'label' => 'Xendit Callback URL', 'type' => 'url', 'default' => '',
+                    'show_when' => ['payment.provider' => ['xendit']]],
+
+                // Doku fields
+                ['key' => 'payment.doku.client_id', 'label' => 'Doku Client ID', 'type' => 'text', 'default' => '',
+                    'show_when' => ['payment.provider' => ['doku']]],
+                ['key' => 'payment.doku.secret_key', 'label' => 'Doku Secret Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['payment.provider' => ['doku']]],
+
+                // Stripe fields
+                ['key' => 'payment.stripe.publishable_key', 'label' => 'Stripe Publishable Key', 'type' => 'text', 'default' => '',
+                    'help' => 'pk_test_... atau pk_live_...',
+                    'show_when' => ['payment.provider' => ['stripe']]],
+                ['key' => 'payment.stripe.secret_key', 'label' => 'Stripe Secret Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'help' => 'sk_test_... atau sk_live_...',
+                    'show_when' => ['payment.provider' => ['stripe']]],
+                ['key' => 'payment.stripe.webhook_secret', 'label' => 'Stripe Webhook Signing Secret', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['payment.provider' => ['stripe']]],
             ],
 
             'email' => [
@@ -141,11 +229,47 @@ class InfrastructureController extends Controller
                 ], 'default' => 'smtp'],
                 ['key' => 'email.from_address', 'label' => 'From Address', 'type' => 'email', 'default' => 'noreply@flik.id'],
                 ['key' => 'email.from_name', 'label' => 'From Name', 'type' => 'text', 'default' => 'FLiK'],
-                ['key' => 'email.smtp.host', 'label' => 'SMTP Host', 'type' => 'text', 'default' => ''],
-                ['key' => 'email.smtp.port', 'label' => 'SMTP Port', 'type' => 'int', 'default' => '587'],
-                ['key' => 'email.smtp.username', 'label' => 'SMTP Username', 'type' => 'text', 'default' => ''],
-                ['key' => 'email.smtp.password', 'label' => 'SMTP Password', 'type' => 'password', 'default' => '', 'secret' => true],
-                ['key' => 'email.smtp.encryption', 'label' => 'SMTP Encryption', 'type' => 'select', 'options' => ['tls' => 'TLS', 'ssl' => 'SSL', 'none' => 'None'], 'default' => 'tls'],
+                // SMTP fields
+                ['key' => 'email.smtp.host', 'label' => 'SMTP Host', 'type' => 'text', 'default' => '',
+                    'help' => 'Misal: smtp.gmail.com, smtp.zoho.com, mail.your-domain.com',
+                    'show_when' => ['email.driver' => ['smtp']]],
+                ['key' => 'email.smtp.port', 'label' => 'SMTP Port', 'type' => 'int', 'default' => '587',
+                    'show_when' => ['email.driver' => ['smtp']]],
+                ['key' => 'email.smtp.username', 'label' => 'SMTP Username', 'type' => 'text', 'default' => '',
+                    'show_when' => ['email.driver' => ['smtp']]],
+                ['key' => 'email.smtp.password', 'label' => 'SMTP Password', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['email.driver' => ['smtp']]],
+                ['key' => 'email.smtp.encryption', 'label' => 'SMTP Encryption', 'type' => 'select', 'options' => ['tls' => 'TLS', 'ssl' => 'SSL', 'none' => 'None'], 'default' => 'tls',
+                    'show_when' => ['email.driver' => ['smtp']]],
+
+                // AWS SES
+                ['key' => 'email.ses.region', 'label' => 'AWS SES Region', 'type' => 'text', 'default' => 'ap-southeast-1',
+                    'show_when' => ['email.driver' => ['ses']]],
+                ['key' => 'email.ses.access_key', 'label' => 'AWS Access Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['email.driver' => ['ses']]],
+                ['key' => 'email.ses.secret_key', 'label' => 'AWS Secret Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['email.driver' => ['ses']]],
+
+                // Mailgun
+                ['key' => 'email.mailgun.domain', 'label' => 'Mailgun Domain', 'type' => 'text', 'default' => '',
+                    'help' => 'mg.your-domain.com',
+                    'show_when' => ['email.driver' => ['mailgun']]],
+                ['key' => 'email.mailgun.secret', 'label' => 'Mailgun API Secret', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['email.driver' => ['mailgun']]],
+
+                // Postmark
+                ['key' => 'email.postmark.token', 'label' => 'Postmark Server Token', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'show_when' => ['email.driver' => ['postmark']]],
+
+                // Resend
+                ['key' => 'email.resend.api_key', 'label' => 'Resend API Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'help' => 're_...',
+                    'show_when' => ['email.driver' => ['resend']]],
+
+                // SendGrid
+                ['key' => 'email.sendgrid.api_key', 'label' => 'SendGrid API Key', 'type' => 'password', 'default' => '', 'secret' => true,
+                    'help' => 'SG....',
+                    'show_when' => ['email.driver' => ['sendgrid']]],
             ],
 
             'integrations' => [
