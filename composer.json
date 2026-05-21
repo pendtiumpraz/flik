@@ -43,7 +43,8 @@
         },
         "files": [
             "app/Helpers/features.php",
-            "app/Helpers/settings.php"
+            "app/Helpers/settings.php",
+            "app/Helpers/infrastructure.php"
         ]
     },
     "autoload-dev": {

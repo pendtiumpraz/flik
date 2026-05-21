@@ -174,6 +174,11 @@ return [
         App\Providers\BroadcastServiceProvider::class,
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
+        // Reads dynamic infrastructure settings from DB on every boot
+        // and overrides matching config() paths. Lets admin switch
+        // payment/CDN/DRM/email/realtime providers at runtime without
+        // editing .env. See app/Providers/DynamicInfrastructureProvider.
+        App\Providers\DynamicInfrastructureProvider::class,
 
     ],
 
