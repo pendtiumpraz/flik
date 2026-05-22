@@ -122,6 +122,49 @@
         }
         /* Alpine x-cloak: hide until Alpine initialises */
         [x-cloak] { display: none !important; }
+
+        /* ─── Premium branded overlay scrollbars (admin) ─────────────────
+           Mirror of the public app.css block so the admin shell — which
+           does NOT bundle app.css, only app.js — gets the same gold
+           scrollbar on every scroll surface (window, sidebar nav, tables,
+           modals, dropdowns, code blocks). Both axes. Gutter is reserved
+           so opening a modal doesn't shift the page. */
+        *::-webkit-scrollbar { width: 10px; height: 10px; }
+        *::-webkit-scrollbar-track {
+            background: rgba(20, 20, 20, 0.6);
+            border-radius: 999px;
+        }
+        *::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #F0D78C 0%, #C5A55A 55%, #8B6914 100%);
+            border-radius: 999px;
+            border: 2px solid rgba(15, 15, 15, 0.9);
+            background-clip: padding-box;
+            transition: background 0.2s ease, box-shadow 0.2s ease;
+        }
+        *::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #FFE9A8 0%, #D4B96E 55%, #C5A55A 100%);
+            background-clip: padding-box;
+            box-shadow:
+                inset 0 0 10px rgba(255, 232, 168, 0.55),
+                0 0 8px rgba(197, 165, 90, 0.55);
+        }
+        *::-webkit-scrollbar-thumb:active {
+            background: linear-gradient(180deg, #FFD66B 0%, #C5A55A 55%, #8B6914 100%);
+            background-clip: padding-box;
+        }
+        *::-webkit-scrollbar-thumb:horizontal {
+            background: linear-gradient(90deg, #F0D78C 0%, #C5A55A 55%, #8B6914 100%);
+            background-clip: padding-box;
+            border: 2px solid rgba(15, 15, 15, 0.9);
+            border-radius: 999px;
+        }
+        *::-webkit-scrollbar-thumb:horizontal:hover {
+            background: linear-gradient(90deg, #FFE9A8 0%, #D4B96E 55%, #C5A55A 100%);
+            background-clip: padding-box;
+        }
+        *::-webkit-scrollbar-corner { background: rgba(15, 15, 15, 0.7); }
+        * { scrollbar-width: thin; scrollbar-color: #C5A55A rgba(20, 20, 20, 0.6); }
+        html { scrollbar-gutter: stable; }
     </style>
 
     {{-- Alpine.js is bundled inside resources/js/app.js (single instance);
