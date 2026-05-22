@@ -164,7 +164,7 @@
                 <button id="navPrev" onclick="prevSlide()" title="Previous (←)">
                     <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
                 </button>
-                <span class="pd-counter" id="navCounter">1 / 22</span>
+                <span class="pd-counter" id="navCounter">1 / 26</span>
                 <button id="navNext" onclick="nextSlide()" title="Next (→)">
                     <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
                 </button>
@@ -186,11 +186,11 @@
                     <span>3-Bulan Build</span>
                     <span>Rp 60jt/bulan</span>
                     <span>400 Film Ready</span>
-                    <span>In-House DRM</span>
+                    <span>Multi-DRM (Studio-Grade)</span>
                     <span>Bunny CDN</span>
-                    <span>DeepSeek V4 Flash</span>
+                    <span>4-Tier Pricing</span>
                 </div>
-                <div class="meta">v2.1 · 2026-05-09 · Verified Pricing · Hybrid DRM (DIY + EZDRM Optional)</div>
+                <div class="meta">v2.2 · 2026-05-23 · Multi-DRM 3rd-Party (Widevine + PlayReady + FairPlay) · KlikFilm-Style Daily/Weekly/Monthly/Annual</div>
             </div>
         </div>
 
@@ -199,10 +199,10 @@
             <div class="slide-inner">
                 <div class="slide-num">01 — Apa yang Berubah dari v1.0</div>
                 <h2>Realistis untuk Client Menengah</h2>
-                <p class="slide-sub">v1.0 over-engineered untuk enterprise (1M users, deal Hollywood). v2.1 sesuai realita: client udah punya 400 film, mau in-house, budget Rp 60jt × 3.</p>
+                <p class="slide-sub">v1.0 over-engineered untuk enterprise (1M users, deal Hollywood). v2.2 sesuai realita: client udah punya 400 film, mau in-house tapi DRM realistis (3rd-party mandatory), budget Rp 60jt × 3, pricing 4-tier KlikFilm-style.</p>
                 <div class="pd-tbl-wrap">
                 <table class="pd-table">
-                    <thead><tr><th>Aspek</th><th>v1.0 (Lama)</th><th>v2.1 (Realistis)</th><th>Save</th></tr></thead>
+                    <thead><tr><th>Aspek</th><th>v1.0 (Lama)</th><th>v2.2 (Realistis Final)</th><th>Save / Note</th></tr></thead>
                     <tbody>
                         <tr><td>Konten</td><td>350 film, ~$20K akuisisi</td><td><b>400 film sudah dimiliki</b></td><td class="cost">Rp 320 jt</td></tr>
                         <tr><td>Build budget</td><td>$165K Year-1 (Rp 2,6 M)</td><td><b>Rp 180jt 3-bulan</b></td><td class="cost">93%</td></tr>
@@ -210,13 +210,14 @@
                         <tr class="hi"><td>CDN</td><td>CloudFront $0.114/GB Asia</td><td><b>Bunny $0.01/GB</b></td><td class="cost">11×</td></tr>
                         <tr class="hi"><td>AI default</td><td>gpt-4o-mini $0.15/$0.60</td><td><b>DeepSeek V4 Flash $0.14/$0.28</b></td><td class="cost">53%</td></tr>
                         <tr><td>Subtitle</td><td>Whisper $0.006/min</td><td><b>gpt-4o-mini-transcribe $0.003/min</b></td><td class="cost">50%</td></tr>
-                        <tr class="hi"><td>DRM</td><td>EZDRM $200/bln wajib</td><td><b>DIY in-house (gratis), EZDRM optional</b></td><td class="cost">Rp 38jt/thn</td></tr>
+                        <tr class="hi"><td>DRM</td><td>EZDRM $200/bln wajib (1 strategy)</td><td><b>Multi-DRM 3rd party (paid) + AES-128 DIY (free tier)</b></td><td class="warn">Realistis</td></tr>
+                        <tr class="hi"><td>Pricing</td><td>1 tier flat Rp 49rb</td><td><b>4-tier KlikFilm-style (harian/mingguan/bulanan/tahunan) + PPV</b></td><td class="cost">ARPU ↑</td></tr>
                     </tbody>
                 </table>
                 </div>
                 <div class="pd-callout green">
-                    <b>Hasil akhir</b>
-                    <p>Build cost <b>Rp 180jt total</b>. Post-launch OPEX di 1.000 user = <b>Rp 7,4jt/bulan</b> (DIY DRM). Margin 62% bahkan di skala terkecil.</p>
+                    <b>Hasil akhir v2.2</b>
+                    <p>Build cost <b>Rp 180jt total</b>. Post-launch OPEX di 1.000 user = <b>Rp 10,6jt/bulan</b> (sudah include ezDRM starter $200). Margin 46% di skala terkecil → 88% di 1M MAU. <b>Pricing 4-tier</b> = blended ARPU lebih tinggi & funnel masuk lebih mudah (mulai Rp 5rb/hari).</p>
                 </div>
             </div>
         </div>
@@ -243,12 +244,13 @@
                         <h3>🚀 Akan dibangun (3 bulan)</h3>
                         <ul class="pd-list">
                             <li>Transcoding pipeline (FFmpeg / MediaConvert)</li>
-                            <li><b>DIY DRM stack</b> (AES-128 + key server + watermark)</li>
+                            <li><b>Multi-DRM integration</b> (Widevine + PlayReady + FairPlay via ezDRM/PallyCon)</li>
+                            <li>AES-128 fallback (untuk tier free + preview)</li>
                             <li>Bunny CDN integration</li>
                             <li>AI service layer (in-house)</li>
                             <li>Semantic search + recommendations</li>
                             <li>Auto-subtitle + auto-tagging</li>
-                            <li>EZDRM toggle per-film (optional)</li>
+                            <li>4-tier pricing engine + PPV add-on</li>
                         </ul>
                     </div>
                 </div>
@@ -260,21 +262,21 @@
             <div class="slide-inner">
                 <div class="slide-num">03 — Build Budget Breakdown</div>
                 <h2>Rp 180 juta untuk 3 Bulan</h2>
-                <p class="slide-sub">Pas di Rp 60jt × 3. Engineering ~58% (termasuk build DIY DRM 2-3 minggu). EZDRM tidak masuk core build — optional aktivasi setelah launch.</p>
+                <p class="slide-sub">Pas di Rp 60jt × 3. Engineering ~58% (termasuk integrasi Multi-DRM 1-2 minggu + AES-128 fallback). ezDRM starter subscription sudah aktif sejak bulan 1 untuk testing playback Widevine/PlayReady/FairPlay.</p>
                 <div class="pd-tbl-wrap">
                 <table class="pd-table">
                     <thead><tr><th>Item</th><th>Per Bulan</th><th style="text-align:right">3 Bulan</th><th>Catatan</th></tr></thead>
                     <tbody>
-                        <tr class="hi"><td><b>Engineering</b> (1 senior FT)</td><td>Rp 35 jt</td><td style="text-align:right" class="cost">Rp 105 jt</td><td>Termasuk DIY DRM build 2-3 minggu</td></tr>
+                        <tr class="hi"><td><b>Engineering</b> (1 senior FT)</td><td>Rp 35 jt</td><td style="text-align:right" class="cost">Rp 105 jt</td><td>Integrasi Multi-DRM SDK + AES-128 fallback</td></tr>
                         <tr><td>AWS dev/staging</td><td>Rp 1,5 jt ($95)</td><td style="text-align:right">Rp 4,5 jt</td><td>Small EC2 + RDS t3.small</td></tr>
                         <tr><td>Bunny CDN (dev)</td><td>Rp 800rb ($50)</td><td style="text-align:right">Rp 2,4 jt</td><td>Storage + minim egress</td></tr>
+                        <tr class="hi"><td><b>ezDRM starter</b> (Multi-DRM)</td><td>Rp 3,2 jt ($200)</td><td style="text-align:right">Rp 9,6 jt</td><td>Widevine + PlayReady + FairPlay testing license</td></tr>
                         <tr><td>AI dev (Claude Max + DeepSeek)</td><td>Rp 4,5 jt ($280)</td><td style="text-align:right">Rp 13,5 jt</td><td>Claude Max $200 + DeepSeek $80</td></tr>
                         <tr><td>Domain, SSL, monitoring</td><td>Rp 800rb</td><td style="text-align:right">Rp 2,4 jt</td><td></td></tr>
                         <tr><td>One-time AI process 400 film</td><td>—</td><td style="text-align:right">Rp 12 jt</td><td>Subtitle + tagging + thumbnail</td></tr>
-                        <tr><td>MaxMind GeoIP2 license</td><td>—</td><td style="text-align:right">Rp 1 jt</td><td>1 tahun, untuk DIY DRM geo</td></tr>
-                        <tr><td>Buffer 25%</td><td>—</td><td style="text-align:right">Rp 39 jt</td><td>Lebih besar (DIY butuh QA)</td></tr>
+                        <tr><td>MaxMind GeoIP2 license</td><td>—</td><td style="text-align:right">Rp 1 jt</td><td>1 tahun, untuk geo-block</td></tr>
+                        <tr><td>Buffer 20%</td><td>—</td><td style="text-align:right">Rp 30 jt</td><td>QA + edge cases playback DRM</td></tr>
                         <tr style="border-top:2px solid #C5A55A;background:rgba(197,165,90,0.08)"><td><b>TOTAL</b></td><td></td><td style="text-align:right" class="cost"><b style="font-size:16px">~Rp 180 jt</b></td><td>Pas di budget</td></tr>
-                        <tr style="opacity:0.6;font-style:italic"><td>Optional: EZDRM (kalau aktif)</td><td>Rp 3,2jt/bln</td><td style="text-align:right">opsional</td><td>Pay only when activated</td></tr>
                     </tbody>
                 </table>
                 </div>
@@ -391,68 +393,104 @@
             </div>
         </div>
 
-        <!-- 8: DRM HYBRID -->
+        <!-- 8: DRM REALITY -->
         <div class="slide" data-idx="8">
             <div class="slide-inner">
-                <div class="slide-num">07 — DRM Strategy (Hybrid)</div>
-                <h2>DIY In-House Primary + EZDRM Optional</h2>
-                <p class="slide-sub">Konten = film klasik milik client (bukan rilisan Hollywood). DIY DRM cukup untuk casual piracy protection. EZDRM disediakan optional per-film.</p>
+                <div class="slide-num">07 — DRM Strategy (Honest Reality)</div>
+                <h2>Multi-DRM 3rd-Party WAJIB untuk Paid Tier</h2>
+                <p class="slide-sub"><b>Fakta teknis:</b> DRM browser/HP terikat ke OS — Widevine (Google/Chrome/Android), PlayReady (Microsoft/Edge/Windows), FairPlay (Apple/Safari/iOS). Ketiganya proprietary, license server harus certified, SDK butuh NDA. <b>Tidak bisa dibikin sendiri.</b> AES-128 DIY hanya cocok untuk free/preview tier — browser tetap putar, tapi proteksinya casual.</p>
 
                 <div class="pd-tier t1">
-                    <div class="stars">⭐⭐⭐⭐</div>
-                    <div class="info"><b>DIY In-House (Default)</b><span>AES-128 + key server + token rotation + watermarking + concurrent limit + geo-block. <span class="pd-pill blue">Pure Laravel</span></span></div>
+                    <div class="stars">⭐⭐</div>
+                    <div class="info"><b>AES-128 HLS (DIY) — Free Tier Only</b><span>Key di Laravel + token rotation + signed URL + geo + watermark. Cukup mencegah copy-paste casual. <b>Bukan studio-grade.</b> <span class="pd-pill blue">Pure Laravel · Free tier preview only</span></span></div>
                     <div class="price">Rp 0/bln</div>
                 </div>
                 <div class="pd-tier t3">
-                    <div class="stars">⭐⭐⭐⭐</div>
-                    <div class="info"><b>EZDRM (Optional Toggle Per-Film)</b><span>Widevine + PlayReady + FairPlay. Untuk konten premium / iOS Safari support. <span class="pd-pill gold">Verified $200 starter</span></span></div>
-                    <div class="price">$200/bln</div>
+                    <div class="stars">⭐⭐⭐⭐⭐</div>
+                    <div class="info"><b>Multi-DRM via ezDRM (DEFAULT — Paid Tier)</b><span>Widevine L3 + PlayReady + FairPlay. License server certified, SDK lengkap, output protection. <b>Wajib</b> untuk semua paket berbayar (Mobile/Standard/Premium). <span class="pd-pill gold">$200 starter → $1.500 enterprise · Pricing realistis</span></span></div>
+                    <div class="price">$200–1.500/bln</div>
+                </div>
+                <div class="pd-tier t3" style="border-left-color:#3b82f6">
+                    <div class="stars">⭐⭐⭐⭐⭐</div>
+                    <div class="info"><b>PallyCon / BuyDRM KeyOS (Alternatif)</b><span>Multi-DRM regional Asia (Korea HQ). Pricing per device/play, biasanya lebih murah di skala 10K+. Switchable via DynamicInfrastructureProvider. <span class="pd-pill blue">Backup vendor</span></span></div>
+                    <div class="price">~$0.05/play</div>
                 </div>
                 <div class="pd-tier t4">
                     <div class="stars">⭐⭐⭐⭐⭐</div>
-                    <div class="info"><b>Hardware-backed (Skip)</b><span>Untuk deal Hollywood / 4K HDR. Tidak relevan. <span class="pd-pill red">Skip</span></span></div>
+                    <div class="info"><b>Widevine L1 Hardware + 4K HDR (Skip Year-1)</b><span>Untuk deal Hollywood 4K HDR. Butuh contract Google + certified player + device whitelist. Tidak relevan untuk 400 film klasik. <span class="pd-pill red">Skip (open di Year-2 kalau ada deal premium)</span></span></div>
                     <div class="price">$5K+/bln</div>
                 </div>
 
+                <div class="pd-callout">
+                    <b>Kenapa "DIY DRM Saja" Bukan Opsi untuk Paid Tier</b>
+                    <p>Browser modern (Safari 11+) <b>menolak HLS unencrypted/AES-only untuk konten premium</b>; iOS Safari TIDAK bisa play apapun selain FairPlay untuk konten paid. Chromecast, Apple TV, Android TV semua butuh CDM yang sah. Kalau kita maksa AES-128 di tier berbayar, user iOS putar 0%, Smart TV gagal cast, dan konten gampang di-screen-record tanpa output-protection. <b>Realita: paid tier WAJIB pakai Multi-DRM 3rd-party.</b> Yang bisa kita kontrol cuma pilih vendor termurah (ezDRM → PallyCon) dan switch dinamis dari /admin/infrastructure.</p>
+                </div>
                 <div class="pd-callout green">
-                    <b>Save vs EZDRM-mandatory</b>
-                    <p>Per bulan: Rp 3,2 jt · Per tahun: <b>Rp 38,4 jt</b> · 3 tahun: <b>~Rp 120 juta</b></p>
+                    <b>Cost Reality (Realistis)</b>
+                    <p>1K MAU: $200/bln starter (Rp 3,2jt) · 10K MAU: $400 (Rp 6,4jt) · 100K MAU: $1.500 (Rp 24jt) · 1M MAU: $8.000 (Rp 128jt, enterprise contract). Cost <b>scaling sub-linear</b> dengan revenue → tetap margin sehat (lihat slide BOM update).</p>
                 </div>
             </div>
         </div>
 
-        <!-- 9: DRM DIY DETAIL -->
+        <!-- 9: DRM STACK DETAIL — HYBRID -->
         <div class="slide" data-idx="9">
             <div class="slide-inner">
-                <div class="slide-num">08 — DIY DRM Stack Detail</div>
-                <h2>13 Komponen Buatan Sendiri</h2>
-                <p class="slide-sub">Build sekitar 2-3 minggu untuk 1 senior dev. Sudah masuk engineering budget.</p>
+                <div class="slide-num">08 — DRM Stack Detail (Hybrid Architecture)</div>
+                <h2>Multi-DRM (Paid) + AES-128 (Free) + Hardening Layer</h2>
+                <p class="slide-sub">Dua engine paralel — Multi-DRM 3rd-party untuk semua paid tier, AES-128 hanya buat free preview & trailer. Layer hardening (geo, watermark, concurrent, fingerprint, dll) jalan di KEDUA engine.</p>
                 <div class="pd-grid-2">
-                    <div class="pd-card">
+                    <div class="pd-card gold">
+                        <h3 style="color:#C5A55A">🔐 Multi-DRM (3rd-Party) — Paid Tier</h3>
                         <ul class="pd-list">
-                            <li><b>AES-128/256 segment encryption</b> via FFmpeg</li>
-                            <li><b>Key delivery server</b> Laravel: JWT + auth + sub + geo + device</li>
-                            <li><b>Token rotation</b> per 5 menit, signed APP_KEY</li>
-                            <li><b>Signed URLs</b> ke Bunny (5-15min expiry)</li>
-                            <li><b>Concurrent stream limit</b> via Redis counter</li>
-                            <li><b>Device fingerprinting</b> canvas+WebGL+audio</li>
-                            <li><b>Watermarking forensik</b> burn-in user ID</li>
+                            <li><b>ezDRM SaaS</b> (default) — Widevine + PlayReady + FairPlay license server</li>
+                            <li><b>PallyCon</b> backup vendor (switchable via /admin/infrastructure)</li>
+                            <li><b>CMAF/CENC packaging</b> via Shaka Packager (1 file, 3 DRM)</li>
+                            <li><b>License proxy</b> di Laravel — sub + geo + device check sebelum forward ke vendor</li>
+                            <li><b>Per-output protection</b> HDCP requirement (HD = HDCP 1.4, 4K = HDCP 2.2)</li>
+                            <li><b>Persistent license</b> untuk download offline (PWA + Android NativePHP)</li>
+                            <li><b>Multi-key rotation</b> per audio/video track (anti key extraction)</li>
                         </ul>
                     </div>
                     <div class="pd-card">
+                        <h3 style="color:#3b82f6">🔓 AES-128 HLS (DIY) — Free Tier + Preview</h3>
                         <ul class="pd-list">
-                            <li><b>Geo-blocking</b> via MaxMind GeoIP2</li>
-                            <li><b>Anti-debugging</b> DevTools detector</li>
-                            <li><b>Session binding</b> key per session token</li>
+                            <li><b>AES-128 segment encryption</b> via FFmpeg</li>
+                            <li><b>Key delivery</b> Laravel: JWT + auth + sub + geo + device</li>
+                            <li><b>Token rotation</b> per 5 menit, signed APP_KEY</li>
+                            <li><b>Signed CDN URLs</b> Bunny (5-15 min expiry)</li>
                             <li><b>Dynamic playlist</b> M3U8 generated per request</li>
-                            <li><b>Anti-replay</b> nonce + timestamp JWT</li>
-                            <li><b>Bandwidth throttle</b> via Bunny edge config</li>
+                            <li><b>Use cases:</b> trailer, free 5-film/bln tier, content preview</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="pd-grid-2">
+                    <div class="pd-card">
+                        <h3>🛡️ Layer Hardening (jalan di kedua engine)</h3>
+                        <ul class="pd-list">
+                            <li><b>Geo-blocking</b> via MaxMind GeoIP2 (negara allowlist per film)</li>
+                            <li><b>Concurrent stream limit</b> Redis counter (sesuai tier)</li>
+                            <li><b>Device fingerprinting</b> canvas+WebGL+audio (max 5 device)</li>
+                            <li><b>Watermarking forensik</b> burn-in user ID + per-session</li>
+                            <li><b>Anti-debugging</b> DevTools detector</li>
+                            <li><b>Session binding</b> key/license per session token</li>
+                        </ul>
+                    </div>
+                    <div class="pd-card">
+                        <h3>🎯 Routing Decision Tree</h3>
+                        <ul class="pd-list">
+                            <li>User tier = Free? → AES-128, max 720p, intro trailer 5 menit</li>
+                            <li>User tier = Mobile/Standard/Premium? → Multi-DRM mandatory</li>
+                            <li>Browser = Safari/iOS? → FairPlay license issued</li>
+                            <li>Browser = Edge/Win? → PlayReady license</li>
+                            <li>Browser = Chrome/Android/lainnya? → Widevine L3</li>
+                            <li>Output 4K? → cek HDCP 2.2 + Widevine L1 (Year-2)</li>
+                            <li>Geo block hit? → block sebelum license issuance</li>
                         </ul>
                     </div>
                 </div>
                 <div class="pd-callout">
-                    <b>Yang TIDAK bisa buatan sendiri (fakta teknis)</b>
-                    <p><b>Widevine, PlayReady, FairPlay</b> = proprietary Google/MS/Apple. License server harus certified, SDK butuh NDA. Konsekuensi: iOS Safari user paksa PWA install. Solusi optional: aktifkan EZDRM per-film tertentu.</p>
+                    <b>Kenapa Multi-DRM Tidak Bisa "Bikin Sendiri"</b>
+                    <p>Widevine/PlayReady/FairPlay = <b>proprietary Google/Microsoft/Apple</b>. License server harus certified (audit security), SDK butuh NDA + corporate license, dan yang paling penting: <b>CDM (Content Decryption Module) hanya dibangun ke OS/browser oleh vendor masing-masing</b>. Browser Chrome cuma percaya CDM Google. Safari cuma percaya FairPlay milik Apple. Kalau kita bikin server sendiri yang mengeluarkan "license", browser tetap menolak. Pilihan satu-satunya: <b>pakai SaaS DRM yang sudah certified</b> (ezDRM, PallyCon, BuyDRM, Axinom, dll). Ini bukan masalah skill engineering — ini masalah kontrak + OS-level certification.</p>
                 </div>
             </div>
         </div>
@@ -461,33 +499,33 @@
         <div class="slide" data-idx="10">
             <div class="slide-inner">
                 <div class="slide-num">09 — Post-Launch OPEX Matrix</div>
-                <h2>4 Skenario Skala (DIY DRM)</h2>
-                <p class="slide-sub">Bunny CDN primary + DIY DRM + DeepSeek V4 Flash AI default.</p>
+                <h2>4 Skenario Skala (Multi-DRM Realistis)</h2>
+                <p class="slide-sub">Bunny CDN primary + Multi-DRM ezDRM + AES-128 free tier + DeepSeek V4 Flash AI default. ezDRM cost sudah include.</p>
                 <div class="pd-grid-4">
                     <div class="pd-card gold">
                         <h3>1.000 MAU</h3>
-                        <div class="num green">Rp 7,4jt</div>
-                        <p>per bulan · $460<br><b>$1.15/paid user</b><br>Margin 62%</p>
+                        <div class="num green">Rp 10,6jt</div>
+                        <p>per bulan · $660<br><b>$1.65/paid user</b><br>Margin 46%</p>
                     </div>
                     <div class="pd-card gold">
                         <h3>10.000 MAU</h3>
-                        <div class="num green">Rp 30jt</div>
-                        <p>per bulan · $1.870<br><b>$0.47/paid user</b><br>Margin 85%</p>
+                        <div class="num green">Rp 36,4jt</div>
+                        <p>per bulan · $2.270<br><b>$0.57/paid user</b><br>Margin 81%</p>
                     </div>
                     <div class="pd-card gold">
                         <h3>100.000 MAU</h3>
-                        <div class="num green">Rp 189jt</div>
-                        <p>per bulan · $11.850<br><b>$0.30/paid user</b><br>Margin 90%</p>
+                        <div class="num green">Rp 213jt</div>
+                        <p>per bulan · $13.350<br><b>$0.33/paid user</b><br>Margin 89%</p>
                     </div>
                     <div class="pd-card gold">
                         <h3>1.000.000 MAU</h3>
-                        <div class="num green">Rp 1,30M</div>
-                        <p>per bulan · $81.500<br><b>$0.20/paid user</b><br>Margin 93%</p>
+                        <div class="num green">Rp 1,43M</div>
+                        <p>per bulan · $89.500<br><b>$0.22/paid user</b><br>Margin 88%</p>
                     </div>
                 </div>
                 <div class="pd-callout green">
-                    <b>v1.0 → v2.1 Comparison</b>
-                    <p>1K: Rp 43,7jt → <b>Rp 7,4jt</b> (83% save) · 10K: Rp 310jt → <b>Rp 30jt</b> (90%) · 100K: Rp 2,04M → <b>Rp 189jt</b> (91%) · 1M: Rp 11,2M → <b>Rp 1,3M</b> (88%). Karena Bunny CDN + DIY DRM.</p>
+                    <b>Cost Composition</b>
+                    <p>CDN tetap dominan (47-55% tech cost). <b>Multi-DRM 30-9% scaling sub-linear</b> — di skala 1M, ezDRM cuma 9% tech cost karena pricing volume-tier. AI cost negligible (1-9%). Compute & DB scale gradual. Bahkan dengan DRM realistis, margin tetap 46-89%.</p>
                 </div>
             </div>
         </div>
@@ -496,7 +534,7 @@
         <div class="slide" data-idx="11">
             <div class="slide-inner">
                 <div class="slide-num">10 — OPEX Detail · 1.000 MAU</div>
-                <h2>Rp 7,4 juta/bulan untuk Soft Launch</h2>
+                <h2>Rp 10,6 juta/bulan untuk Soft Launch</h2>
                 <div class="pd-tbl-wrap">
                 <table class="pd-table">
                     <thead><tr><th>Komponen</th><th>Spec</th><th style="text-align:right">USD/bln</th><th style="text-align:right">Rupiah</th></tr></thead>
@@ -509,17 +547,17 @@
                         <tr><td>RDS PostgreSQL t3.micro</td><td>20 GB pgvector</td><td style="text-align:right">$25</td><td style="text-align:right">Rp 400rb</td></tr>
                         <tr><td>ElastiCache Redis t3.micro</td><td>—</td><td style="text-align:right">$15</td><td style="text-align:right">Rp 240rb</td></tr>
                         <tr><td>ALB + CloudWatch + SES</td><td>—</td><td style="text-align:right">$35</td><td style="text-align:right">Rp 560rb</td></tr>
-                        <tr class="hi"><td><b>DIY DRM</b></td><td>key server di Laravel app</td><td class="cost" style="text-align:right">$0</td><td class="cost" style="text-align:right">Rp 0</td></tr>
+                        <tr class="hi"><td><b>Multi-DRM ezDRM</b></td><td>Widevine+PlayReady+FairPlay starter</td><td class="cost" style="text-align:right">$200</td><td class="cost" style="text-align:right">Rp 3,2 jt</td></tr>
+                        <tr><td>AES-128 free tier (DIY Laravel)</td><td>key server in-process</td><td style="text-align:right">$0</td><td style="text-align:right">Rp 0</td></tr>
                         <tr class="hi"><td><b>AI APIs</b></td><td>DeepSeek V4 Flash + Whisper</td><td class="cost" style="text-align:right">$8</td><td style="text-align:right">Rp 128rb</td></tr>
                         <tr><td>Domain, SSL, monitoring</td><td>—</td><td style="text-align:right">$20</td><td style="text-align:right">Rp 320rb</td></tr>
-                        <tr style="border-top:2px solid #C5A55A;background:rgba(197,165,90,0.08)"><td><b>TOTAL</b></td><td><b style="color:#22c55e">Rp 18K/paid user</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">$460</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">Rp 7,4 jt</b></td></tr>
-                        <tr style="opacity:0.6;font-style:italic"><td>Optional: EZDRM aktif</td><td>—</td><td style="text-align:right">+$200</td><td style="text-align:right">+Rp 3,2 jt</td></tr>
+                        <tr style="border-top:2px solid #C5A55A;background:rgba(197,165,90,0.08)"><td><b>TOTAL</b></td><td><b style="color:#22c55e">Rp 26K/paid user</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">$660</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">Rp 10,6 jt</b></td></tr>
                     </tbody>
                 </table>
                 </div>
                 <div class="pd-callout green">
-                    <b>Margin Check @ Rp 49K subscription</b>
-                    <p>1.000 MAU × 40% paid = 400 paid × Rp 49rb = Rp 19,6jt revenue · OPEX Rp 7,4jt → <b>Margin ~62%</b>. Profitable bahkan di skala TERkecil.</p>
+                    <b>Margin Check @ blended ARPU Rp 49K (paket bulanan rata-rata)</b>
+                    <p>1.000 MAU × 40% paid = 400 paid × Rp 49rb = Rp 19,6jt revenue · OPEX Rp 10,6jt → <b>Margin ~46%</b>. Tetap profitable di skala TERkecil meskipun DRM sudah realistis. Margin naik ke 60%+ kalau konversi annual atau ada PPV add-on.</p>
                 </div>
             </div>
         </div>
@@ -528,7 +566,7 @@
         <div class="slide" data-idx="12">
             <div class="slide-inner">
                 <div class="slide-num">11 — OPEX Detail · 10.000 MAU</div>
-                <h2>Rp 30 juta/bulan</h2>
+                <h2>Rp 36,4 juta/bulan</h2>
                 <div class="pd-tbl-wrap">
                 <table class="pd-table">
                     <thead><tr><th>Komponen</th><th>Spec</th><th style="text-align:right">USD/bln</th><th style="text-align:right">Rupiah</th></tr></thead>
@@ -540,16 +578,16 @@
                         <tr><td>RDS PostgreSQL t3.small</td><td>50 GB</td><td style="text-align:right">$50</td><td style="text-align:right">Rp 800rb</td></tr>
                         <tr><td>Redis + ALB + WAF</td><td>—</td><td style="text-align:right">$80</td><td style="text-align:right">Rp 1,28 jt</td></tr>
                         <tr><td>Monitoring + SES</td><td>500K emails</td><td style="text-align:right">$100</td><td style="text-align:right">Rp 1,6 jt</td></tr>
-                        <tr class="hi"><td><b>DIY DRM</b></td><td>multi-instance</td><td class="cost" style="text-align:right">$0</td><td class="cost" style="text-align:right">Rp 0</td></tr>
+                        <tr class="hi"><td><b>Multi-DRM ezDRM</b></td><td>paid scale (license issuance volume)</td><td class="cost" style="text-align:right">$400</td><td class="cost" style="text-align:right">Rp 6,4 jt</td></tr>
                         <tr><td>AI APIs</td><td>scaled</td><td class="cost" style="text-align:right">$80</td><td style="text-align:right">Rp 1,28 jt</td></tr>
                         <tr><td>Misc</td><td>—</td><td style="text-align:right">$40</td><td style="text-align:right">Rp 640rb</td></tr>
-                        <tr style="border-top:2px solid #C5A55A;background:rgba(197,165,90,0.08)"><td><b>TOTAL</b></td><td><b style="color:#22c55e">Rp 7,5K/paid user</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">$1.870</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">Rp 30 jt</b></td></tr>
+                        <tr style="border-top:2px solid #C5A55A;background:rgba(197,165,90,0.08)"><td><b>TOTAL</b></td><td><b style="color:#22c55e">Rp 9K/paid user</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">$2.270</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">Rp 36,4 jt</b></td></tr>
                     </tbody>
                 </table>
                 </div>
                 <div class="pd-callout green">
-                    <b>Margin @ 10K MAU</b>
-                    <p>4.000 paid × Rp 49rb = Rp 196jt revenue · OPEX Rp 30jt → <b>Margin ~85%</b>. ✅✅</p>
+                    <b>Margin @ 10K MAU (blended ARPU Rp 49K)</b>
+                    <p>4.000 paid × Rp 49rb = Rp 196jt revenue · OPEX Rp 36,4jt → <b>Margin ~81%</b>. ✅✅ ezDRM scaling sub-linear — naik dari $200 ke $400 (2×) tapi user 10× — efisiensi DRM/user makin bagus.</p>
                 </div>
             </div>
         </div>
@@ -558,7 +596,7 @@
         <div class="slide" data-idx="13">
             <div class="slide-inner">
                 <div class="slide-num">12 — OPEX Detail · 100.000 MAU</div>
-                <h2>Rp 189 juta/bulan</h2>
+                <h2>Rp 213 juta/bulan</h2>
                 <div class="pd-tbl-wrap">
                 <table class="pd-table">
                     <thead><tr><th>Komponen</th><th style="text-align:right">USD/bln</th><th style="text-align:right">Rupiah</th></tr></thead>
@@ -573,17 +611,16 @@
                         <tr><td>ALB + WAF + Shield</td><td style="text-align:right">$200</td><td style="text-align:right">Rp 3,2 jt</td></tr>
                         <tr><td>Monitoring (Datadog/Sentry)</td><td style="text-align:right">$400</td><td style="text-align:right">Rp 6,4 jt</td></tr>
                         <tr><td>SES (5M emails)</td><td style="text-align:right">$500</td><td style="text-align:right">Rp 8 jt</td></tr>
-                        <tr class="hi"><td><b>DIY DRM</b> (key servers di EC2)</td><td class="cost" style="text-align:right">$0</td><td class="cost" style="text-align:right">Rp 0</td></tr>
+                        <tr class="hi"><td><b>Multi-DRM ezDRM enterprise</b> (license proxy di EC2)</td><td class="cost" style="text-align:right">$1.500</td><td class="cost" style="text-align:right">Rp 24 jt</td></tr>
                         <tr><td>AI APIs</td><td class="cost" style="text-align:right">$800</td><td style="text-align:right">Rp 12,8 jt</td></tr>
                         <tr><td>Misc (NAT, KMS, secrets)</td><td style="text-align:right">$300</td><td style="text-align:right">Rp 4,8 jt</td></tr>
-                        <tr style="border-top:2px solid #C5A55A;background:rgba(197,165,90,0.08)"><td><b>TOTAL</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">$11.850</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">Rp 189 jt</b></td></tr>
-                        <tr style="opacity:0.6;font-style:italic"><td>Optional: EZDRM enterprise</td><td style="text-align:right">+$1.500</td><td style="text-align:right">+Rp 24 jt</td></tr>
+                        <tr style="border-top:2px solid #C5A55A;background:rgba(197,165,90,0.08)"><td><b>TOTAL</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">$13.350</b></td><td style="text-align:right" class="cost"><b style="font-size:16px">Rp 213 jt</b></td></tr>
                     </tbody>
                 </table>
                 </div>
                 <div class="pd-callout green">
-                    <b>Margin @ 100K MAU</b>
-                    <p>40K paid × Rp 49rb = Rp 1,96 miliar revenue · OPEX Rp 189jt → <b>Margin ~90%</b>. ✅✅</p>
+                    <b>Margin @ 100K MAU (blended ARPU Rp 49K)</b>
+                    <p>40K paid × Rp 49rb = Rp 1,96 miliar revenue · OPEX Rp 213jt → <b>Margin ~89%</b>. ✅✅ ezDRM enterprise contract di scale ini biasanya custom — angka $1.500 konservatif (bisa negosiasi turun ke $1.000 untuk volume Indonesia).</p>
                 </div>
             </div>
         </div>
@@ -599,22 +636,22 @@
                     <thead><tr><th>Item</th><th style="text-align:right">1K MAU</th><th style="text-align:right">10K MAU</th><th style="text-align:right">100K MAU</th><th style="text-align:right">1M MAU</th></tr></thead>
                     <tbody>
                         <tr class="hi"><td><b>Revenue</b></td><td class="cost" style="text-align:right">Rp 19,6 jt</td><td class="cost" style="text-align:right">Rp 196 jt</td><td class="cost" style="text-align:right">Rp 1,96 M</td><td class="cost" style="text-align:right">Rp 19,6 M</td></tr>
-                        <tr><td>Tech infra (Bunny+AWS+AI+DIY DRM)</td><td style="text-align:right">Rp 7,4 jt</td><td style="text-align:right">Rp 30 jt</td><td style="text-align:right">Rp 189 jt</td><td style="text-align:right">Rp 1,3 M</td></tr>
+                        <tr><td>Tech infra (Bunny+AWS+AI+Multi-DRM)</td><td style="text-align:right">Rp 10,6 jt</td><td style="text-align:right">Rp 36,4 jt</td><td style="text-align:right">Rp 213 jt</td><td style="text-align:right">Rp 1,43 M</td></tr>
                         <tr><td>Payment processing (3.5%)</td><td style="text-align:right">Rp 0,7 jt</td><td style="text-align:right">Rp 6,9 jt</td><td style="text-align:right">Rp 69 jt</td><td style="text-align:right">Rp 686 jt</td></tr>
                         <tr><td>Customer Support (staff)</td><td style="text-align:right">Rp 5 jt (1 PT)</td><td style="text-align:right">Rp 18 jt (3)</td><td style="text-align:right">Rp 60 jt (10)</td><td style="text-align:right">Rp 400 jt (50)</td></tr>
                         <tr><td>Marketing / CAC</td><td style="text-align:right">Rp 10 jt</td><td style="text-align:right">Rp 40 jt</td><td style="text-align:right">Rp 280 jt</td><td style="text-align:right">Rp 1,5 M</td></tr>
                         <tr><td>Engineering team (post-build)</td><td style="text-align:right">—</td><td style="text-align:right">Rp 15 jt (1 PT)</td><td style="text-align:right">Rp 105 jt (3)</td><td style="text-align:right">Rp 525 jt (15)</td></tr>
                         <tr><td>BD / Marketing team</td><td style="text-align:right">—</td><td style="text-align:right">—</td><td style="text-align:right">Rp 60 jt (3)</td><td style="text-align:right">Rp 300 jt (15)</td></tr>
                         <tr><td>Office / Legal / Misc</td><td style="text-align:right">—</td><td style="text-align:right">Rp 5 jt</td><td style="text-align:right">Rp 30 jt</td><td style="text-align:right">Rp 150 jt</td></tr>
-                        <tr style="border-top:1px solid #2a2a2a"><td><b>Total Cost</b></td><td style="text-align:right">Rp 23,1 jt</td><td style="text-align:right">Rp 115 jt</td><td style="text-align:right">Rp 793 jt</td><td style="text-align:right">Rp 4,86 M</td></tr>
-                        <tr style="background:rgba(34,197,94,0.08);border-top:2px solid #22c55e"><td><b>Profit / (Loss)</b></td><td class="neg" style="text-align:right"><b>(Rp 3,5 jt)</b></td><td class="cost" style="text-align:right"><b>Rp 81 jt</b></td><td class="cost" style="text-align:right"><b>Rp 1,17 M</b></td><td class="cost" style="text-align:right"><b>Rp 14,7 M</b></td></tr>
-                        <tr style="background:rgba(34,197,94,0.04)"><td><b>Net Margin %</b></td><td class="warn" style="text-align:right"><b>(18%)</b></td><td class="cost" style="text-align:right"><b>41%</b></td><td class="cost" style="text-align:right"><b>60%</b></td><td class="cost" style="text-align:right"><b>75%</b></td></tr>
+                        <tr style="border-top:1px solid #2a2a2a"><td><b>Total Cost</b></td><td style="text-align:right">Rp 26,3 jt</td><td style="text-align:right">Rp 121 jt</td><td style="text-align:right">Rp 817 jt</td><td style="text-align:right">Rp 4,99 M</td></tr>
+                        <tr style="background:rgba(34,197,94,0.08);border-top:2px solid #22c55e"><td><b>Profit / (Loss)</b></td><td class="neg" style="text-align:right"><b>(Rp 6,7 jt)</b></td><td class="cost" style="text-align:right"><b>Rp 75 jt</b></td><td class="cost" style="text-align:right"><b>Rp 1,14 M</b></td><td class="cost" style="text-align:right"><b>Rp 14,6 M</b></td></tr>
+                        <tr style="background:rgba(34,197,94,0.04)"><td><b>Net Margin %</b></td><td class="warn" style="text-align:right"><b>(34%)</b></td><td class="cost" style="text-align:right"><b>38%</b></td><td class="cost" style="text-align:right"><b>58%</b></td><td class="cost" style="text-align:right"><b>74%</b></td></tr>
                     </tbody>
                 </table>
                 </div>
                 <div class="pd-callout green">
-                    <b>Verdict</b>
-                    <p><b>1K MAU</b>: mild loss wajar (CAC heavy phase) · <b>10K MAU</b>: PROFIT 41% · <b>100K MAU</b>: PROFIT 60% · <b>1M MAU</b>: PROFIT 75%. Tech cost cuma <b>15%</b> di skala 10K, turun ke <b>7%</b> di skala 1M. <b>Tech BUKAN cost driver utama.</b></p>
+                    <b>Verdict (dengan Multi-DRM realistis)</b>
+                    <p><b>1K MAU</b>: loss wajar (CAC heavy phase + DRM minimum fee) · <b>10K MAU</b>: PROFIT 38% · <b>100K MAU</b>: PROFIT 58% · <b>1M MAU</b>: PROFIT 74%. Multi-DRM nambah ~Rp 3jt di skala 1K, tapi <b>tetap profitable</b> mulai 10K. Tech cost masih cuma <b>18%</b> di skala 10K → <b>7%</b> di 1M. <b>Pricing 4-tier (slide berikut) bisa angkat profit signifikan</b> karena blended ARPU naik dari Rp 49K → Rp 60K+.</p>
                 </div>
             </div>
         </div>
@@ -624,7 +661,7 @@
             <div class="slide-inner">
                 <div class="slide-num">14 — Tech Cost Detail per Kategori</div>
                 <h2>Breakdown Granular per Komponen</h2>
-                <p class="slide-sub">Breakdown tech infra per kategori — terlihat CDN dominan, DIY DRM bikin DRM kategori = Rp 0.</p>
+                <p class="slide-sub">Breakdown tech infra per kategori — CDN tetap dominan, Multi-DRM 3rd-party realistis sekarang muncul sebagai line item nyata (scaling sub-linear).</p>
                 <div class="pd-tbl-wrap">
                 <table class="pd-table">
                     <thead><tr><th>Kategori</th><th style="text-align:right">1K MAU</th><th style="text-align:right">10K MAU</th><th style="text-align:right">100K MAU</th><th style="text-align:right">1M MAU</th></tr></thead>
@@ -638,17 +675,16 @@
                         <tr><td>Network (ALB+WAF+Shield)</td><td style="text-align:right">Rp 0,3 jt</td><td style="text-align:right">Rp 0,8 jt</td><td style="text-align:right">Rp 3,2 jt</td><td style="text-align:right">Rp 48 jt</td></tr>
                         <tr><td>Monitoring (CW+Sentry+DD)</td><td style="text-align:right">Rp 0,5 jt</td><td style="text-align:right">Rp 1,3 jt</td><td style="text-align:right">Rp 6,4 jt</td><td style="text-align:right">Rp 24 jt</td></tr>
                         <tr><td>Email (SES)</td><td style="text-align:right">Rp 0,1 jt</td><td style="text-align:right">Rp 0,8 jt</td><td style="text-align:right">Rp 8 jt</td><td style="text-align:right">Rp 80 jt</td></tr>
-                        <tr class="hi"><td><b>DRM (DIY in-house)</b></td><td class="cost" style="text-align:right">Rp 0</td><td class="cost" style="text-align:right">Rp 0</td><td class="cost" style="text-align:right">Rp 0</td><td class="cost" style="text-align:right">Rp 0</td></tr>
+                        <tr class="hi"><td><b>Multi-DRM (ezDRM 3rd-party)</b></td><td class="cost" style="text-align:right">Rp 3,2 jt (30%)</td><td class="cost" style="text-align:right">Rp 6,4 jt (18%)</td><td class="cost" style="text-align:right">Rp 24 jt (11%)</td><td class="cost" style="text-align:right">Rp 128 jt (9%)</td></tr>
                         <tr class="hi"><td><b>AI APIs</b> (DeepSeek+Whisper+misc)</td><td class="cost" style="text-align:right">Rp 0,1 jt</td><td class="cost" style="text-align:right">Rp 1,3 jt</td><td class="cost" style="text-align:right">Rp 12,8 jt</td><td class="cost" style="text-align:right">Rp 128 jt</td></tr>
                         <tr><td>Misc (NAT, KMS, secrets, backup, domain)</td><td style="text-align:right">Rp 0,3 jt</td><td style="text-align:right">Rp 0,6 jt</td><td style="text-align:right">Rp 4,8 jt</td><td style="text-align:right">Rp 32 jt</td></tr>
-                        <tr style="border-top:2px solid #C5A55A;background:rgba(197,165,90,0.08)"><td><b>TOTAL TECH</b></td><td class="cost" style="text-align:right"><b>Rp 7,4 jt</b></td><td class="cost" style="text-align:right"><b>Rp 30 jt</b></td><td class="cost" style="text-align:right"><b>Rp 189 jt</b></td><td class="cost" style="text-align:right"><b>Rp 1,3 M</b></td></tr>
-                        <tr style="opacity:0.6;font-style:italic"><td>Optional: EZDRM</td><td style="text-align:right">+Rp 3,2 jt</td><td style="text-align:right">+Rp 6,4 jt</td><td style="text-align:right">+Rp 24 jt</td><td style="text-align:right">+Rp 128 jt</td></tr>
+                        <tr style="border-top:2px solid #C5A55A;background:rgba(197,165,90,0.08)"><td><b>TOTAL TECH</b></td><td class="cost" style="text-align:right"><b>Rp 10,6 jt</b></td><td class="cost" style="text-align:right"><b>Rp 36,4 jt</b></td><td class="cost" style="text-align:right"><b>Rp 213 jt</b></td><td class="cost" style="text-align:right"><b>Rp 1,43 M</b></td></tr>
                     </tbody>
                 </table>
                 </div>
                 <div class="pd-callout">
-                    <b>Insight</b>
-                    <p>CDN selalu dominan (54-59% tech cost). DIY DRM = Rp 0 = save 5-15% tech cost. AI cost negligible (1-7%). Compute & DB scale gradual.</p>
+                    <b>Insight Cost Structure</b>
+                    <p>CDN tetap dominan (47-55%). <b>Multi-DRM 30% → 9%</b> dengan skala — fixed minimum ezDRM $200/bln berat di awal tapi efisien di volume. AI cost 1-9% (still negligible). <b>Switching DRM vendor</b> (ezDRM → PallyCon) bisa dilakukan dari /admin/infrastructure tanpa redeploy — kalau PallyCon menawarkan harga lebih baik di skala 10K+ tinggal pindah.</p>
                 </div>
             </div>
         </div>
@@ -694,7 +730,7 @@
 
                 <div class="pd-callout green">
                     <b>Why FLiK Economics Work</b>
-                    <p>1. Niche film klasik = audience self-select via search → CAC rendah · 2. Nostalgia → user lifetime panjang (low churn) · 3. Bunny CDN + DIY DRM → gross margin 85-93% · 4. Konten gratis (client punya 400 film) → no recurring licensing fee</p>
+                    <p>1. Niche film klasik = audience self-select via search → CAC rendah · 2. Nostalgia → user lifetime panjang (low churn) · 3. Bunny CDN + Multi-DRM efficient → gross margin 81-89% · 4. Konten gratis (client punya 400 film) → no recurring licensing fee · 5. 4-tier pricing (slide berikut) = funnel masuk mulai Rp 5K/hari → konversi paid bulanan/tahunan lebih agresif</p>
                 </div>
             </div>
         </div>
@@ -741,12 +777,222 @@
             </div>
         </div>
 
-        <!-- ORIGINAL 14: YEAR-ON-YEAR (now slide 18) -->
+        <!-- ═════════ NEW: PRICING STRATEGY BLOCK (4 slides) ═════════ -->
+
+        <!-- 18: PRICING STRATEGY — WHERE WE PLAY -->
         <div class="slide" data-idx="18">
             <div class="slide-inner">
-                <div class="slide-num">17a — Year-on-Year Projection</div>
+                <div class="slide-num">17 — Pricing Strategy: Where We Play</div>
+                <h2>Sweet Spot Pasar Indonesia 2026</h2>
+                <p class="slide-sub">Riset 17 kompetitor OTT (Netflix, Disney+, Vidio, KlikFilm, WeTV, Catchplay, dll — lihat <code>docs/competitor-pricing-research.md</code>). 3 zona harga yang jelas + 1 gap besar untuk FLiK masuk.</p>
+
+                <div class="pd-grid-3">
+                    <div class="pd-card">
+                        <h3 style="color:#3b82f6">💸 Impulse Zone</h3>
+                        <div class="num" style="color:#3b82f6">&lt; Rp 30K</div>
+                        <p><b>Genflix Rp 5K/hari · Vidio Mobile Rp 15K · WeTV Rp 25K · KlikFilm Rp 9K/7-hari</b><br>User klik beli tanpa pikir. Cocok untuk: trial, telco bundle, voucher Alfamart.</p>
+                    </div>
+                    <div class="pd-card gold">
+                        <h3 style="color:#C5A55A">⭐ Sweet Spot</h3>
+                        <div class="num">Rp 30K–49K</div>
+                        <p><b>Viu Rp 33K · KlikFilm Rp 40K · Catchplay Rp 45K · Genflix Rp 49K · HBO Mobile Rp 49K</b><br>Mainstream subscription. <b>FLiK Standard main di sini.</b> Sustainable margin + mass market reach.</p>
+                    </div>
+                    <div class="pd-card">
+                        <h3 style="color:#ef4444">💎 Premium Zone</h3>
+                        <div class="num red">Rp 65K–186K</div>
+                        <p><b>Disney+ Rp 65–119K · HBO Rp 79–119K · Netflix Rp 65–186K</b><br>4K, multi-screen, IP global. FLiK tidak compete head-to-head. Premium tier untuk power user saja.</p>
+                    </div>
+                </div>
+
+                <div class="pd-callout">
+                    <b>🎯 GAP yang Kita Manfaatkan</b>
+                    <p>1. <b>Tidak ada platform film klasik Indonesia premium</b> dengan UX modern + AI features. Vidio terlalu sport-heavy, Bioskop Online catalog terbatas, KlikFilm UX outdated. · 2. <b>Multi-tier dengan funnel "harian"</b> (KlikFilm style) belum dilakukan platform film Indonesia premium — ini cara terbaik untuk akusisi user pemula yang takut commit bulanan. · 3. <b>Netflix Ads-Tier baru masuk Indonesia ~2027</b> → 18 bulan window untuk lock-in subscriber tahunan sebelum mereka serbu.</p>
+                </div>
+
+                <div class="pd-callout green">
+                    <b>Posisi FLiK</b>
+                    <p>Bukan competing dengan Netflix/Disney — competing dengan <b>KlikFilm + Vidio + Catchplay</b>. Differentiator: <b>kurasi film klasik Indonesia + AI features (rekomendasi, plot explainer, recap, subtitle 69 bahasa)</b> + funnel pricing yang ramah pemula.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 19: TIER PACKAGES — KLIKFILM STYLE -->
+        <div class="slide" data-idx="19">
+            <div class="slide-inner">
+                <div class="slide-num">18 — Tier Packages (KlikFilm-Style Sangar)</div>
+                <h2>4 Tier Subscription + PPV + Bundling</h2>
+                <p class="slide-sub">Funnel masuk mulai Rp 5K/hari (impulse) → ramp up ke Mobile Rp 19K → Standard Rp 39K → Premium Rp 69K. <b>Setiap tier punya 4 horizon waktu</b> (harian / mingguan / bulanan / tahunan) supaya user bisa commit sesuai budget psikologis mereka.</p>
+
+                <div class="pd-tbl-wrap">
+                <table class="pd-table">
+                    <thead><tr><th>Tier</th><th>Harian</th><th>Mingguan</th><th>Bulanan</th><th>Tahunan</th><th>Stream</th><th>Resolusi</th><th>Devices</th><th>DRM</th></tr></thead>
+                    <tbody>
+                        <tr><td><b style="color:#888">FREE (AVOD)</b><br><small>+ iklan, 5 film/bln</small></td><td>Rp 0</td><td>Rp 0</td><td>Rp 0</td><td>Rp 0</td><td>1</td><td>480p</td><td>1</td><td>AES-128</td></tr>
+                        <tr class="hi"><td><b style="color:#3b82f6">MOBILE</b><br><small>cocok pelajar, telco bundle</small></td><td class="cost">Rp 3K</td><td class="cost">Rp 12K</td><td class="cost"><b>Rp 19K</b></td><td class="cost"><b>Rp 179K</b><br><small>(hemat 21%)</small></td><td>1</td><td>720p</td><td>1 HP</td><td>Multi-DRM</td></tr>
+                        <tr class="hi" style="background:rgba(197,165,90,0.08);border-left:3px solid #C5A55A"><td><b style="color:#C5A55A">STANDARD ⭐</b><br><small>SWEET SPOT — paket utama</small></td><td class="cost">Rp 5K</td><td class="cost">Rp 19K</td><td class="cost"><b>Rp 39K</b></td><td class="cost"><b>Rp 349K</b><br><small>(hemat 25%)</small></td><td>2</td><td>1080p</td><td>3</td><td>Multi-DRM</td></tr>
+                        <tr class="hi"><td><b style="color:#22c55e">PREMIUM</b><br><small>family + power user</small></td><td class="cost">Rp 9K</td><td class="cost">Rp 35K</td><td class="cost"><b>Rp 69K</b></td><td class="cost"><b>Rp 599K</b><br><small>(hemat 28%)</small></td><td>4</td><td>1080p+</td><td>5</td><td>Multi-DRM</td></tr>
+                        <tr style="background:rgba(255,255,255,0.02)"><td colspan="9" style="text-align:center;font-style:italic;color:#888;padding:8px">— add-ons (siapa saja) —</td></tr>
+                        <tr><td><b>PPV Klasik</b> (film katalog)</td><td colspan="4" class="cost"><b>Rp 7K–15K/film · sewa 48 jam</b></td><td>—</td><td>1080p</td><td>1</td><td>Multi-DRM</td></tr>
+                        <tr><td><b>PPV Premiere</b> (film baru rilis)</td><td colspan="4" class="cost"><b>Rp 20K–25K/film · sewa 48 jam</b></td><td>—</td><td>1080p</td><td>1</td><td>Multi-DRM</td></tr>
+                        <tr><td><b>Buy-to-own</b> (koleksi permanen)</td><td colspan="4" class="cost"><b>Rp 49K–99K/film · selamanya</b></td><td>—</td><td>1080p</td><td>5</td><td>Multi-DRM</td></tr>
+                        <tr><td><b>Coin Top-up</b> (gamification)</td><td colspan="4" class="cost"><b>Rp 10K → 100 coin · convert ke PPV/avatar/badge</b></td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+                    </tbody>
+                </table>
+                </div>
+
+                <div class="pd-callout green">
+                    <b>Kenapa 4 horizon waktu (harian/mingguan/bulanan/tahunan)</b>
+                    <p><b>Harian Rp 3-9K</b> = funnel masuk paling murah, "coba dulu deh" — cocok untuk user yang awam subscription, bisa beli via pulsa (Telkomsel/IM3). <b>Mingguan</b> = match periode gajian mingguan kelas pekerja informal. <b>Bulanan</b> = mainstream commitment, default upsell dari harian/mingguan. <b>Tahunan</b> = lock-in + discount 21-28% buat ARPU stable + reduce churn drastis. <b>KlikFilm sudah validasi model ini works untuk Indonesia.</b></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 20: WHY THESE PRICES WORK -->
+        <div class="slide" data-idx="20">
+            <div class="slide-inner">
+                <div class="slide-num">19 — Reasoning: Kenapa Harga Ini Cocok</div>
+                <h2>Setiap Angka Punya Alasan</h2>
+                <p class="slide-sub">Pricing bukan tebakan — setiap titik harga ditentukan oleh psikologi consumer ID, benchmarking kompetitor, dan unit economics yang harus tertutup.</p>
+
+                <div class="pd-grid-2">
+                    <div class="pd-card">
+                        <h3 style="color:#3b82f6">Mobile Rp 19K/bln (Rp 179K/thn)</h3>
+                        <p style="font-size:12px;color:#ccc;line-height:1.6">
+                            <b>Target:</b> Pelajar SMA/mahasiswa, pekerja entry-level, telco bundle subscriber.<br>
+                            <b>Anchoring:</b> Vidio Diamond Mobile Rp 15K (under-priced). HBO Max Mobile Rp 49K (over-priced untuk Mobile). Kita di tengah → competitive tapi sustainable.<br>
+                            <b>Psikologi:</b> &lt; Rp 20K = impulse purchase zone. Resolusi 720p = sesuai layar HP.<br>
+                            <b>Margin check:</b> CAC blended Rp 70K. LTV 12 bln = Rp 228K. Ratio 3.3× — healthy.
+                        </p>
+                    </div>
+
+                    <div class="pd-card gold">
+                        <h3 style="color:#C5A55A">Standard Rp 39K/bln (Rp 349K/thn) ⭐</h3>
+                        <p style="font-size:12px;color:#ccc;line-height:1.6">
+                            <b>Target:</b> Mainstream urban (Jabodetabek, Surabaya, Bandung, Medan), kelas menengah, sweet spot pasar.<br>
+                            <b>Anchoring:</b> KlikFilm Rp 40K (direct competitor). Catchplay Rp 45K. Viu Rp 33K. Kita pricing &lt; KlikFilm tapi value lebih (AI features + UX modern).<br>
+                            <b>Psikologi:</b> Rp 39K = price ending 9 (consumer trick); ~1 cup coffee Starbucks; psikologis &quot;under Rp 40K&quot;.<br>
+                            <b>Margin check:</b> Tier paling penting — diharapkan 50-60% paying base. Tahunan diskon 25% (Rp 349K) untuk lock-in.
+                        </p>
+                    </div>
+
+                    <div class="pd-card green">
+                        <h3 style="color:#22c55e">Premium Rp 69K/bln (Rp 599K/thn)</h3>
+                        <p style="font-size:12px;color:#ccc;line-height:1.6">
+                            <b>Target:</b> Family, power user, household sharing 4-5 device.<br>
+                            <b>Anchoring:</b> Disney+ Basic Rp 65K (no-ads). HBO Max Standard Rp 79K. Netflix Standard Rp 120K. Kita compete dengan Disney bukan Netflix.<br>
+                            <b>Psikologi:</b> Rp 69K = di bawah Rp 70K threshold (above which mass market drop-off). 4 stream simultan = solve family-sharing problem.<br>
+                            <b>Margin check:</b> Pure margin tier — 73% gross margin di scale. Expected 15-20% base akan upgrade ke sini.
+                        </p>
+                    </div>
+
+                    <div class="pd-card">
+                        <h3 style="color:#888">Free AVOD (5 film/bln + iklan)</h3>
+                        <p style="font-size:12px;color:#ccc;line-height:1.6">
+                            <b>Target:</b> User belum siap commit, freemium funnel, SEO play (Google indexing).<br>
+                            <b>Anchoring:</b> Vidio Free, Viu Free, YouTube. Free tier diperlukan untuk mass acquisition.<br>
+                            <b>Strategi:</b> AES-128 only (cost Rp 0/user untuk DRM), 480p, 5 film/bln cap. Setelah quota habis → soft paywall ke Mobile Rp 19K.<br>
+                            <b>Monetisasi:</b> Pre-roll & mid-roll iklan (Google AdManager) — secondary revenue stream + ekspos brand.
+                        </p>
+                    </div>
+
+                    <div class="pd-card">
+                        <h3 style="color:#C5A55A">Harian Rp 3-9K (per tier)</h3>
+                        <p style="font-size:12px;color:#ccc;line-height:1.6">
+                            <b>Target:</b> First-time buyer, "iseng coba", pelanggan baru telco yang dapet bonus pulsa.<br>
+                            <b>Anchoring:</b> Genflix Rp 5K/hari (validated demand). KlikFilm Rp 9K/7-hari.<br>
+                            <b>Strategi:</b> Friction terendah untuk konversi — bayar via pulsa Telkomsel/IM3 (mikro-payment). Anti-funnel: setelah beli harian 3× → auto-show offer mingguan/bulanan.<br>
+                            <b>Unit economics:</b> Harian Rp 5K × ~6 hari sebulan = Rp 30K rata-rata user, lebih tinggi dari Mobile Rp 19K kalau commit. Win-win.
+                        </p>
+                    </div>
+
+                    <div class="pd-card">
+                        <h3 style="color:#22c55e">PPV Premiere Rp 20-25K/film</h3>
+                        <p style="font-size:12px;color:#ccc;line-height:1.6">
+                            <b>Target:</b> User yang tidak subscribe tapi mau nonton film baru tertentu (event-driven purchase).<br>
+                            <b>Anchoring:</b> Bioskop Online Rp 20-30K/film. Tiket bioskop XXI Rp 50-80K. Posisi kita: "lebih murah dari bioskop, bisa dari rumah".<br>
+                            <b>Strategi:</b> Window release — film baru tayang PPV dulu 30 hari, kemudian masuk ke catalog Standard.<br>
+                            <b>Revenue boost:</b> 1 hit film bisa generate Rp 200-500jt PPV dalam window 30 hari. Pure margin tinggi (no recurring obligation).
+                        </p>
+                    </div>
+                </div>
+
+                <div class="pd-callout">
+                    <b>⚠️ Anti-Pattern yang Sengaja Dihindari</b>
+                    <p><b>1.</b> Single-tier Rp 49K flat → no funnel, mass market drop-off. <b>2.</b> Pricing &lt; Rp 19K bulanan → margin tipis, perang harga dengan Vidio (bakar uang). <b>3.</b> Pricing &gt; Rp 99K → masuk premium zone Netflix/Disney, lose differentiation. <b>4.</b> Tanpa annual discount → churn 6-8 bln rusak LTV. <b>5.</b> Tanpa harian → kehilangan segmen 60% pasar Indonesia yang preferensi micro-commitment.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 21: ACQUISITION PLAYBOOK -->
+        <div class="slide" data-idx="21">
+            <div class="slide-inner">
+                <div class="slide-num">20 — Acquisition Playbook: Cara Jualan Tier-Tier Ini</div>
+                <h2>5 Channel × 4 Tier = 20 Funnel Combo</h2>
+                <p class="slide-sub">Pricing yang bagus percuma kalau distribusi lemah. Setiap tier punya channel akuisisi optimal — tidak campur aduk dan tidak satu-channel-cover-semua.</p>
+
+                <div class="pd-tbl-wrap">
+                <table class="pd-table">
+                    <thead><tr><th>Channel</th><th>Best Tier</th><th>CAC Target</th><th>Tactic</th><th>Cost Model</th></tr></thead>
+                    <tbody>
+                        <tr class="hi"><td><b>📱 Telco Bundle</b><br><small>Telkomsel MAXstream, IM3, XL Prio</small></td><td>Harian + Mobile</td><td class="cost">Rp 0–30K</td><td>Aggregator deal — Telkomsel jual paket data + FLiK harian/mingguan. Revenue split 60/40. Auto-billing via pulsa.</td><td>Rev-share, no upfront</td></tr>
+                        <tr class="hi"><td><b>🏪 Voucher Offline</b><br><small>Alfamart, Indomaret, Tokopedia voucher</small></td><td>Mingguan + Bulanan</td><td class="cost">Rp 20–50K</td><td>Voucher fisik/digital Rp 50K = 1 bulan Standard. Distribusi via aggregator (UPoint, RajaSMS). Top-up budaya familiar di ID.</td><td>10-15% margin haircut</td></tr>
+                        <tr class="hi"><td><b>📲 TikTok / IG UGC</b><br><small>Organic + micro-influencer</small></td><td>Standard (default)</td><td class="cost">Rp 50–100K</td><td>Content seeding film klasik clip (nostalgia angle). Bukan KOL besar — KOL kecil 10-50K follower lebih ROI. Always-on, not campaign-based.</td><td>Performance-based budget</td></tr>
+                        <tr><td><b>🛒 E-commerce Bundle</b><br><small>Tokopedia Premium, Shopee+</small></td><td>Standard + Premium</td><td class="cost">Rp 30–60K</td><td>Cross-promo dengan premium membership marketplace. User bayar Rp 49K/bln dapat FLiK Standard + Tokopedia Plus. Lebih sticky.</td><td>Bundling discount 10-20%</td></tr>
+                        <tr><td><b>🔍 SEO + AI Content</b><br><small>Long-tail film klasik queries</small></td><td>Free → Mobile/Standard</td><td class="cost">Rp 10–30K</td><td>1 film = 1 landing page SEO-optimized (cast, sinopsis AI, trivia, reviews). Long-tail "film tahun 80an Warkop DKI" capture nostalgia search. Funnel: Free trial → Mobile upgrade.</td><td>Content production cost only</td></tr>
+                        <tr><td><b>💳 Bank Cashback / Promo</b><br><small>BCA, Mandiri, BRI cashback campaigns</small></td><td>Bulanan + Tahunan</td><td class="cost">Rp 40–80K</td><td>Cashback Rp 50K untuk pembelian tahunan via kartu kredit. Bank covers Rp 25K. Boost ARPU + lock-in.</td><td>50/50 cashback split</td></tr>
+                        <tr><td><b>🎁 Referral Program</b><br><small>Coin reward gamification</small></td><td>Semua tier</td><td class="cost">Rp 15–40K</td><td>User invite teman → dapat 200 coin (= Rp 20K credit). Referee dapat trial 7 hari free. Self-perpetuating funnel.</td><td>Coin credit + content cost</td></tr>
+                    </tbody>
+                </table>
+                </div>
+
+                <div class="pd-grid-3" style="margin-top:14px">
+                    <div class="pd-card gold">
+                        <h3>🎯 Year-1 Acquisition Mix</h3>
+                        <ul class="pd-list" style="font-size:11px">
+                            <li><b>40%</b> SEO + AI content (lowest CAC)</li>
+                            <li><b>25%</b> TikTok UGC always-on</li>
+                            <li><b>15%</b> Telco bundle (Telkomsel POC)</li>
+                            <li><b>10%</b> Voucher Alfamart</li>
+                            <li><b>10%</b> Referral organic</li>
+                        </ul>
+                    </div>
+                    <div class="pd-card gold">
+                        <h3>📈 Year-2 Scale-up</h3>
+                        <ul class="pd-list" style="font-size:11px">
+                            <li>Tambah <b>IM3 + XL bundling</b></li>
+                            <li>Tambah <b>Tokopedia/Shopee co-promo</b></li>
+                            <li><b>Bank partnerships</b> (BCA cashback)</li>
+                            <li><b>PPV premiere</b> deals dengan studio Indonesia</li>
+                            <li>Lock-in tahunan agresif sebelum Netflix Ads</li>
+                        </ul>
+                    </div>
+                    <div class="pd-card green">
+                        <h3>💡 Conversion Funnel</h3>
+                        <ul class="pd-list" style="font-size:11px">
+                            <li><b>Free tier:</b> 100% (mass)</li>
+                            <li><b>→ Harian/Mingguan:</b> ~15% (impulse)</li>
+                            <li><b>→ Bulanan Mobile/Standard:</b> ~25% (mainstream)</li>
+                            <li><b>→ Tahunan:</b> ~30% dari bulanan (best retention)</li>
+                            <li>Blended ARPU target: <b>Rp 35–45K/bln</b></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="pd-callout green">
+                    <b>Bottom Line: Pricing × Distribution = ARR</b>
+                    <p>4-tier pricing alone tidak cukup — harus dipasangkan dengan distribusi yang match consumer behavior Indonesia. <b>Telco bundle</b> = unlock pulsa-economy users (60% pasar). <b>Voucher offline</b> = unlock unbanked + Gen X. <b>SEO/AI content</b> = unlock organic nostalgia traffic. <b>Premium tahunan</b> = unlock lock-in revenue stability. Kombinasi 4 ini target <b>Rp 7 miliar ARR di Year-3 dengan 50K MAU</b>.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═════════ END PRICING STRATEGY BLOCK ═════════ -->
+
+        <!-- ORIGINAL 14: YEAR-ON-YEAR (now slide 22) -->
+        <div class="slide" data-idx="22">
+            <div class="slide-inner">
+                <div class="slide-num">21 — Year-on-Year Projection</div>
                 <h2>Growth Konservatif 2× per Tahun</h2>
-                <p class="slide-sub">Build done bulan 1-3, post-launch starts bulan 4. DIY DRM bikin OPEX Year-on-Year tetap kecil.</p>
+                <p class="slide-sub">Build done bulan 1-3, post-launch starts bulan 4. ezDRM cost scaling sub-linear → OPEX YoY tetap manageable; Multi-DRM jadi % cost makin kecil saat MAU naik.</p>
                 <div class="pd-tbl-wrap">
                 <table class="pd-table">
                     <thead><tr><th>Periode</th><th>MAU</th><th>OPEX/bln avg</th><th style="text-align:right">Annual</th></tr></thead>
@@ -782,30 +1028,31 @@
             </div>
         </div>
 
-        <!-- 19: ROADMAP -->
-        <div class="slide" data-idx="19">
+        <!-- 23: ROADMAP -->
+        <div class="slide" data-idx="23">
             <div class="slide-inner">
-                <div class="slide-num">17 — 3-Bulan Build Roadmap</div>
+                <div class="slide-num">22 — 3-Bulan Build Roadmap</div>
                 <h2>Detail Per Minggu</h2>
                 <div class="pd-grid-3">
                     <div class="pd-card">
                         <h3>📅 Bulan 1 — Foundation</h3>
                         <ul class="pd-list">
-                            <li>W1: AWS env + Bunny + domain + SSL</li>
+                            <li>W1: AWS env + Bunny + domain + SSL + ezDRM account setup</li>
                             <li>W2: FFmpeg pipeline + ABR ladder</li>
-                            <li>W2-3: Import + transcode 400 film</li>
-                            <li>W3-4: <b>DIY DRM core</b> (AES-128 + key server)</li>
-                            <li>W4: Shaka Player integration</li>
+                            <li>W2-3: Import + transcode 400 film (CMAF packaging)</li>
+                            <li>W3-4: <b>AES-128 DIY</b> (free tier) + Laravel key server</li>
+                            <li>W4: Shaka Player integration (CMAF + DRM-ready)</li>
                         </ul>
                     </div>
                     <div class="pd-card">
-                        <h3>📅 Bulan 2 — DRM Polish + AI</h3>
+                        <h3>📅 Bulan 2 — Multi-DRM + AI</h3>
                         <ul class="pd-list">
-                            <li>W5: <b>DIY DRM hardening</b> (geo, watermark, fingerprint)</li>
+                            <li>W5: <b>Multi-DRM integration</b> (ezDRM SDK + license proxy)</li>
+                            <li>W5-6: Widevine/PlayReady/FairPlay test playback all platforms</li>
                             <li>W6: AiClient service layer</li>
                             <li>W6-7: Subtitle + tagging pipeline</li>
                             <li>W7-8: pgvector semantic search</li>
-                            <li>W8: EZDRM optional toggle (per-film)</li>
+                            <li>W8: Hardening layer (geo, watermark, fingerprint, concurrent)</li>
                         </ul>
                     </div>
                     <div class="pd-card gold">
@@ -821,35 +1068,35 @@
                 </div>
                 <div class="pd-callout green">
                     <b>Deliverables Akhir Bulan 3</b>
-                    <p>✅ 400 film encoded + DIY DRM protected · ✅ EZDRM toggle ready · ✅ 8 fitur AI live · ✅ Bunny CDN production · ✅ Admin monitoring · ✅ PWA + NativePHP Android</p>
+                    <p>✅ 400 film encoded + Multi-DRM packaged (Widevine+PlayReady+FairPlay) · ✅ AES-128 free tier ready · ✅ 8 fitur AI live · ✅ Bunny CDN production · ✅ 4-tier pricing engine + Midtrans integration · ✅ Admin monitoring · ✅ PWA + NativePHP Android</p>
                 </div>
             </div>
         </div>
 
-        <!-- 20: WHY DOABLE -->
-        <div class="slide" data-idx="20">
+        <!-- 24: WHY DOABLE -->
+        <div class="slide" data-idx="24">
             <div class="slide-inner">
-                <div class="slide-num">18 — Mengapa Doable di Rp 60jt × 3</div>
+                <div class="slide-num">23 — Mengapa Doable di Rp 60jt × 3</div>
                 <h2>7 Alasan Kuat</h2>
                 <div class="pd-grid-2">
                     <div class="pd-card gold"><h3>1. Foundation existing</h3><p>Bukan rebuild. App handle 60% feature.</p></div>
                     <div class="pd-card gold"><h3>2. Konten Rp 0</h3><p>Client sudah punya 400 film. No acquisition.</p></div>
                     <div class="pd-card green"><h3>3. Bunny CDN</h3><p>11× lebih murah dari CloudFront Asia.</p></div>
                     <div class="pd-card green"><h3>4. DeepSeek V4 Flash</h3><p>$0.14/$0.28 per MTok — termurah dengan quality OK.</p></div>
-                    <div class="pd-card green"><h3>5. DIY DRM</h3><p>Save $200/bln EZDRM. Cukup untuk casual piracy protection.</p></div>
-                    <div class="pd-card gold"><h3>6. In-house everything</h3><p>No SaaS lock-in. Margin 60-93%.</p></div>
+                    <div class="pd-card green"><h3>5. Multi-DRM SaaS (ezDRM)</h3><p>Pay-per-use, scaling sub-linear. Switchable ke PallyCon dari /admin/infrastructure. Tidak vendor lock-in.</p></div>
+                    <div class="pd-card gold"><h3>6. In-house everything (kecuali DRM CDM)</h3><p>Tidak vendor lock-in untuk app/AI/CDN. DRM 3rd-party mandatory by OS contract. Margin 46-89%.</p></div>
                     <div class="pd-card" style="grid-column:span 2;border-color:#22c55e">
                         <h3>7. Timeline 3-bulan realistis</h3>
-                        <p>1 senior dev FT cukup karena foundation existing. Engineering 58% alokasi yang tepat. DIY DRM masuk dalam timeline (2-3 minggu).</p>
+                        <p>1 senior dev FT cukup karena foundation existing. Engineering 58% alokasi yang tepat. Multi-DRM integration 1-2 minggu (vendor SDK), AES-128 DIY 1 minggu, hardening layer 1 minggu — total 3-4 minggu DRM work dalam roadmap.</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 21: SOURCES -->
-        <div class="slide" data-idx="21">
+        <!-- 25: SOURCES -->
+        <div class="slide" data-idx="25">
             <div class="slide-inner">
-                <div class="slide-num">19 — Sources (Verified Mei 2026)</div>
+                <div class="slide-num">24 — Sources (Verified Mei 2026)</div>
                 <h2>Pricing Verification</h2>
                 <p class="slide-sub">Semua harga di pitch deck ini diverifikasi dari sumber publik. No speculation.</p>
                 <div class="pd-grid-2">
@@ -877,25 +1124,35 @@
                             <li>aws.amazon.com/cloudfront/pricing/</li>
                             <li>blog.blazingcdn.com (CloudFront 2026 cost)</li>
                             <li>ezdrm.com/service-pricing</li>
+                            <li>pallycon.com/pricing/</li>
+                            <li>buydrm.com/keyos-pricing/</li>
+                        </ul>
+                        <h3 style="margin-top:14px">Competitor Pricing (Riset 2026-05-22)</h3>
+                        <ul class="pd-list" style="font-size:11px">
+                            <li><code>docs/competitor-pricing-research.md</code> (17 platform)</li>
+                            <li>klikfilm.com / vidio.com / wetv.vip / iflix.com</li>
+                            <li>netflix.com/id, disneyplus.com/id-id</li>
+                            <li>catchplay.com/id, hbomax.com/id</li>
+                            <li>Kompas Tekno, CNN Indonesia, ContentAsia (cross-ref)</li>
                         </ul>
                         <h3 style="margin-top:14px">Notes</h3>
-                        <p style="font-size:11px;color:#888">Kurs USD = Rp 16.000. Pricing CDN volume tier-based — angka real bisa bervariasi tergantung negosiasi. EZDRM enterprise pricing untuk >100K active devices custom.</p>
+                        <p style="font-size:11px;color:#888">Kurs USD = Rp 16.000. CDN pricing volume tier-based. ezDRM enterprise >100K active devices custom — angka di pitch konservatif. Competitor pricing snapshot Mei 2026 (harga OTT bisa berubah 6-12 bulan sekali).</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 22: NEXT STEPS -->
-        <div class="slide cover" data-idx="22">
+        <!-- 26: NEXT STEPS -->
+        <div class="slide cover" data-idx="26">
             <div class="slide-inner" style="text-align:center">
-                <div class="slide-num" style="margin-bottom:12px">20 — Next Steps</div>
+                <div class="slide-num" style="margin-bottom:12px">25 — Next Steps</div>
                 <h1 style="font-size:48px">Mari Mulai</h1>
-                <div class="tagline">Pitch deck v2.1 sudah disesuaikan dengan budget Rp 60jt × 3. Hybrid DRM (DIY + EZDRM optional). Tinggal sign-off & kick-off.</div>
+                <div class="tagline">Pitch deck v2.2 sudah final: Multi-DRM 3rd-party realistis + 4-tier pricing KlikFilm-style + acquisition playbook 5-channel. Budget Rp 60jt × 3. Tinggal sign-off & kick-off.</div>
 
                 <div class="pd-grid-3" style="width:100%;max-width:800px;margin:24px auto 0">
                     <div class="pd-card gold">
                         <h3>📋 1. Sign-off</h3>
-                        <p>Review pitch v2.1 bareng client</p>
+                        <p>Review pitch v2.2 + pricing menu bareng client</p>
                     </div>
                     <div class="pd-card gold">
                         <h3>🎬 2. Konten</h3>
