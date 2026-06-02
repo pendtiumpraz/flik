@@ -31,6 +31,20 @@ class S3StorageService implements CdnStorageContract
         $this->disk = $disk;
     }
 
+    /**
+     * Whether the S3-compatible disk is configured (key + secret + bucket).
+     *
+     * Mirrors BunnyStorageService::enabled() so callers can feature-gate the
+     * GCS / S3 upload path and degrade gracefully when credentials are absent
+     * (e.g. the admin upload UI falls back to server-proxied upload).
+     */
+    public static function enabled(string $disk = 's3'): bool
+    {
+        return ! empty(config("filesystems.disks.{$disk}.key"))
+            && ! empty(config("filesystems.disks.{$disk}.secret"))
+            && ! empty(config("filesystems.disks.{$disk}.bucket"));
+    }
+
     public function put(string $path, string $contents, array $headers = []): bool
     {
         try {

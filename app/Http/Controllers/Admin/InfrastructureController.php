@@ -286,6 +286,14 @@ class InfrastructureController extends Controller
                     'help' => 'For weekly GeoLite2 mmdb download (flik:geo:update cron).'],
                 ['key' => 'integrations.maxmind_license_key', 'label' => 'MaxMind License Key', 'type' => 'password', 'default' => '', 'secret' => true],
             ],
+
+            'queue' => [
+                ['key' => 'queue.driver', 'label' => 'Job Queue Driver', 'type' => 'select', 'options' => [
+                    'sync'     => 'Sync — jalan langsung saat request (tanpa worker)',
+                    'database' => 'Database — async via tabel jobs (butuh worker)',
+                    'redis'    => 'Redis — async throughput tinggi (butuh Redis + worker)',
+                ], 'default' => 'sync', 'help' => 'SYNC: tiap job (transcode, email, AI) dikerjakan langsung di dalam request — lambat untuk tugas berat tapi TANPA worker, cocok shared hosting. DATABASE/REDIS: job dikerjakan worker di background (wajib `php artisan queue:work` berjalan terus, mis. di VPS/VM). Ganti driver hanya berlaku untuk job BARU; worker yang sedang jalan perlu di-restart dengan `php artisan queue:restart`.'],
+            ],
         ];
     }
 

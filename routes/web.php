@@ -830,6 +830,12 @@ Route::middleware(['auth', '2fa', 'can:admin'])->prefix('admin')->name('admin.')
         ->middleware('can:movies.upload_master')->name('movies.upload-page');
     Route::post('/movies/{movie}/upload-master', [\App\Http\Controllers\Admin\MovieUploadController::class, 'uploadMaster'])
         ->middleware('can:movies.upload_master')->name('movies.upload-master');
+    // Direct browser → GCS (S3-compatible) upload: sign a presigned PUT, then
+    // finalize once the object lands. Keeps the 2GB payload off the PHP server.
+    Route::post('/movies/{movie}/sign-upload', [\App\Http\Controllers\Admin\MovieUploadController::class, 'signUpload'])
+        ->middleware('can:movies.upload_master')->name('movies.sign-upload');
+    Route::post('/movies/{movie}/finalize-upload', [\App\Http\Controllers\Admin\MovieUploadController::class, 'finalizeUpload'])
+        ->middleware('can:movies.upload_master')->name('movies.finalize-upload');
     Route::post('/movies/{movie}/start-transcode', [\App\Http\Controllers\Admin\MovieUploadController::class, 'startTranscode'])
         ->middleware('can:movies.upload_master')->name('movies.start-transcode');
     Route::get('/movies/{movie}/encoding-status', [\App\Http\Controllers\Admin\MovieUploadController::class, 'encodingStatus'])
