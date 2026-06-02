@@ -79,6 +79,10 @@
                             @endif
                         </td>
                         <td style="text-align:right">
+                            @if($sub->status === 'ready')
+                                <a href="{{ route('admin.movies.subtitles.download', [$movie, $sub]) }}" class="btn btn-ghost btn-sm" title="Download WebVTT">.vtt</a>
+                                <a href="{{ route('admin.movies.subtitles.download', [$movie, $sub]) }}?format=srt" class="btn btn-ghost btn-sm" title="Download SubRip">.srt</a>
+                            @endif
                             <form method="POST" action="{{ route('admin.movies.subtitles.destroy', [$movie, $sub]) }}" style="display:inline" onsubmit="return confirm('Hapus subtitle {{ $sub->label }}?')">
                                 @csrf @method('DELETE')
                                 <button type="submit" class="btn btn-danger btn-sm">Delete</button>
@@ -89,6 +93,34 @@
                 </tbody>
             </table>
         @endif
+    </div>
+
+    <!-- Upload existing subtitle (.srt / .vtt) -->
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:20px;margin-bottom:24px">
+        <h3 style="font-size:15px;font-weight:600;margin-bottom:6px">⬆️ Upload Subtitle (.srt / .vtt)</h3>
+        <p style="font-size:12px;color:#777;margin-bottom:14px">Punya file subtitle sendiri? Upload <code style="background:#0f0f0f;padding:1px 6px;border-radius:3px;color:#C5A55A">.srt</code> atau <code style="background:#0f0f0f;padding:1px 6px;border-radius:3px;color:#C5A55A">.vtt</code> — file <code style="background:#0f0f0f;padding:1px 6px;border-radius:3px;color:#C5A55A">.srt</code> otomatis dikonversi ke WebVTT (timeline tidak diubah).</p>
+        <form method="POST" action="{{ route('admin.movies.subtitles.upload', $movie) }}" enctype="multipart/form-data" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
+            @csrf
+            <div class="form-group" style="margin-bottom:0">
+                <label>File (.srt / .vtt)</label>
+                <input type="file" name="subtitle_file" accept=".srt,.vtt" required class="form-input">
+            </div>
+            <div class="form-group" style="margin-bottom:0;min-width:240px">
+                <label>Bahasa</label>
+                <select name="language" class="form-input">
+                    @foreach($grouped as $group => $langs)
+                        <optgroup label="{{ $groups[$group] ?? $group }}">
+                            @foreach($langs as $code => $meta)
+                                @if(!isset($meta['variant']))
+                                    <option value="{{ $code }}" {{ $code === 'id' ? 'selected' : '' }}>{{ $meta['native'] }} ({{ $meta['name'] }})</option>
+                                @endif
+                            @endforeach
+                        </optgroup>
+                    @endforeach
+                </select>
+            </div>
+            <button type="submit" class="btn btn-gold">⬆️ Upload</button>
+        </form>
     </div>
 
     <div class="grid-stats" style="grid-template-columns:1fr 1fr;gap:24px">

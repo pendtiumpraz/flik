@@ -116,6 +116,50 @@ class WebVttHelper
     }
 
     /**
+     * Convert SubRip (.srt) text → WebVTT.
+     *
+     * The only structural differences we need to handle: SRT uses a comma as
+     * the millisecond separator (`00:00:01,000`) and has no `WEBVTT` header.
+     * Cue sequence numbers are valid WebVTT cue identifiers, so we keep them.
+     */
+    public function srtToVtt(string $srt): string
+    {
+        $srt = str_replace(["\r\n", "\r"], "\n", trim($srt));
+        // Comma → dot, but only inside timestamps (HH:MM:SS,mmm).
+        $srt = preg_replace('/(\d{2}:\d{2}:\d{2}),(\d{3})/', '$1.$2', $srt) ?? $srt;
+
+        if (stripos(ltrim($srt), 'WEBVTT') !== 0) {
+            $srt = "WEBVTT\n\n".$srt;
+        }
+
+        return rtrim($srt)."\n";
+    }
+
+    /**
+     * Convert WebVTT text → SubRip (.srt).
+     *
+     * Re-numbers cues sequentially, swaps the millisecond dot for a comma,
+     * and strips any trailing cue settings (which SRT does not understand).
+     */
+    public function vttToSrt(string $vtt): string
+    {
+        $cues = $this->parse($vtt);
+
+        $out = '';
+        foreach ($cues as $i => $cue) {
+            // Keep only the timestamp token (drop "align:..." style settings).
+            $start = str_replace('.', ',', explode(' ', trim($cue['start']))[0]);
+            $end = str_replace('.', ',', explode(' ', trim($cue['end']))[0]);
+
+            $out .= ($i + 1)."\n";
+            $out .= $start.' --> '.$end."\n";
+            $out .= $cue['text']."\n\n";
+        }
+
+        return rtrim($out)."\n";
+    }
+
+    /**
      * Convert seconds (float) → "HH:MM:SS.mmm"
      */
     public function secondsToTimestamp(float $seconds): string

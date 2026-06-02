@@ -742,6 +742,10 @@ Route::middleware(['auth', '2fa', 'can:admin'])->prefix('admin')->name('admin.')
         ->middleware('can:subtitles.generate')->name('movies.subtitles.destroy');
     Route::post('/movies/{movie}/subtitles/{subtitle}/default', [\App\Http\Controllers\Admin\SubtitleController::class, 'setDefault'])
         ->middleware('can:subtitles.generate')->name('movies.subtitles.default');
+    Route::post('/movies/{movie}/subtitles/upload', [\App\Http\Controllers\Admin\SubtitleController::class, 'upload'])
+        ->middleware('can:subtitles.generate')->name('movies.subtitles.upload');
+    Route::get('/movies/{movie}/subtitles/{subtitle}/download', [\App\Http\Controllers\Admin\SubtitleController::class, 'download'])
+        ->middleware('can:subtitles.generate')->name('movies.subtitles.download');
 
     // ─── AI Providers ────────────────────────────────────────────
     Route::get('/ai-settings', [\App\Http\Controllers\AdminController::class, 'aiSettings'])
