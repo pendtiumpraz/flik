@@ -128,6 +128,12 @@ return [
                     'icon' => 'wrench',
                 ],
                 [
+                    'label' => 'Panduan Koneksi',
+                    'route' => 'admin.integration-guide.index',
+                    'permission' => null, // any admin — read-only setup tutorial
+                    'icon' => 'book',
+                ],
+                [
                     'label' => 'Users',
                     'route' => 'admin.users.index',
                     'permission' => 'users.view',

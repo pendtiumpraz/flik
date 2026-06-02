@@ -646,6 +646,12 @@ Route::middleware(['auth', '2fa', 'can:admin'])->prefix('admin')->name('admin.')
     Route::post('/infrastructure', [\App\Http\Controllers\Admin\InfrastructureController::class, 'update'])
         ->name('infrastructure.update');
 
+    // ─── Integration setup guide (in-app render of docs/integration-setup.md) ──
+    // Pick a service → read its step-by-step connection tutorial, then enter
+    // the keys in Infrastructure above.
+    Route::get('/integration-guide', [\App\Http\Controllers\Admin\IntegrationGuideController::class, 'index'])
+        ->name('integration-guide.index');
+
     // ─── Architecture Docs (client-facing HLA) ──────────────────
     // Password-gated (every reload re-prompts). Default password: ott2026
     // Configurable via /admin/settings → key `pages.protected_password`.
