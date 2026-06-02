@@ -51,14 +51,21 @@ return [
             'visibility' => 'private',
         ],
 
+        // S3-compatible disk. Works with AWS S3 and any S3-API-compatible
+        // backend — including Google Cloud Storage via its XML / "inter-
+        // operability" endpoint (https://storage.googleapis.com) using an
+        // HMAC key as the AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY pair.
+        // For GCS set AWS_DEFAULT_REGION=auto and AWS_USE_PATH_STYLE_ENDPOINT=true.
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
             'secret' => env('AWS_SECRET_ACCESS_KEY'),
-            'region' => env('AWS_DEFAULT_REGION'),
+            'region' => env('AWS_DEFAULT_REGION', 'auto'),
             'bucket' => env('AWS_BUCKET'),
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => (bool) env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'throw' => false,
         ],
 
     ],

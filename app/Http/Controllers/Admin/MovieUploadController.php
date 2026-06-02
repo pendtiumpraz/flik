@@ -10,6 +10,7 @@ use App\Models\EncodingJob;
 use App\Models\Movie;
 use App\Services\Security\FileUploadValidator;
 use App\Services\Security\VirusScanner;
+use App\Services\Storage\S3StorageService;
 use App\Support\SafeFilename;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,6 +49,10 @@ class MovieUploadController extends Controller
     {
         return view('admin.movies.upload', [
             'movie' => $movie,
+            // When GCS / S3 is configured, the front-end uploads the master
+            // directly to the bucket via a presigned PUT (bypassing PHP).
+            // Otherwise it falls back to the server-proxied chunked upload.
+            'directUpload' => S3StorageService::enabled(),
         ]);
     }
 
@@ -157,6 +162,118 @@ class MovieUploadController extends Controller
                 'message' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Issue a presigned PUT URL so the browser can upload the master file
+     * DIRECTLY to GCS / S3, bypassing the PHP server entirely.
+     *
+     * This is the shared-hosting-friendly path: a 2GB file never transits the
+     * web server (no temp disk, no max_execution_time risk). Because we can't
+     * magic-byte sniff or virus-scan a file that hasn't landed yet, this
+     * endpoint gates on the extension only — acceptable since the route is
+     * admin-only (can:movies.upload_master).
+     *
+     * POST { filename: "movie.mp4" }
+     * → { ok, url, headers, key, disk }
+     */
+    public function signUpload(Request $request, Movie $movie, S3StorageService $s3): JsonResponse
+    {
+        $data = $request->validate([
+            'filename' => 'required|string|max:255',
+        ]);
+
+        if (! S3StorageService::enabled()) {
+            return response()->json([
+                'ok' => false, 'error' => 'gcs_not_configured',
+                'message' => 'Cloud storage (GCS/S3) belum dikonfigurasi.',
+            ], 422);
+        }
+
+        if (! SafeFilename::isSafePath($data['filename'])) {
+            return response()->json([
+                'ok' => false, 'error' => 'unsafe_filename',
+                'message' => 'Filename mengandung karakter terlarang.',
+            ], 422);
+        }
+
+        // Name-based extension gate (mirrors FileUploadValidator's video set).
+        $ext = SafeFilename::sanitiseExtension($data['filename']);
+        $allowed = ['mp4', 'mov', 'mkv', 'webm'];
+        if (! in_array($ext, $allowed, true)) {
+            return response()->json([
+                'ok' => false, 'error' => 'bad_extension',
+                'message' => 'Ekstensi tidak diizinkan. Gunakan: '.implode(', ', $allowed).'.',
+            ], 422);
+        }
+
+        $key = sprintf('movies/%d/%s', $movie->id, SafeFilename::generate($data['filename'], 'master'));
+
+        try {
+            $signed = $s3->presignedUploadUrl($key, 3600);
+        } catch (Throwable $e) {
+            Log::error('signUpload presign failed', [
+                'movie_id' => $movie->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'ok' => false, 'error' => 'presign_failed', 'message' => $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'url' => $signed['url'],
+            'headers' => $signed['headers'],
+            'key' => $key,
+            'disk' => 's3',
+        ]);
+    }
+
+    /**
+     * Register a master file that the browser uploaded directly to GCS / S3.
+     *
+     * Called after the presigned PUT (signUpload) succeeds. We re-validate the
+     * key is inside THIS movie's prefix (never trust the client) and confirm
+     * the object actually exists before stamping it on the movie.
+     *
+     * POST { key: "movies/{id}/master_xxx.mp4" }
+     */
+    public function finalizeUpload(Request $request, Movie $movie, S3StorageService $s3): JsonResponse
+    {
+        $data = $request->validate([
+            'key' => 'required|string|max:512',
+        ]);
+
+        $key = $data['key'];
+        $prefix = sprintf('movies/%d/', $movie->id);
+
+        if (! str_starts_with($key, $prefix) || str_contains($key, '..')) {
+            return response()->json([
+                'ok' => false, 'error' => 'invalid_key',
+                'message' => 'Object key di luar folder movie ini.',
+            ], 422);
+        }
+
+        if (! $s3->exists($key)) {
+            return response()->json([
+                'ok' => false, 'error' => 'not_found',
+                'message' => 'File belum ada di storage — upload mungkin gagal atau CORS bucket belum diset.',
+            ], 422);
+        }
+
+        $movie->forceFill([
+            'master_file_path' => $key,
+            'master_file_disk' => 's3',
+            'encoding_status' => 'pending',
+        ])->save();
+
+        return response()->json([
+            'ok' => true,
+            'path' => $key,
+            'disk' => 's3',
+        ]);
     }
 
     /**

@@ -133,6 +133,12 @@ class DynamicInfrastructureProvider extends ServiceProvider
         'integrations.turnstile_secret_key' => 'services.turnstile.secret_key',
         'integrations.maxmind_account_id' => 'services.maxmind.account_id',
         'integrations.maxmind_license_key' => 'services.maxmind.license_key',
+
+        // ─── Queue ─────────────────────────────────────────────
+        // Overrides the default queue connection (sync/database/redis). Note:
+        // a running `queue:work` worker reads this at boot — flipping it here
+        // only affects newly dispatched jobs until workers are restarted.
+        'queue.driver'                    => 'queue.default',
     ];
 
     public function register(): void

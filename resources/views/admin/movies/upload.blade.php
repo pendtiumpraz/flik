@@ -16,7 +16,10 @@
                  csrf: '{{ csrf_token() }}',
                  currentMaster: @js($movie->master_file_path),
                  currentDisk: @js($movie->master_file_disk),
-                 chunkSize: 5 * 1024 * 1024
+                 chunkSize: 5 * 1024 * 1024,
+                 directUpload: @js($directUpload),
+                 signUploadUrl: '{{ route('admin.movies.sign-upload', $movie) }}',
+                 finalizeUrl: '{{ route('admin.movies.finalize-upload', $movie) }}'
              })"
              x-init="init()">
 
@@ -193,9 +196,15 @@
                     this.uploadStatusText = 'Uploading…';
 
                     try {
-                        // Files larger than ~50MB → chunked upload. Smaller files
-                        // go in one shot for lower latency on small clips.
-                        if (this.selectedFile.size > 50 * 1024 * 1024) {
+                        // When GCS/S3 is configured, upload straight to the
+                        // bucket via a presigned PUT — the file never transits
+                        // the PHP server (essential for large files on shared
+                        // hosting). Otherwise fall back to server-proxied upload.
+                        if (this.directUpload) {
+                            await this.uploadDirectToGcs(this.selectedFile);
+                        } else if (this.selectedFile.size > 50 * 1024 * 1024) {
+                            // Files larger than ~50MB → chunked upload. Smaller
+                            // files go in one shot for lower latency.
                             await this.uploadChunked(this.selectedFile);
                         } else {
                             await this.uploadSingleShot(this.selectedFile);
@@ -288,6 +297,74 @@
                         };
                         xhr.onerror = () => reject(new Error('Network error during chunk upload.'));
                         xhr.send(fd);
+                    });
+                },
+
+                // ── Direct browser → GCS / S3 (presigned PUT) ──────────────
+                // 1) ask our server to sign a PUT URL, 2) PUT the file straight
+                // to the bucket, 3) tell our server the object has landed.
+                async uploadDirectToGcs(file) {
+                    this.uploadStatusText = 'Meminta URL upload…';
+                    const signRes = await fetch(this.signUploadUrl, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': this.csrf,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: JSON.stringify({ filename: file.name }),
+                    });
+                    const sign = await signRes.json().catch(() => ({}));
+                    if (!signRes.ok || !sign.ok) {
+                        throw new Error(sign.message || ('Gagal membuat URL upload (HTTP ' + signRes.status + ').'));
+                    }
+
+                    this.uploadStatusText = 'Mengupload ke Google Cloud…';
+                    await this.putToBucket(sign.url, sign.headers || {}, file);
+
+                    this.uploadStatusText = 'Menyelesaikan…';
+                    const finRes = await fetch(this.finalizeUrl, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': this.csrf,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: JSON.stringify({ key: sign.key }),
+                    });
+                    const fin = await finRes.json().catch(() => ({}));
+                    if (!finRes.ok || !fin.ok) {
+                        throw new Error(fin.message || ('Gagal finalize (HTTP ' + finRes.status + ').'));
+                    }
+                },
+
+                putToBucket(url, headers, file) {
+                    return new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('PUT', url);
+                        // Apply exactly the headers the presign signed (if any).
+                        Object.entries(headers).forEach(([k, v]) => {
+                            try { xhr.setRequestHeader(k, v); } catch (e) { /* forbidden header — skip */ }
+                        });
+                        xhr.upload.onprogress = (ev) => {
+                            if (ev.lengthComputable) {
+                                this.uploadProgress = Math.round((ev.loaded / ev.total) * 100);
+                            }
+                        };
+                        xhr.onload = () => {
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                this.uploadProgress = 100;
+                                resolve();
+                            } else {
+                                reject(new Error('Upload ke storage gagal: HTTP ' + xhr.status));
+                            }
+                        };
+                        xhr.onerror = () => reject(new Error('Network error saat upload ke storage (cek CORS bucket).'));
+                        xhr.send(file);
                     });
                 },
 

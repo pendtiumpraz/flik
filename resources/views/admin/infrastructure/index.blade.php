@@ -162,6 +162,7 @@
                             'payment' => '💳',
                             'email' => '📧',
                             'integrations' => '🔌',
+                            'queue' => '🧵',
                         ];
                         $tabLabels = [
                             'drm' => 'DRM',
@@ -171,6 +172,7 @@
                             'payment' => 'Payment',
                             'email' => 'Email',
                             'integrations' => 'Integrations',
+                            'queue' => 'Queue',
                         ];
                     @endphp
                     <button type="button"
