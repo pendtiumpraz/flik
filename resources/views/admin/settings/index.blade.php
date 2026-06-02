@@ -10,6 +10,41 @@
 --}}
 <x-admin.layout title="Settings">
 
+    @push('styles')
+    <style>
+        /* Tabbed settings registry — self-contained styling so the page no
+           longer depends on the undefined .tab-active / .tab-inactive classes. */
+        .settings-tabs {
+            display: flex; gap: 4px; flex-wrap: wrap;
+            border-bottom: 1px solid #2a2a2a; margin-bottom: 22px;
+        }
+        .settings-tab {
+            background: transparent; border: none; cursor: pointer;
+            padding: 10px 18px; font-size: 13px; font-weight: 500;
+            color: #888; border-bottom: 2px solid transparent;
+            border-radius: 6px 6px 0 0; text-transform: capitalize;
+            transition: color .15s, background .15s, border-color .15s;
+            white-space: nowrap;
+        }
+        .settings-tab:hover { color: #ccc; background: rgba(255,255,255,0.03); }
+        .settings-tab.is-active {
+            color: #C5A55A; border-bottom-color: #C5A55A;
+            background: rgba(197,165,90,0.08);
+        }
+        .settings-tab .cnt { font-size: 11px; color: #555; margin-left: 2px; }
+
+        /* Per-setting row: label column + input column, stacks on narrow screens. */
+        .setting-row {
+            display: grid; grid-template-columns: 280px 1fr; gap: 24px;
+            padding-bottom: 20px; border-bottom: 1px solid #1f1f1f;
+        }
+        .setting-row:last-child { border-bottom: none; padding-bottom: 0; }
+        @media (max-width: 820px) {
+            .setting-row { grid-template-columns: 1fr; gap: 10px; }
+        }
+    </style>
+    @endpush
+
     {{-- ─── Helper-usage callout ───────────────────────────────── --}}
     <div style="background:rgba(197,165,90,0.08);border:1px solid rgba(197,165,90,0.25);border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:flex-start;gap:14px">
         <div style="width:32px;height:32px;border-radius:8px;background:rgba(197,165,90,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -37,14 +72,12 @@
         <div x-data="{ tab: @js($groupKeys[0] ?? 'general') }">
 
             {{-- ─── Tab bar ─────────────────────────────────────── --}}
-            <div style="display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid #2a2a2a;margin-bottom:20px;padding-bottom:0">
+            <div class="settings-tabs">
                 @foreach($groupKeys as $group)
                     <button type="button"
                             @click="tab = @js($group)"
-                            :class="tab === @js($group) ? 'tab-active' : 'tab-inactive'"
-                            style="background:transparent;border:none;cursor:pointer;padding:10px 18px;font-size:13px;font-weight:500;border-bottom:2px solid transparent;border-radius:4px 4px 0 0;text-transform:capitalize;transition:all 0.2s"
-                            :style="tab === @js($group) ? 'color:#C5A55A;border-bottom-color:#C5A55A;background:rgba(197,165,90,0.08)' : 'color:#888'">
-                        {{ $group }} <span style="font-size:11px;color:#555">({{ $grouped[$group]->count() }})</span>
+                            :class="tab === @js($group) ? 'settings-tab is-active' : 'settings-tab'">
+                        {{ $group }} <span class="cnt">({{ $grouped[$group]->count() }})</span>
                     </button>
                 @endforeach
             </div>
@@ -81,7 +114,7 @@
                                         $hasError = $errors->has($fieldName);
                                     @endphp
 
-                                    <div style="display:grid;grid-template-columns:280px 1fr;gap:24px;padding-bottom:20px;border-bottom:1px solid #1f1f1f">
+                                    <div class="setting-row">
                                         {{-- Label column --}}
                                         <div>
                                             <label for="{{ $fieldId }}" style="display:block;font-size:13px;font-weight:500;color:#e5e5e5;margin-bottom:4px">
