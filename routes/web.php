@@ -480,6 +480,13 @@ Route::get('/drm/playlist/{movie:slug}/{rendition}.m3u8', [\App\Http\Controllers
     ->where('rendition', '[A-Za-z0-9_\-]+')
     ->name('drm.playlist');
 
+// Subtitle sidecar (WebVTT) — served same-origin (disk-agnostic) so the player
+// can load text tracks without cross-origin / CORS friction. Public; the
+// controller validates (movie, active, ready). {movie} binds by slug.
+Route::get('/playback/{movie}/subtitle/{subtitle}.vtt', [\App\Http\Controllers\PlaybackController::class, 'subtitle'])
+    ->whereNumber('subtitle')
+    ->name('playback.subtitle');
+
 Route::get('/drm/segment/{movie:slug}/{rendition}/{filename}', [\App\Http\Controllers\PlaybackController::class, 'segment'])
     ->middleware(['signed', 'geoblock'])
     ->where('rendition', '[A-Za-z0-9_\-]+')

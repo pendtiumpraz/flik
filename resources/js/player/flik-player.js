@@ -153,9 +153,53 @@ export default class FlikPlayer {
 
         await this.shakaPlayer.load(this.config.manifestUrl);
 
+        // Sidecar subtitle tracks (WebVTT) from the config bundle. Added but
+        // NOT shown by default — the player UI toggles them on demand.
+        await this.addSubtitleTracks();
+
         await this.startHeartbeat();
 
         return this;
+    }
+
+    /**
+     * Add WebVTT sidecar text tracks from config.subtitles. Each entry:
+     *   { url, language, label, default, rtl }
+     */
+    async addSubtitleTracks() {
+        const subs = Array.isArray(this.config?.subtitles) ? this.config.subtitles : [];
+        for (const s of subs) {
+            try {
+                if (typeof this.shakaPlayer.addTextTrackAsync === 'function') {
+                    await this.shakaPlayer.addTextTrackAsync(s.url, s.language, 'subtitle', 'text/vtt', undefined, s.label);
+                } else if (typeof this.shakaPlayer.addTextTrack === 'function') {
+                    this.shakaPlayer.addTextTrack(s.url, s.language, 'subtitle', 'text/vtt', undefined, s.label);
+                }
+            } catch (e) {
+                // eslint-disable-next-line no-console
+                console.warn('[FlikPlayer] addTextTrack failed', s?.language, e);
+            }
+        }
+    }
+
+    /** Show subtitles in the given BCP-47 language. */
+    selectTextLanguage(language) {
+        if (!this.shakaPlayer) return;
+        try {
+            this.shakaPlayer.selectTextLanguage(language);
+            this.shakaPlayer.setTextTrackVisibility(true);
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn('[FlikPlayer] selectTextLanguage failed', language, e);
+        }
+    }
+
+    /** Hide subtitles. */
+    disableText() {
+        if (!this.shakaPlayer) return;
+        try {
+            this.shakaPlayer.setTextTrackVisibility(false);
+        } catch (e) { /* noop */ }
     }
 
     /**

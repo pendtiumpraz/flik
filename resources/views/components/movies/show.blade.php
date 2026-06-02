@@ -60,6 +60,7 @@
                                     autoSkip: null,
                                     xray: null,
                                     error: null,
+                                    subs: [],
                                     async init() {
                                         await this.waitForShaka();
                                         const videoEl = document.getElementById('flik-shaka-player');
@@ -68,6 +69,7 @@
                                         try {
                                             this.player = new window.FlikPlayer('flik-shaka-player', '{{ $movieModel->slug }}');
                                             await this.player.initialize();
+                                            this.subs = this.player.config?.subtitles || [];
                                             this.autoSkip = window.initAutoSkip({
                                                 video: videoEl,
                                                 markerSource: videoEl,
@@ -97,6 +99,12 @@
                                             }, 100);
                                         });
                                     },
+                                    onSubChange(e) {
+                                        const lang = e.target.value;
+                                        if (!this.player) return;
+                                        if (!lang) { this.player.disableText(); }
+                                        else { this.player.selectTextLanguage(lang); }
+                                    },
                                 }"
                                 x-init="init()"
                                 @beforeunload.window="player?.destroy(); autoSkip?.destroy(); xray?.destroy();"
@@ -108,6 +116,19 @@
                                         </div>
                                     </div>
                                 </template>
+                                {{-- Subtitle (CC) picker for the Shaka path — native controls
+                                     don't expose Shaka text tracks, so we drive them manually. --}}
+                                <template x-if="subs.length">
+                                    <div class="absolute top-3 right-3 z-30">
+                                        <select @change="onSubChange($event)"
+                                                class="bg-black/70 text-white text-xs rounded px-2 py-1 border border-white/20 focus:outline-none">
+                                            <option value="">CC: Off</option>
+                                            <template x-for="s in subs" :key="s.language">
+                                                <option :value="s.language" x-text="s.label"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                </template>
                             </div>
                         @elseif($movieModel->video_path)
                             <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet">
@@ -116,6 +137,15 @@
                                 poster="{{ $movies['backdrop_path'] }}"
                                 data-setup='{"playbackRates": [0.5, 1, 1.25, 1.5, 2]}'>
                                 <source src="{{ $movieModel->video_full_url }}" type="video/mp4">
+                                {{-- Subtitle tracks — Video.js shows a captions menu automatically.
+                                     Served same-origin via playback.subtitle (no CORS needed). --}}
+                                @foreach($movieModel->activeSubtitles as $sub)
+                                    <track kind="subtitles"
+                                           src="{{ route('playback.subtitle', ['movie' => $movieModel, 'subtitle' => $sub->id]) }}"
+                                           srclang="{{ $sub->language_code }}"
+                                           label="{{ $sub->native_name }}"
+                                           @if($sub->is_default) default @endif>
+                                @endforeach
                             </video>
                             <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
                             <style>

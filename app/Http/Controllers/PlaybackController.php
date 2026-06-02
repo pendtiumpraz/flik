@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\DrmSession;
 use App\Models\Movie;
+use App\Models\MovieSubtitle;
 use App\Services\Audit\AuditLogger;
 use App\Services\Drm\ConcurrentStreamLimiter;
 use App\Services\Drm\DeviceFingerprinter;
@@ -127,6 +128,41 @@ class PlaybackController extends Controller
             'sessionToken'       => $session->session_token,
             'heartbeatIntervalMs' => 30_000,
             'heartbeatUrl'       => route('playback.heartbeat', ['movie' => $movie]),
+            'subtitles'          => $movie->activeSubtitles->map(fn (MovieSubtitle $s) => [
+                'url'      => route('playback.subtitle', ['movie' => $movie, 'subtitle' => $s->id]),
+                'language' => $s->language_code,
+                'label'    => $s->native_name,
+                'default'  => (bool) $s->is_default,
+                'rtl'      => $s->is_rtl,
+            ])->values()->all(),
+        ]);
+    }
+
+    /**
+     * Serve a subtitle's WebVTT same-origin (disk-agnostic) so the player can
+     * load text tracks without cross-origin / CORS friction. Public route,
+     * validated to (movie, active, ready). Low-sensitivity text content.
+     */
+    public function subtitle(Movie $movie, MovieSubtitle $subtitle): Response
+    {
+        if ($subtitle->movie_id !== $movie->id || ! $subtitle->is_active || $subtitle->status !== 'ready') {
+            return response('Subtitle not found.', 404);
+        }
+
+        try {
+            $disk = \Illuminate\Support\Facades\Storage::disk((string) $subtitle->disk);
+            if (! $disk->exists($subtitle->webvtt_path)) {
+                return response('Subtitle file missing.', 404);
+            }
+            $content = (string) $disk->get($subtitle->webvtt_path);
+        } catch (Throwable $e) {
+            return response('Subtitle unavailable.', 404);
+        }
+
+        return response($content, 200, [
+            'Content-Type'           => 'text/vtt; charset=UTF-8',
+            'Cache-Control'          => 'public, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
