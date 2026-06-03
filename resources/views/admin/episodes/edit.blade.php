@@ -39,6 +39,7 @@
                 Save + Re-generate AI Blurb
             </button>
             <a href="{{ route('admin.movies.seasons.episodes.index', [$movie, $season]) }}" class="btn btn-ghost">Cancel</a>
+            <a href="{{ route('admin.episodes.subtitles.index', $episode) }}" class="btn btn-ghost" style="margin-left:auto">💬 Subtitles</a>
         </div>
     </form>
 

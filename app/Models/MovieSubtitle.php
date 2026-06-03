@@ -12,7 +12,7 @@ class MovieSubtitle extends Model
     use HasFactory;
 
     protected $fillable = [
-        'movie_id', 'language_code', 'label', 'webvtt_path', 'disk',
+        'movie_id', 'episode_id', 'language_code', 'label', 'webvtt_path', 'disk',
         'is_auto_generated', 'is_translated', 'source_language',
         'generator_model', 'variant', 'status', 'error_message',
         'cue_count', 'duration_seconds', 'cost_usd', 'is_default', 'is_active',
@@ -29,6 +29,11 @@ class MovieSubtitle extends Model
     public function movie()
     {
         return $this->belongsTo(Movie::class);
+    }
+
+    public function episode()
+    {
+        return $this->belongsTo(Episode::class);
     }
 
     public function scopeActive($q)

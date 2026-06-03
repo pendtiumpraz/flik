@@ -70,6 +70,19 @@ class Episode extends Model
         return $this->belongsTo(Movie::class);
     }
 
+    public function subtitles()
+    {
+        return $this->hasMany(MovieSubtitle::class)->orderBy('language_code');
+    }
+
+    public function activeSubtitles()
+    {
+        return $this->hasMany(MovieSubtitle::class)
+            ->where('is_active', true)
+            ->where('status', 'ready')
+            ->orderByDesc('is_default');
+    }
+
     /**
      * Player-friendly duration (Video.js/Shaka think in seconds).
      */

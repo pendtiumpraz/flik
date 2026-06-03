@@ -61,6 +61,14 @@
                        })">
                     <div class="relative bg-black" style="padding-top: 56.25%">
                         @if($hasHls)
+                            @php
+                                $episodeSubs = $episode->activeSubtitles->map(fn ($s) => [
+                                    'url'      => route('playback.episode-subtitle', ['episode' => $episode, 'subtitle' => $s->id]),
+                                    'language' => $s->language_code,
+                                    'label'    => $s->native_name,
+                                    'default'  => (bool) $s->is_default,
+                                ])->values();
+                            @endphp
                             {{-- ━━━ Shaka Player (DRM/HLS pipeline) ━━━ --}}
                             <video id="flik-episode-shaka-player"
                                    class="absolute top-0 left-0 w-full h-full bg-black"
@@ -74,6 +82,7 @@
                                 x-data="{
                                     player: null,
                                     error: null,
+                                    subs: @js($episodeSubs),
                                     async init() {
                                         await this.waitForShaka();
                                         const videoEl = document.getElementById('flik-episode-shaka-player');
@@ -81,13 +90,20 @@
                                         try {
                                             this.player = new window.FlikPlayer(
                                                 'flik-episode-shaka-player',
-                                                '{{ $movie?->slug }}'
+                                                '{{ $movie?->slug }}',
+                                                { subtitles: @js($episodeSubs) }
                                             );
                                             await this.player.initialize();
                                         } catch (e) {
                                             console.error('[FLiK] episode player init failed', e);
                                             this.error = e.message || 'Playback unavailable';
                                         }
+                                    },
+                                    onSubChange(e) {
+                                        const lang = e.target.value;
+                                        if (!this.player) return;
+                                        if (!lang) { this.player.disableText(); }
+                                        else { this.player.selectTextLanguage(lang); }
                                     },
                                     waitForShaka() {
                                         return new Promise((resolve) => {
@@ -110,6 +126,18 @@
                                         <div class="text-center text-gray-400 px-4">
                                             <div class="text-sm" x-text="error"></div>
                                         </div>
+                                    </div>
+                                </template>
+                                {{-- Subtitle (CC) picker — episode Shaka path --}}
+                                <template x-if="subs.length">
+                                    <div class="absolute top-3 right-3 z-30">
+                                        <select @change="onSubChange($event)"
+                                                class="bg-black/70 text-white text-xs rounded px-2 py-1 border border-white/20 focus:outline-none">
+                                            <option value="">CC: Off</option>
+                                            <template x-for="s in subs" :key="s.language">
+                                                <option :value="s.language" x-text="s.label"></option>
+                                            </template>
+                                        </select>
                                     </div>
                                 </template>
                             </div>

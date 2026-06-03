@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\DrmSession;
+use App\Models\Episode;
 use App\Models\Movie;
 use App\Models\MovieSubtitle;
 use App\Services\Audit\AuditLogger;
@@ -146,6 +147,33 @@ class PlaybackController extends Controller
     public function subtitle(Movie $movie, MovieSubtitle $subtitle): Response
     {
         if ($subtitle->movie_id !== $movie->id || ! $subtitle->is_active || $subtitle->status !== 'ready') {
+            return response('Subtitle not found.', 404);
+        }
+
+        try {
+            $disk = \Illuminate\Support\Facades\Storage::disk((string) $subtitle->disk);
+            if (! $disk->exists($subtitle->webvtt_path)) {
+                return response('Subtitle file missing.', 404);
+            }
+            $content = (string) $disk->get($subtitle->webvtt_path);
+        } catch (Throwable $e) {
+            return response('Subtitle unavailable.', 404);
+        }
+
+        return response($content, 200, [
+            'Content-Type'           => 'text/vtt; charset=UTF-8',
+            'Cache-Control'          => 'public, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    /**
+     * Episode counterpart of subtitle() — serves an episode's WebVTT
+     * same-origin, validated to (episode, active, ready).
+     */
+    public function episodeSubtitle(Episode $episode, MovieSubtitle $subtitle): Response
+    {
+        if ($subtitle->episode_id !== $episode->id || ! $subtitle->is_active || $subtitle->status !== 'ready') {
             return response('Subtitle not found.', 404);
         }
 

@@ -486,6 +486,9 @@ Route::get('/drm/playlist/{movie:slug}/{rendition}.m3u8', [\App\Http\Controllers
 Route::get('/playback/{movie}/subtitle/{subtitle}.vtt', [\App\Http\Controllers\PlaybackController::class, 'subtitle'])
     ->whereNumber('subtitle')
     ->name('playback.subtitle');
+Route::get('/playback/episode/{episode}/subtitle/{subtitle}.vtt', [\App\Http\Controllers\PlaybackController::class, 'episodeSubtitle'])
+    ->whereNumber('subtitle')
+    ->name('playback.episode-subtitle');
 
 Route::get('/drm/segment/{movie:slug}/{rendition}/{filename}', [\App\Http\Controllers\PlaybackController::class, 'segment'])
     ->middleware(['signed', 'geoblock'])
@@ -746,6 +749,18 @@ Route::middleware(['auth', '2fa', 'can:admin'])->prefix('admin')->name('admin.')
         ->middleware('can:subtitles.generate')->name('movies.subtitles.upload');
     Route::get('/movies/{movie}/subtitles/{subtitle}/download', [\App\Http\Controllers\Admin\SubtitleController::class, 'download'])
         ->middleware('can:subtitles.generate')->name('movies.subtitles.download');
+
+    // Episode subtitles (flat, keyed by episode id) — upload/download/delete/default
+    Route::get('/episodes/{episode}/subtitles', [\App\Http\Controllers\Admin\EpisodeSubtitleController::class, 'index'])
+        ->middleware('can:subtitles.generate')->name('episodes.subtitles.index');
+    Route::post('/episodes/{episode}/subtitles/upload', [\App\Http\Controllers\Admin\EpisodeSubtitleController::class, 'upload'])
+        ->middleware('can:subtitles.generate')->name('episodes.subtitles.upload');
+    Route::get('/episodes/{episode}/subtitles/{subtitle}/download', [\App\Http\Controllers\Admin\EpisodeSubtitleController::class, 'download'])
+        ->middleware('can:subtitles.generate')->name('episodes.subtitles.download');
+    Route::delete('/episodes/{episode}/subtitles/{subtitle}', [\App\Http\Controllers\Admin\EpisodeSubtitleController::class, 'destroy'])
+        ->middleware('can:subtitles.generate')->name('episodes.subtitles.destroy');
+    Route::post('/episodes/{episode}/subtitles/{subtitle}/default', [\App\Http\Controllers\Admin\EpisodeSubtitleController::class, 'setDefault'])
+        ->middleware('can:subtitles.generate')->name('episodes.subtitles.default');
 
     // ─── AI Providers ────────────────────────────────────────────
     Route::get('/ai-settings', [\App\Http\Controllers\AdminController::class, 'aiSettings'])

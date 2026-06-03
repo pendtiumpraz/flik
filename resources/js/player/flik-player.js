@@ -167,7 +167,12 @@ export default class FlikPlayer {
      *   { url, language, label, default, rtl }
      */
     async addSubtitleTracks() {
-        const subs = Array.isArray(this.config?.subtitles) ? this.config.subtitles : [];
+        // Prefer explicitly-passed subtitles (episode player feeds them via
+        // options, since it doesn't fetch the movie-level config) and fall
+        // back to the config bundle (movie player).
+        const subs = Array.isArray(this.options?.subtitles)
+            ? this.options.subtitles
+            : (Array.isArray(this.config?.subtitles) ? this.config.subtitles : []);
         for (const s of subs) {
             try {
                 if (typeof this.shakaPlayer.addTextTrackAsync === 'function') {
