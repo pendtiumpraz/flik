@@ -208,14 +208,17 @@ class HelpArticle extends Model
         }
 
         // LIKE fallback — escape % and _ so user-typed wildcards don't
-        // turn into runaway scans.
+        // turn into runaway scans. Postgres LIKE is case-sensitive, so use
+        // ILIKE there for parity with MySQL's case-insensitive default.
+        $likeOp = $driver === 'pgsql' ? 'ilike' : 'like';
+        $caseKw = $driver === 'pgsql' ? 'ILIKE' : 'LIKE';
         $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
         return $query
-            ->where(function (Builder $w) use ($like) {
-                $w->where('title', 'like', $like)
-                  ->orWhere('body', 'like', $like);
+            ->where(function (Builder $w) use ($like, $likeOp) {
+                $w->where('title', $likeOp, $like)
+                  ->orWhere('body', $likeOp, $like);
             })
-            ->orderByRaw('CASE WHEN title LIKE ? THEN 0 ELSE 1 END', [$like])
+            ->orderByRaw('CASE WHEN title '.$caseKw.' ? THEN 0 ELSE 1 END', [$like])
             ->orderByDesc('helpful_count');
     }
 
