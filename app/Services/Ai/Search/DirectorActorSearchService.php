@@ -88,7 +88,7 @@ class DirectorActorSearchService
         return Movie::query()
             ->with(['genres', 'castMembers'])
             ->whereHas('castMembers', function ($q) use ($needle) {
-                $q->where('name', 'LIKE', "%{$needle}%");
+                $q->whereLike('name', "%{$needle}%");
             })
             ->orderByDesc('popularity')
             ->limit(50)

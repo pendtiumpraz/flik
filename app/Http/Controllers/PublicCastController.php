@@ -41,7 +41,7 @@ class PublicCastController extends Controller
         $casts = Cast::query()
             ->withMovies()
             ->withCount('movies')
-            ->when($q !== '', fn ($qq) => $qq->where('name', 'LIKE', '%' . $q . '%'))
+            ->when($q !== '', fn ($qq) => $qq->whereLike('name', '%' . $q . '%'))
             ->when($role !== 'all', fn ($qq) => $qq->ofRole($role))
             ->orderByDesc('movies_count')
             ->orderBy('name')

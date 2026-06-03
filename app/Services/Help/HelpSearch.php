@@ -72,8 +72,8 @@ class HelpSearch
             ->published()
             ->select('id', 'slug', 'title')
             ->where(function ($q) use ($like, $contains) {
-                $q->where('title', 'like', $like)
-                  ->orWhere('title', 'like', $contains);
+                $q->whereLike('title', $like)
+                  ->orWhereLike('title', $contains);
             })
             ->orderByRaw('CASE WHEN title LIKE ? THEN 0 ELSE 1 END', [$like])
             ->orderByDesc('helpful_count')

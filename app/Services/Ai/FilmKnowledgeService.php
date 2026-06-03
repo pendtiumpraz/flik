@@ -56,11 +56,11 @@ class FilmKnowledgeService
         $movies = Movie::with('genres', 'castMembers')
             ->where(function ($q) use ($keywords) {
                 foreach ($keywords as $kw) {
-                    $q->orWhere('title', 'LIKE', "%{$kw}%")
-                      ->orWhere('original_title', 'LIKE', "%{$kw}%")
-                      ->orWhere('overview', 'LIKE', "%{$kw}%")
-                      ->orWhereHas('genres', fn ($qg) => $qg->where('name', 'LIKE', "%{$kw}%"))
-                      ->orWhereHas('castMembers', fn ($qc) => $qc->where('name', 'LIKE', "%{$kw}%"));
+                    $q->orWhereLike('title', "%{$kw}%")
+                      ->orWhereLike('original_title', "%{$kw}%")
+                      ->orWhereLike('overview', "%{$kw}%")
+                      ->orWhereHas('genres', fn ($qg) => $qg->whereLike('name', "%{$kw}%"))
+                      ->orWhereHas('castMembers', fn ($qc) => $qc->whereLike('name', "%{$kw}%"));
                 }
             })
             ->limit($limit * 3) // overfetch then re-rank
@@ -112,8 +112,8 @@ class FilmKnowledgeService
 
         // Fuzzy LIKE
         return Movie::with('genres', 'castMembers')
-            ->where('title', 'LIKE', "%{$title}%")
-            ->orWhere('original_title', 'LIKE', "%{$title}%")
+            ->whereLike('title', "%{$title}%")
+            ->orWhereLike('original_title', "%{$title}%")
             ->orderByDesc('popularity')
             ->first();
     }
@@ -196,8 +196,8 @@ class FilmKnowledgeService
         if ($bySlug) return $bySlug;
 
         // 3. LIKE fuzzy match
-        $fuzzy = Movie::where('title', 'LIKE', "%{$needle}%")
-            ->orWhere('original_title', 'LIKE', "%{$needle}%")
+        $fuzzy = Movie::whereLike('title', "%{$needle}%")
+            ->orWhereLike('original_title', "%{$needle}%")
             ->orderByDesc('popularity')
             ->first();
         if ($fuzzy) return $fuzzy;

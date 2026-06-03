@@ -63,7 +63,7 @@ class AdminController extends Controller
         $query = Movie::with('genres');
 
         if ($search = $request->get('search')) {
-            $query->where('title', 'like', "%{$search}%");
+            $query->whereLike('title', "%{$search}%");
         }
 
         $movies = $query->orderBy('title')->paginate(15);
@@ -237,7 +237,7 @@ class AdminController extends Controller
         $query = Cast::withCount('movies');
 
         if ($search = $request->get('search')) {
-            $query->where('name', 'like', "%{$search}%");
+            $query->whereLike('name', "%{$search}%");
         }
 
         $casts = $query->orderBy('name')->paginate(20);

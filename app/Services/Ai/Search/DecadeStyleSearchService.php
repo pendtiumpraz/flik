@@ -210,7 +210,7 @@ class DecadeStyleSearchService
                     $q->orWhereHas('genres', function ($qg) use ($genres) {
                         $qg->where(function ($inner) use ($genres) {
                             foreach ($genres as $g) {
-                                $inner->orWhere('name', 'LIKE', "%{$g}%");
+                                $inner->orWhereLike('name', "%{$g}%");
                             }
                         });
                     });

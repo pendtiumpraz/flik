@@ -14,8 +14,8 @@ class SearchFlik extends Component
         $results = collect();
 
         if (strlen($this->search) >= 3) {
-            $results = Movie::where('title', 'like', '%' . $this->search . '%')
-                ->orWhere('original_title', 'like', '%' . $this->search . '%')
+            $results = Movie::whereLike('title', '%' . $this->search . '%')
+                ->orWhereLike('original_title', '%' . $this->search . '%')
                 ->limit(7)
                 ->get()
                 ->map(function ($movie) {

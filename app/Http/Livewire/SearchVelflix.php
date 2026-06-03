@@ -21,8 +21,8 @@ class SearchVelflix extends Component
 
         // @phpstan-ignore-next-line
         if (strlen($this->searchVelflix >= 3)) {
-            $searchVelflixResults = Movie::where('title', 'like', '%' . $this->searchVelflix . '%')
-                ->orWhere('original_title', 'like', '%' . $this->searchVelflix . '%')
+            $searchVelflixResults = Movie::whereLike('title', '%' . $this->searchVelflix . '%')
+                ->orWhereLike('original_title', '%' . $this->searchVelflix . '%')
                 ->limit(7)
                 ->get()
                 ->map(function ($movie) {

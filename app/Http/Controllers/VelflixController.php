@@ -71,8 +71,8 @@ class VelflixController extends Controller
         // Search query
         if ($q = trim(request('q', ''))) {
             $trendingQuery->where(function ($qr) use ($q) {
-                $qr->where('title', 'LIKE', "%{$q}%")
-                   ->orWhere('original_title', 'LIKE', "%{$q}%");
+                $qr->whereLike('title', "%{$q}%")
+                   ->orWhereLike('original_title', "%{$q}%");
             });
         }
 

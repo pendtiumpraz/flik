@@ -58,7 +58,7 @@ class UserListController extends Controller
             ->with(['user:id,name,username,avatar_path', 'cover:id,title,slug,poster_path,backdrop_path']);
 
         if ($q !== '') {
-            $query->where('title', 'like', '%'.$q.'%');
+            $query->whereLike('title', '%'.$q.'%');
         }
 
         if ($username !== '') {

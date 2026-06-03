@@ -117,8 +117,8 @@ class SmartSearchController extends Controller
 
         $movies = Movie::query()
             ->where(function ($q) use ($like) {
-                $q->where('title', 'LIKE', $like)
-                  ->orWhere('original_title', 'LIKE', $like);
+                $q->whereLike('title', $like)
+                  ->orWhereLike('original_title', $like);
             })
             ->orderByDesc('popularity')
             ->limit(10)
@@ -136,7 +136,7 @@ class SmartSearchController extends Controller
             ->values();
 
         $people = Cast::query()
-            ->where('name', 'LIKE', $like)
+            ->whereLike('name', $like)
             ->orderBy('name')
             ->limit(10)
             ->get(['id', 'name', 'profile_path'])
