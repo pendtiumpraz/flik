@@ -1,4 +1,9 @@
 * text=auto
+
+# Shell scripts MUST keep LF endings — CRLF breaks them on Linux/macOS
+# ("bad interpreter: /usr/bin/env bash^M"), and the deploy target is Linux.
+*.sh text eol=lf
+
 *.css linguist-vendored
 *.scss linguist-vendored
 *.js linguist-vendored
