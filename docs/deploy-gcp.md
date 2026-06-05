@@ -236,8 +236,8 @@ php artisan event:cache
 ## 11. Auto-deploy (GitHub Actions)
 
 Workflow `.github/workflows/deploy.yml` melakukan auto-deploy tiap push ke `main`: SSH ke VM →
-`git pull` → `scripts/deploy.sh` (composer install, `npm run build`, `migrate --force`, `optimize`,
-`queue:restart`, reload php-fpm).
+`git pull` → `scripts/deploy.sh` (composer install, `npm run build`, **DB backup (pre-migrate)**,
+`migrate --force`, `optimize`, `queue:restart`, reload php-fpm).
 
 **Setup sekali (di GitHub repo → Settings → Secrets and variables → Actions):**
 | Secret | Isi |
@@ -268,6 +268,20 @@ workflow otomatis `git reset` balik ke commit sebelumnya + rebuild + restart, la
 > (forward-compatible) → kode lama tetap jalan dengan skema baru. Auto-undo migrasi
 > (`migrate:rollback`) sengaja TIDAK dilakukan karena `down()` bisa lossy. Kalau sebuah rilis
 > butuh perubahan skema yang breaking, tangani migrasinya manual.
+
+**Backup DB sebelum migrate:** `deploy.sh` menjalankan `scripts/db-backup.sh` tepat sebelum
+`migrate` — snapshot driver-aware (`pg_dump -Fc` / `mysqldump|gzip`) ke `/var/backups/flik`
+(rotasi: 10 terbaru). Kalau backup **gagal**, deploy dibatalkan (tak jadi migrate) → rollback
+otomatis. Restore cepat:
+
+```bash
+# Postgres
+pg_restore -h 127.0.0.1 -p 5432 -U <user> -d <db> --clean /var/backups/flik/<db>-<ts>.dump
+# MySQL
+gunzip -c /var/backups/flik/<db>-<ts>.sql.gz | mysql -h 127.0.0.1 -u <user> -p <db>
+```
+> Jaring pengaman cepat untuk meng-undo migrasi breaking. Untuk DR, Cloud SQL juga punya backup
+> harian + PITR (diaktifkan saat provisioning).
 
 ## 12. Staging environment (branch `staging`)
 

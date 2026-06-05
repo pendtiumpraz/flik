@@ -31,7 +31,8 @@ apt-get update
 apt-get install -y \
   php8.2 php8.2-fpm php8.2-cli php8.2-mbstring php8.2-xml php8.2-curl \
   php8.2-zip php8.2-gd php8.2-bcmath php8.2-pgsql php8.2-mysql php8.2-redis \
-  nginx git unzip ffmpeg redis-server curl ca-certificates
+  nginx git unzip ffmpeg redis-server curl ca-certificates \
+  postgresql-client default-mysql-client     # untuk db-backup.sh (pre-migrate)
 
 # Composer
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -54,6 +55,9 @@ printf 'FLIK_SQL_CONNECTION=%s\n' "$CONN" > /etc/flik/proxy.env
 
 mkdir -p "$APP_DIR"
 chown -R www-data:www-data "$APP_DIR"
+
+# Folder snapshot DB pre-migrate (lihat scripts/db-backup.sh).
+mkdir -p /var/backups/flik
 
 # ── 3. systemd: Cloud SQL Auth Proxy ──────────────────────────
 cat > /etc/systemd/system/cloud-sql-proxy.service <<'UNIT'

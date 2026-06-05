@@ -22,6 +22,9 @@ run_www composer install --no-dev --optimize-autoloader --no-interaction
 echo "▶️  build assets"
 run_www bash -c 'npm ci && npm run build'
 
+echo "▶️  DB backup (pre-migrate)"
+bash "$APP_DIR/scripts/db-backup.sh"   # gagal di sini → deploy.sh gagal (set -e) → CI rollback
+
 echo "▶️  migrate"
 run_www php artisan migrate --force
 
