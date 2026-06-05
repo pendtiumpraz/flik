@@ -32,23 +32,20 @@ return new class extends Migration
             return;
         }
 
-        // 1. Drop duplicate rows. Keep the lowest-id occurrence of each
-        // (user_id, movie_id) pair so the unique index can be added
-        // without violating it.
-        //
-        // MySQL/MariaDB syntax (LEFT JOIN form) is portable across
-        // 5.7+/8.x. Wrap in try/catch so SQLite / Postgres test
-        // environments fall back to a portable variant.
-        try {
+        $driver = DB::connection()->getDriverName();
+
+        // 1. Drop duplicate rows (keep lowest id per user+movie). Driver-aware:
+        // the MySQL multi-table DELETE is invalid on Postgres and — because PG
+        // aborts the whole transaction on a failed statement — must NOT be
+        // attempted there. Postgres/SQLite use the portable grouped delete.
+        if ($driver === 'mysql' || $driver === 'mariadb') {
             DB::statement(
                 'DELETE w1 FROM watchlists w1 '
                 .'INNER JOIN watchlists w2 ON w1.user_id = w2.user_id '
                 .'AND w1.movie_id = w2.movie_id '
                 .'WHERE w1.id > w2.id'
             );
-        } catch (\Throwable) {
-            // Portable fallback for SQLite / Postgres. Slower but works
-            // anywhere — only ever runs in test envs.
+        } else {
             $dups = DB::table('watchlists')
                 ->select('user_id', 'movie_id', DB::raw('MIN(id) as keep_id'))
                 ->groupBy('user_id', 'movie_id')
@@ -63,17 +60,29 @@ return new class extends Migration
             }
         }
 
-        // 2. Add the unique index if it does not exist yet. We can't
-        // rely on `Schema::hasIndex` (Laravel doesn't expose one across
-        // every driver) so we attempt the add and swallow the
-        // duplicate-key error.
-        try {
-            Schema::table('watchlists', function (Blueprint $table) {
-                $table->unique(['user_id', 'movie_id'], 'watchlists_user_id_movie_id_unique');
-            });
-        } catch (\Throwable $e) {
-            // Index probably already exists from the original create-table
-            // migration. Safe to ignore.
+        // 2. Add the unique index only if absent — check first (portable) rather
+        // than catch a duplicate error, which would abort the PG transaction.
+        // On a fresh DB the index already exists (create-table) → clean no-op.
+        $indexName = 'watchlists_user_id_movie_id_unique';
+        $exists = match ($driver) {
+            'pgsql' => DB::selectOne(
+                'SELECT 1 FROM pg_indexes WHERE tablename = ? AND indexname = ? LIMIT 1',
+                ['watchlists', $indexName]
+            ) !== null,
+            'mysql', 'mariadb' => DB::selectOne(
+                'SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? LIMIT 1',
+                ['watchlists', $indexName]
+            ) !== null,
+            default => false,
+        };
+        if (! $exists) {
+            try {
+                Schema::table('watchlists', function (Blueprint $table) use ($indexName) {
+                    $table->unique(['user_id', 'movie_id'], $indexName);
+                });
+            } catch (\Throwable) {
+                // race / already exists — fine
+            }
         }
     }
 
