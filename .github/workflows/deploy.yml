@@ -65,6 +65,36 @@ jobs:
               exit 1   # tetap tandai job GAGAL biar kelihatan di Actions
             fi
 
+      - name: Notify Discord — sukses
+        if: success()
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          MSG: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$WEBHOOK" ] || { echo "DISCORD_WEBHOOK kosong — skip notif"; exit 0; }
+          SHORT="${SHA:0:7}"; MSG="${MSG:-manual/dispatch}"; MSG="${MSG:0:900}"
+          jq -n --arg t "✅ Deploy sukses" --arg u "$RUN_URL" --arg repo "$REPO" --arg ref "$REF" --arg sha "$SHORT" --arg actor "$ACTOR" --arg msg "$MSG" '{embeds:[{title:$t,url:$u,color:3066993,fields:[{name:"Repo",value:$repo,inline:true},{name:"Branch",value:$ref,inline:true},{name:"Commit",value:$sha,inline:true},{name:"Oleh",value:$actor,inline:true},{name:"Pesan",value:$msg}]}]}' | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK" >/dev/null || echo "notif gagal"
+
+      - name: Notify Discord — gagal
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          MSG: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$WEBHOOK" ] || { echo "DISCORD_WEBHOOK kosong — skip notif"; exit 0; }
+          SHORT="${SHA:0:7}"; MSG="${MSG:-manual/dispatch}"; MSG="${MSG:0:900}"
+          jq -n --arg t "❌ Deploy GAGAL (rollback otomatis)" --arg u "$RUN_URL" --arg repo "$REPO" --arg ref "$REF" --arg sha "$SHORT" --arg actor "$ACTOR" --arg msg "$MSG" '{embeds:[{title:$t,url:$u,color:15158332,description:"Build/migrate atau health-check gagal — site di-rollback ke commit sebelumnya.",fields:[{name:"Repo",value:$repo,inline:true},{name:"Branch",value:$ref,inline:true},{name:"Commit",value:$sha,inline:true},{name:"Oleh",value:$actor,inline:true},{name:"Pesan",value:$msg}]}]}' | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK" >/dev/null || echo "notif gagal"
+
 # ── Alternatif GCP-native (tanpa menyimpan private key di GitHub) ───────────────
 # Ganti step di atas dengan:
 #   - uses: google-github-actions/auth@v2

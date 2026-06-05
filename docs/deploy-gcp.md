@@ -245,6 +245,7 @@ Workflow `.github/workflows/deploy.yml` melakukan auto-deploy tiap push ke `main
 | `VM_HOST` | IP eksternal VM (output `gcp-provision.sh`) |
 | `VM_USER` | user SSH di VM (mis. `deploy`) |
 | `VM_SSH_KEY` | **private** key SSH (PEM) — public-nya dipasang di `~/.ssh/authorized_keys` VM |
+| `DISCORD_WEBHOOK` | *(opsional)* webhook channel Discord → notifikasi deploy **sukses/gagal**. Kosong = nonaktif. |
 
 **Di VM (sekali):**
 ```bash
