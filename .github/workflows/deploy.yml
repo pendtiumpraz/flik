@@ -31,58 +31,38 @@ jobs:
     # Secret (VM_HOST/VM_USER/VM_SSH_KEY/DISCORD_WEBHOOK) di-scope PER-ENVIRONMENT.
     environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
     steps:
-      - name: Prepare SSH key
+      - name: Validate SSH key
         env:
           KEY: ${{ secrets.VM_SSH_KEY }}
         run: |
-          # VM_SSH_KEY boleh raw (ada 'BEGIN') ATAU base64 (anti newline-mangle).
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          # VM_SSH_KEY boleh raw PEM (ada 'BEGIN') ATAU base64 satu-baris (anti mangle).
           if printf '%s' "$KEY" | grep -q 'BEGIN'; then
-            printf '%s\n' "$KEY" > /tmp/deploy_key
+            printf '%s\n' "$KEY" > ~/.ssh/id_deploy
           else
-            printf '%s' "$KEY" | base64 -d > /tmp/deploy_key
+            printf '%s' "$KEY" | base64 -d > ~/.ssh/id_deploy 2>/dev/null
           fi
-          chmod 600 /tmp/deploy_key
-          ssh-keygen -y -f /tmp/deploy_key >/dev/null && echo "✅ SSH key valid"
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keygen -y -f ~/.ssh/id_deploy >/dev/null 2>&1 \
+            && echo "✅ SSH key valid" \
+            || { echo "❌ VM_SSH_KEY TIDAK VALID. Isi secret dgn output: base64 -w0 ~/deploy_key  (satu baris)"; exit 1; }
 
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
         env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
           TARGET_REF: ${{ github.ref_name }}
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key_path: /tmp/deploy_key
-          envs: TARGET_REF             # teruskan nama branch ke remote
-          script_stop: false           # error ditangani manual (rollback) di bawah
-          command_timeout: 30m         # build + migrate bisa beberapa menit
-          script: |
-            cd /var/www/flik
-            # Commit yang SEDANG ter-deploy (target rollback kalau gagal)
-            PREV=$(sudo -u www-data env HOME=/var/www/flik git rev-parse HEAD)
-            echo "Branch: $TARGET_REF | deployed commit: $PREV"
-
-            # deploy <ref>: checkout ref lalu build/migrate/cache/restart (deploy.sh fresh dari ref itu)
-            deploy() {
-              sudo -u www-data env HOME=/var/www/flik git reset --hard "$1" \
-                && sudo bash /var/www/flik/scripts/deploy.sh
-            }
-
-            # Deploy origin/main → tunggu php-fpm → health-check /healthz
-            if sudo -u www-data env HOME=/var/www/flik git fetch --all --prune \
-               && deploy "origin/$TARGET_REF" \
-               && sleep 3 \
-               && curl -fsS -o /dev/null --max-time 15 http://127.0.0.1/healthz; then
-              echo "✅ Deploy + health check OK."
-            else
-              echo "❌ Deploy/health GAGAL — rollback ke $PREV"
-              if deploy "$PREV" && sleep 3 \
-                 && curl -fsS -o /dev/null --max-time 15 http://127.0.0.1/healthz; then
-                echo "↩️  Rollback berhasil — site kembali ke commit sebelumnya ($PREV)."
-              else
-                echo "⚠️  Rollback juga gagal — perlu cek VM manual."
-              fi
-              exit 1   # tetap tandai job GAGAL biar kelihatan di Actions
-            fi
+        run: |
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 \
+            "$VM_USER@$VM_HOST" "
+              set -e
+              cd /var/www/flik
+              PREV=\$(sudo -u www-data env HOME=/var/www/flik git rev-parse HEAD)
+              echo \"branch=$TARGET_REF prev=\$PREV\"
+              sudo -u www-data env HOME=/var/www/flik git fetch --all --prune
+              sudo -u www-data env HOME=/var/www/flik git reset --hard origin/$TARGET_REF
+              sudo PREV=\$PREV TARGET_REF='$TARGET_REF' bash /var/www/flik/scripts/ci-deploy.sh
+            "
 
       - name: Notify Discord — sukses
         if: success()
