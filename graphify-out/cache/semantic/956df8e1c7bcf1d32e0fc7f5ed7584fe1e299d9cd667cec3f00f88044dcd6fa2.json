@@ -1,0 +1,1 @@
+{"nodes": [{"id": "01_auth_twofactorservice", "label": "TwoFactorService", "file_type": "code", "source_file": "app/Services/Security/TwoFactorService.php", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}], "edges": [], "hyperedges": []}
