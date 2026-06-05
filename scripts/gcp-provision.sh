@@ -34,6 +34,7 @@ SQL_MEM="${SQL_MEM:-8GiB}"                      # custom: kelipatan 256MB
 SQL_DB="${SQL_DB:-velflix}"
 SQL_USER="${SQL_USER:-velflix}"
 SQL_HA="${SQL_HA:-ZONAL}"                       # REGIONAL untuk HA produksi
+SQL_EDITION="${FLIK_SQL_EDITION:-ENTERPRISE}"   # ENTERPRISE dukung custom cpu/memory (Plus tidak)
 PG_VERSION="${PG_VERSION:-POSTGRES_16}"
 SQL_PASS="${SQL_PASS:-}"                        # digenerate kalau kosong
 
@@ -93,6 +94,7 @@ run gcloud services enable compute.googleapis.com sqladmin.googleapis.com --proj
 run gcloud sql instances create "$SQL_NAME" \
   --project="$PROJECT" \
   --database-version="$PG_VERSION" \
+  --edition="$SQL_EDITION" \
   --region="$REGION" \
   --cpu="$SQL_CPU" --memory="$SQL_MEM" \
   --storage-auto-increase \
