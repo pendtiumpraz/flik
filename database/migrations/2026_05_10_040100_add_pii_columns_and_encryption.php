@@ -54,23 +54,21 @@ return new class extends Migration
             }
         });
 
-        // Index for searchable hash lookup. Wrapped in try/catch in case the
-        // migration is re-run on a DB where the column already had this index.
+        // Index for searchable hash lookup. The MySQL prefix-index syntax
+        // `column(64)` is invalid on Postgres/SQLite and would ABORT the whole
+        // migration transaction on Postgres — so only use it on MySQL/MariaDB.
+        $driver = \Illuminate\Support\Facades\DB::connection()->getDriverName();
         try {
-            Schema::table('users', function (Blueprint $table) {
-                // Use a hash-prefix index since some MySQL versions choke on
-                // full TEXT indexes. 64 chars covers the full sha256 digest.
-                $table->index([\Illuminate\Support\Facades\DB::raw('national_id_hash(64)')], 'users_national_id_hash_index');
+            Schema::table('users', function (Blueprint $table) use ($driver) {
+                if ($driver === 'mysql' || $driver === 'mariadb') {
+                    // 64 chars covers the full sha256 digest (TEXT prefix index).
+                    $table->index([\Illuminate\Support\Facades\DB::raw('national_id_hash(64)')], 'users_national_id_hash_index');
+                } else {
+                    $table->index('national_id_hash', 'users_national_id_hash_index');
+                }
             });
         } catch (\Throwable) {
-            // Driver-specific (SQLite ignores prefix) — fall back to a plain index.
-            try {
-                Schema::table('users', function (Blueprint $table) {
-                    $table->index('national_id_hash', 'users_national_id_hash_index');
-                });
-            } catch (\Throwable) {
-                // Already exists — fine.
-            }
+            // Already exists — fine.
         }
 
         if (Schema::hasTable('subscriptions') && ! Schema::hasColumn('subscriptions', 'billing_address')) {
