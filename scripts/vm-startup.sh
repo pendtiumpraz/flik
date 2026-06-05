@@ -41,6 +41,12 @@ curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt-get install -y nodejs
 
+# PostgreSQL 16 client — pg_dump WAJIB >= versi server Cloud SQL (16). Default Debian 12
+# cuma client 15 → "server version mismatch" saat db-backup.sh. PGDG repo punya client 16.
+apt-get install -y postgresql-common || true
+/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y || true
+apt-get install -y postgresql-client-16 || true
+
 # Google Cloud CLI (gsutil) — upload backup DB offsite ke GCS (pakai service account VM, tanpa key)
 curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
 echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" > /etc/apt/sources.list.d/google-cloud-sdk.list
