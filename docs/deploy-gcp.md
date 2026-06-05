@@ -282,6 +282,12 @@ Dump juga di-**upload offsite ke GCS** (`gs://<bucket>/db-backups/<host>/`) — 
 FLIK_GCS_BUCKET=<bucket-gcs-kamu> ... bash scripts/gcp-provision.sh
 ```
 
+Backup offsite **dirotasi otomatis** lewat lifecycle GCS: `gcp-provision.sh` memanggil
+`scripts/gcs-backup-lifecycle.sh` → objek `db-backups/` dihapus setelah **30 hari** (atur via
+`FLIK_BACKUP_RETENTION_DAYS`). Rule hanya menyasar prefix `db-backups/` — media lain di bucket
+tetap aman, dan re-run = update (bukan duplikat). Manual kapan saja:
+`bash scripts/gcs-backup-lifecycle.sh <bucket> <hari>`.
+
 Restore cepat:
 
 ```bash

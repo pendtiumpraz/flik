@@ -144,6 +144,12 @@ if [ -n "$GCS_BUCKET" ]; then
   fi
 fi
 
+# Lifecycle: auto-hapus backup lama di bucket (best-effort; butuh gsutil + jq).
+if [ -n "$GCS_BUCKET" ] && [ "$DRY" = 0 ]; then
+  bash "$SCRIPT_DIR/gcs-backup-lifecycle.sh" "$GCS_BUCKET" "${FLIK_BACKUP_RETENTION_DAYS:-30}" \
+    || echo "⚠️  Lifecycle GCS belum diset (jq/gsutil tak ada di mesin ini?). Jalankan manual: bash scripts/gcs-backup-lifecycle.sh $GCS_BUCKET 30"
+fi
+
 # ─────────────────────── Ringkasan ────────────────────────────
 echo
 if [ "$DRY" = 1 ]; then echo "✅ Selesai (DRY-RUN — tidak ada yang dibuat)."; else echo "✅ Selesai."; fi
