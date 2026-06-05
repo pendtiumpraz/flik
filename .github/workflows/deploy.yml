@@ -16,31 +16,37 @@ name: Deploy to VM
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   workflow_dispatch: {}
 
-# Jangan biarkan dua deploy jalan bersamaan (hindari migrate/build bentrok).
+# Per-branch: prod (main) & staging jalan independen, tak dobel di branch sama.
 concurrency:
-  group: deploy-vm
+  group: deploy-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # main → environment 'production'; selain itu (staging) → 'staging'.
+    # Secret (VM_HOST/VM_USER/VM_SSH_KEY/DISCORD_WEBHOOK) di-scope PER-ENVIRONMENT.
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          TARGET_REF: ${{ github.ref_name }}
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
+          envs: TARGET_REF             # teruskan nama branch ke remote
           script_stop: false           # error ditangani manual (rollback) di bawah
           command_timeout: 30m         # build + migrate bisa beberapa menit
           script: |
             cd /var/www/flik
             # Commit yang SEDANG ter-deploy (target rollback kalau gagal)
             PREV=$(sudo -u www-data env HOME=/var/www/flik git rev-parse HEAD)
-            echo "Deployed commit saat ini: $PREV"
+            echo "Branch: $TARGET_REF | deployed commit: $PREV"
 
             # deploy <ref>: checkout ref lalu build/migrate/cache/restart (deploy.sh fresh dari ref itu)
             deploy() {
@@ -50,7 +56,7 @@ jobs:
 
             # Deploy origin/main → tunggu php-fpm → health-check /healthz
             if sudo -u www-data env HOME=/var/www/flik git fetch --all --prune \
-               && deploy origin/main \
+               && deploy "origin/$TARGET_REF" \
                && sleep 3 \
                && curl -fsS -o /dev/null --max-time 15 http://127.0.0.1/healthz; then
               echo "✅ Deploy + health check OK."
@@ -75,10 +81,11 @@ jobs:
           ACTOR: ${{ github.actor }}
           MSG: ${{ github.event.head_commit.message }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
         run: |
           [ -n "$WEBHOOK" ] || { echo "DISCORD_WEBHOOK kosong — skip notif"; exit 0; }
           SHORT="${SHA:0:7}"; MSG="${MSG:-manual/dispatch}"; MSG="${MSG:0:900}"
-          jq -n --arg t "✅ Deploy sukses" --arg u "$RUN_URL" --arg repo "$REPO" --arg ref "$REF" --arg sha "$SHORT" --arg actor "$ACTOR" --arg msg "$MSG" '{embeds:[{title:$t,url:$u,color:3066993,fields:[{name:"Repo",value:$repo,inline:true},{name:"Branch",value:$ref,inline:true},{name:"Commit",value:$sha,inline:true},{name:"Oleh",value:$actor,inline:true},{name:"Pesan",value:$msg}]}]}' | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK" >/dev/null || echo "notif gagal"
+          jq -n --arg t "✅ Deploy sukses [$ENVIRONMENT]" --arg u "$RUN_URL" --arg repo "$REPO" --arg ref "$REF" --arg sha "$SHORT" --arg actor "$ACTOR" --arg msg "$MSG" '{embeds:[{title:$t,url:$u,color:3066993,fields:[{name:"Repo",value:$repo,inline:true},{name:"Branch",value:$ref,inline:true},{name:"Commit",value:$sha,inline:true},{name:"Oleh",value:$actor,inline:true},{name:"Pesan",value:$msg}]}]}' | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK" >/dev/null || echo "notif gagal"
 
       - name: Notify Discord — gagal
         if: failure()
@@ -90,10 +97,11 @@ jobs:
           ACTOR: ${{ github.actor }}
           MSG: ${{ github.event.head_commit.message }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
         run: |
           [ -n "$WEBHOOK" ] || { echo "DISCORD_WEBHOOK kosong — skip notif"; exit 0; }
           SHORT="${SHA:0:7}"; MSG="${MSG:-manual/dispatch}"; MSG="${MSG:0:900}"
-          jq -n --arg t "❌ Deploy GAGAL (rollback otomatis)" --arg u "$RUN_URL" --arg repo "$REPO" --arg ref "$REF" --arg sha "$SHORT" --arg actor "$ACTOR" --arg msg "$MSG" '{embeds:[{title:$t,url:$u,color:15158332,description:"Build/migrate atau health-check gagal — site di-rollback ke commit sebelumnya.",fields:[{name:"Repo",value:$repo,inline:true},{name:"Branch",value:$ref,inline:true},{name:"Commit",value:$sha,inline:true},{name:"Oleh",value:$actor,inline:true},{name:"Pesan",value:$msg}]}]}' | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK" >/dev/null || echo "notif gagal"
+          jq -n --arg t "❌ Deploy GAGAL [$ENVIRONMENT] (rollback)" --arg u "$RUN_URL" --arg repo "$REPO" --arg ref "$REF" --arg sha "$SHORT" --arg actor "$ACTOR" --arg msg "$MSG" '{embeds:[{title:$t,url:$u,color:15158332,description:"Build/migrate atau health-check gagal — site di-rollback ke commit sebelumnya.",fields:[{name:"Repo",value:$repo,inline:true},{name:"Branch",value:$ref,inline:true},{name:"Commit",value:$sha,inline:true},{name:"Oleh",value:$actor,inline:true},{name:"Pesan",value:$msg}]}]}' | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK" >/dev/null || echo "notif gagal"
 
 # ── Alternatif GCP-native (tanpa menyimpan private key di GitHub) ───────────────
 # Ganti step di atas dengan:

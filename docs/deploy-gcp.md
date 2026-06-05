@@ -269,6 +269,43 @@ workflow otomatis `git reset` balik ke commit sebelumnya + rebuild + restart, la
 > (`migrate:rollback`) sengaja TIDAK dilakukan karena `down()` bisa lossy. Kalau sebuah rilis
 > butuh perubahan skema yang breaking, tangani migrasinya manual.
 
+## 12. Staging environment (branch `staging`)
+
+Workflow yang sama men-deploy ke environment berbeda **berdasarkan branch**:
+- push ke **`main`** → environment **production** (VM/DB prod)
+- push ke **`staging`** → environment **staging** (VM/DB terpisah)
+
+**1. Provision infra staging** (nama/host beda — jalankan `gcp-provision.sh` dengan param staging):
+```bash
+GCP_PROJECT=projek-kamu \
+VM_NAME=flik-staging SQL_NAME=flik-pg-staging \
+SQL_CPU=1 SQL_MEM=3840MB \
+FLIK_DOMAIN=staging.domain-kamu.com FLIK_LE_EMAIL=kamu@email.com \
+  bash scripts/gcp-provision.sh
+```
+
+**2. Di VM staging**, clone branch `staging`:
+```bash
+sudo git clone -b staging <repo-url> /var/www/flik
+# lalu .env staging (DB ke Cloud SQL staging), key:generate, migrate — sama seperti prod
+```
+
+**3. GitHub Environments** (Settings → Environments) — buat **`production`** dan **`staging`**,
+isi secret **per-environment** dengan nilai masing-masing:
+
+| Secret | production | staging |
+|---|---|---|
+| `VM_HOST` | IP VM prod | IP VM staging |
+| `VM_USER` | user prod | user staging |
+| `VM_SSH_KEY` | key prod | key staging |
+| `DISCORD_WEBHOOK` | channel #deploy-prod | channel #deploy-staging |
+
+> `secrets.*` otomatis resolve ke environment yang dipilih job — workflow tak perlu logika
+> tambahan. Branch `staging` di-checkout (`origin/staging`) di VM staging via `$TARGET_REF`.
+> Concurrency di-scope per-branch → deploy prod & staging tak saling blokir. Notif Discord
+> mencantumkan `[production]` / `[staging]`. Bisa tambah **protection rules** (required
+> reviewers) pada environment `production` untuk gate rilis ke prod.
+
 ---
 
 ## Catatan penting (Neon vs Cloud SQL)
