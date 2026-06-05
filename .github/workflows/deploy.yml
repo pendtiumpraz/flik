@@ -34,16 +34,36 @@ jobs:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
-          script_stop: true            # hentikan & gagalkan kalau ada perintah error
+          script_stop: false           # error ditangani manual (rollback) di bawah
           command_timeout: 30m         # build + migrate bisa beberapa menit
           script: |
-            set -e
             cd /var/www/flik
-            # 1) Pull kode terbaru sebagai pemilik repo (www-data) — hindari "dubious ownership"
-            sudo -u www-data env HOME=/var/www/flik git fetch --all --prune
-            sudo -u www-data env HOME=/var/www/flik git reset --hard origin/main
-            # 2) Jalankan deploy (build + migrate + cache + restart) — script sudah fresh dari pull
-            sudo bash /var/www/flik/scripts/deploy.sh
+            # Commit yang SEDANG ter-deploy (target rollback kalau gagal)
+            PREV=$(sudo -u www-data env HOME=/var/www/flik git rev-parse HEAD)
+            echo "Deployed commit saat ini: $PREV"
+
+            # deploy <ref>: checkout ref lalu build/migrate/cache/restart (deploy.sh fresh dari ref itu)
+            deploy() {
+              sudo -u www-data env HOME=/var/www/flik git reset --hard "$1" \
+                && sudo bash /var/www/flik/scripts/deploy.sh
+            }
+
+            # Deploy origin/main → tunggu php-fpm → health-check /healthz
+            if sudo -u www-data env HOME=/var/www/flik git fetch --all --prune \
+               && deploy origin/main \
+               && sleep 3 \
+               && curl -fsS -o /dev/null --max-time 15 http://127.0.0.1/healthz; then
+              echo "✅ Deploy + health check OK."
+            else
+              echo "❌ Deploy/health GAGAL — rollback ke $PREV"
+              if deploy "$PREV" && sleep 3 \
+                 && curl -fsS -o /dev/null --max-time 15 http://127.0.0.1/healthz; then
+                echo "↩️  Rollback berhasil — site kembali ke commit sebelumnya ($PREV)."
+              else
+                echo "⚠️  Rollback juga gagal — perlu cek VM manual."
+              fi
+              exit 1   # tetap tandai job GAGAL biar kelihatan di Actions
+            fi
 
 # ── Alternatif GCP-native (tanpa menyimpan private key di GitHub) ───────────────
 # Ganti step di atas dengan:

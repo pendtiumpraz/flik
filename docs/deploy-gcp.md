@@ -259,6 +259,15 @@ Setelah itu: tiap `git push origin main` → otomatis ter-deploy. Bisa juga jala
 > Untuk yang anti-static-key, workflow menyertakan alternatif **Workload Identity Federation +
 > `gcloud compute ssh --tunnel-through-iap`** (lihat komentar di file workflow).
 
+**Rollback otomatis:** sebelum deploy, workflow menyimpan commit yang sedang berjalan. Setelah
+build/migrate ia health-check `GET /healthz`. Jika **build/migrate gagal ATAU health-check merah**,
+workflow otomatis `git reset` balik ke commit sebelumnya + rebuild + restart, lalu menandai job GAGAL.
+
+> ⚠️ Rollback ini **kode saja, BUKAN database**. Migrasi Laravel bersifat additif
+> (forward-compatible) → kode lama tetap jalan dengan skema baru. Auto-undo migrasi
+> (`migrate:rollback`) sengaja TIDAK dilakukan karena `down()` bisa lossy. Kalau sebuah rilis
+> butuh perubahan skema yang breaking, tangani migrasinya manual.
+
 ---
 
 ## Catatan penting (Neon vs Cloud SQL)
