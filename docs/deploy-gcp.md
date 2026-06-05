@@ -228,6 +228,32 @@ php artisan event:cache
 ```
 > Ulangi tiap deploy. `DynamicInfrastructureProvider` tetap override config dari DB walau di-cache.
 
+## 11. Auto-deploy (GitHub Actions)
+
+Workflow `.github/workflows/deploy.yml` melakukan auto-deploy tiap push ke `main`: SSH ke VM →
+`git pull` → `scripts/deploy.sh` (composer install, `npm run build`, `migrate --force`, `optimize`,
+`queue:restart`, reload php-fpm).
+
+**Setup sekali (di GitHub repo → Settings → Secrets and variables → Actions):**
+| Secret | Isi |
+|---|---|
+| `VM_HOST` | IP eksternal VM (output `gcp-provision.sh`) |
+| `VM_USER` | user SSH di VM (mis. `deploy`) |
+| `VM_SSH_KEY` | **private** key SSH (PEM) — public-nya dipasang di `~/.ssh/authorized_keys` VM |
+
+**Di VM (sekali):**
+```bash
+# tambah public key ke authorized_keys user deploy, lalu beri passwordless sudo:
+echo '<VM_USER> ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/flik-deploy
+```
+
+Setelah itu: tiap `git push origin main` → otomatis ter-deploy. Bisa juga jalankan manual via tab
+**Actions → Deploy to VM → Run workflow** (`workflow_dispatch`).
+
+> Worker tidak perlu di-restart manual — `deploy.sh` memanggil `queue:restart`.
+> Untuk yang anti-static-key, workflow menyertakan alternatif **Workload Identity Federation +
+> `gcloud compute ssh --tunnel-through-iap`** (lihat komentar di file workflow).
+
 ---
 
 ## Catatan penting (Neon vs Cloud SQL)

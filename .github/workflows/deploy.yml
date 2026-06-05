@@ -1,0 +1,60 @@
+name: Deploy to VM
+
+# Auto-deploy ke Compute Engine VM tiap push ke main.
+#
+# Prasyarat (set di repo Settings → Secrets and variables → Actions):
+#   VM_HOST    : IP eksternal VM (atau domain)
+#   VM_USER    : user SSH di VM (mis. 'deploy' atau user GCE-mu)
+#   VM_SSH_KEY : PRIVATE key SSH (PEM) yang public-nya ada di ~/.ssh/authorized_keys VM
+#
+# User SSH butuh passwordless sudo (untuk `sudo -u www-data ...` + `sudo bash deploy.sh`
+# + `systemctl reload`). Contoh di VM:
+#   echo '<VM_USER> ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/flik-deploy
+#
+# Alternatif lebih aman (tanpa static key): google-github-actions/auth + Workload
+# Identity Federation + `gcloud compute ssh`. Lihat komentar di bawah job.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Jangan biarkan dua deploy jalan bersamaan (hindari migrate/build bentrok).
+concurrency:
+  group: deploy-vm
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script_stop: true            # hentikan & gagalkan kalau ada perintah error
+          command_timeout: 30m         # build + migrate bisa beberapa menit
+          script: |
+            set -e
+            cd /var/www/flik
+            # 1) Pull kode terbaru sebagai pemilik repo (www-data) — hindari "dubious ownership"
+            sudo -u www-data env HOME=/var/www/flik git fetch --all --prune
+            sudo -u www-data env HOME=/var/www/flik git reset --hard origin/main
+            # 2) Jalankan deploy (build + migrate + cache + restart) — script sudah fresh dari pull
+            sudo bash /var/www/flik/scripts/deploy.sh
+
+# ── Alternatif GCP-native (tanpa menyimpan private key di GitHub) ───────────────
+# Ganti step di atas dengan:
+#   - uses: google-github-actions/auth@v2
+#     with:
+#       workload_identity_provider: projects/<num>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
+#       service_account: deployer@<project>.iam.gserviceaccount.com
+#   - uses: google-github-actions/setup-gcloud@v2
+#   - run: |
+#       gcloud compute ssh flik-app --zone asia-southeast2-a --tunnel-through-iap --command '
+#         cd /var/www/flik &&
+#         sudo -u www-data env HOME=/var/www/flik git fetch --all --prune &&
+#         sudo -u www-data env HOME=/var/www/flik git reset --hard origin/main &&
+#         sudo bash /var/www/flik/scripts/deploy.sh'
