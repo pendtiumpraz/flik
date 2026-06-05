@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+#
+# vm-startup.sh — GCE startup script (runs as root on first boot).
+# Dipasang oleh scripts/gcp-provision.sh via --metadata-from-file=startup-script.
+#
+# Tugas:
+#   1) install PHP 8.2 + ext, nginx, ffmpeg, redis, composer, node 20
+#   2) install Cloud SQL Auth Proxy + systemd service (auto-start, 127.0.0.1:5432)
+#   3) install 'flik-worker' systemd service (queue:work) — enabled, START manual
+#      setelah kode + .env siap
+#   4) cron Laravel scheduler (schedule:run tiap menit)
+#
+# Connection name Cloud SQL dibaca dari instance metadata 'flik-sql-connection'.
+# Semua log → /var/log/flik-startup.log. Idempoten (skip kalau sudah pernah jalan).
+#
+set -euo pipefail
+exec > /var/log/flik-startup.log 2>&1
+echo "=== FLiK VM startup $(date -u) ==="
+
+if [ -f /etc/flik/.provisioned ]; then
+  echo "Sudah pernah provision — skip."
+  exit 0
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+APP_DIR=/var/www/flik
+PROXY_VER=v2.11.0
+
+# ── 1. Dependencies ───────────────────────────────────────────
+apt-get update
+apt-get install -y \
+  php8.2 php8.2-fpm php8.2-cli php8.2-mbstring php8.2-xml php8.2-curl \
+  php8.2-zip php8.2-gd php8.2-bcmath php8.2-pgsql php8.2-mysql php8.2-redis \
+  nginx git unzip ffmpeg redis-server curl ca-certificates
+
+# Composer
+curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Node 20 (untuk `npm run build`)
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt-get install -y nodejs
+
+# ── 2. Cloud SQL Auth Proxy ───────────────────────────────────
+curl -o /usr/local/bin/cloud-sql-proxy \
+  "https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/${PROXY_VER}/cloud-sql-proxy.linux.amd64"
+chmod +x /usr/local/bin/cloud-sql-proxy
+
+# Ambil connection name dari metadata (diset oleh gcp-provision.sh)
+META="http://metadata.google.internal/computeMetadata/v1/instance/attributes"
+CONN="$(curl -s -H 'Metadata-Flavor: Google' "$META/flik-sql-connection" || true)"
+
+mkdir -p /etc/flik
+printf 'FLIK_SQL_CONNECTION=%s\n' "$CONN" > /etc/flik/proxy.env
+
+mkdir -p "$APP_DIR"
+chown -R www-data:www-data "$APP_DIR"
+
+# ── 3. systemd: Cloud SQL Auth Proxy ──────────────────────────
+cat > /etc/systemd/system/cloud-sql-proxy.service <<'UNIT'
+[Unit]
+Description=Cloud SQL Auth Proxy (FLiK)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/flik/proxy.env
+ExecStart=/usr/local/bin/cloud-sql-proxy --port 5432 ${FLIK_SQL_CONNECTION}
+Restart=always
+RestartSec=3
+User=www-data
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+# ── 3b. systemd: queue worker ─────────────────────────────────
+cat > /etc/systemd/system/flik-worker.service <<UNIT
+[Unit]
+Description=FLiK queue worker
+After=network-online.target cloud-sql-proxy.service
+Wants=cloud-sql-proxy.service
+
+[Service]
+WorkingDirectory=${APP_DIR}
+ExecStart=/usr/bin/php ${APP_DIR}/artisan queue:work --queue=transcoding,ai-realtime,ai-batch,notifications,audit,default --timeout=7200 --sleep=3 --tries=2
+Restart=always
+RestartSec=5
+User=www-data
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+
+# Proxy bisa langsung jalan (VM service account sudah punya roles/cloudsql.client).
+systemctl enable cloud-sql-proxy.service
+[ -n "$CONN" ] && systemctl start cloud-sql-proxy.service || echo "⚠️  flik-sql-connection metadata kosong — start proxy manual setelah set /etc/flik/proxy.env"
+
+# Worker di-ENABLE (auto-start saat boot berikutnya) tapi BELUM di-start:
+# butuh kode + .env dulu. Setelah deploy: `sudo systemctl start flik-worker`.
+systemctl enable flik-worker.service
+
+# ── 4. Scheduler (cron) ───────────────────────────────────────
+cat > /etc/cron.d/flik-scheduler <<CRON
+* * * * * www-data cd ${APP_DIR} && /usr/bin/php artisan schedule:run >> /dev/null 2>&1
+CRON
+chmod 0644 /etc/cron.d/flik-scheduler
+
+touch /etc/flik/.provisioned
+echo "=== ✅ FLiK VM siap. Deploy kode ke ${APP_DIR}, isi .env, lalu: systemctl start flik-worker ==="

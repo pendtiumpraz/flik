@@ -18,6 +18,8 @@
 #
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # ─────────────────────────── CONFIG ───────────────────────────
 PROJECT="${GCP_PROJECT:-$(gcloud config get-value project 2>/dev/null || true)}"
 REGION="${GCP_REGION:-asia-southeast2}"        # Jakarta
@@ -34,6 +36,9 @@ SQL_USER="${SQL_USER:-velflix}"
 SQL_HA="${SQL_HA:-ZONAL}"                       # REGIONAL untuk HA produksi
 PG_VERSION="${PG_VERSION:-POSTGRES_16}"
 SQL_PASS="${SQL_PASS:-}"                        # digenerate kalau kosong
+
+# Cloud SQL connection name = project:region:instance (deterministik).
+CONN="${PROJECT}:${REGION}:${SQL_NAME}"
 
 DRY=0; YES=0
 for a in "$@"; do
@@ -92,7 +97,9 @@ run gcloud compute instances create "$VM_NAME" \
   --machine-type="$VM_MACHINE" \
   --image-family=debian-12 --image-project=debian-cloud \
   --scopes=cloud-platform \
-  --tags=http-server,https-server
+  --tags=http-server,https-server \
+  --metadata=flik-sql-connection="$CONN" \
+  --metadata-from-file=startup-script="$SCRIPT_DIR/vm-startup.sh"
 
 # ──────────────── 4. Firewall HTTP/HTTPS ──────────────────────
 run gcloud compute firewall-rules create flik-allow-web \
@@ -105,10 +112,9 @@ run gcloud compute firewall-rules create flik-allow-web \
 # ───────────── 5. IAM: VM boleh konek Cloud SQL ───────────────
 if [ "$DRY" = 0 ]; then
   SA="$(gcloud compute instances describe "$VM_NAME" --zone="$ZONE" --project="$PROJECT" --format='value(serviceAccounts[0].email)')"
-  CONN="$(gcloud sql instances describe "$SQL_NAME" --project="$PROJECT" --format='value(connectionName)')"
   VM_IP="$(gcloud compute instances describe "$VM_NAME" --zone="$ZONE" --project="$PROJECT" --format='value(networkInterfaces[0].accessConfigs[0].natIP)')"
 else
-  SA="<vm-service-account>"; CONN="${PROJECT}:${REGION}:${SQL_NAME}"; VM_IP="<vm-external-ip>"
+  SA="<vm-service-account>"; VM_IP="<vm-external-ip>"
 fi
 
 run gcloud projects add-iam-policy-binding "$PROJECT" \
@@ -129,16 +135,23 @@ fi
 echo "──────────────────────────────────────────────"
 cat <<EOF
 
-Langkah berikutnya (di VM — \`gcloud compute ssh $VM_NAME --zone $ZONE\`):
+VM menjalankan startup-script otomatis saat boot pertama. Pantau:
+  gcloud compute ssh $VM_NAME --zone $ZONE --command 'sudo tail -f /var/log/flik-startup.log'
+Yang otomatis terpasang:
+  ✓ PHP 8.2 + nginx + ffmpeg + redis + composer + node 20
+  ✓ systemd 'cloud-sql-proxy'  (auto-start → 127.0.0.1:5432)
+  ✓ systemd 'flik-worker'      (enabled; di-start setelah kode + .env siap)
+  ✓ cron scheduler             (schedule:run tiap menit)
 
-  # Cloud SQL Auth Proxy (koneksi aman ke Postgres lewat 127.0.0.1:5432)
-  curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.11.0/cloud-sql-proxy.linux.amd64
-  chmod +x cloud-sql-proxy && sudo mv cloud-sql-proxy /usr/local/bin/
-  cloud-sql-proxy --port 5432 $CONN &      # idealnya jadi systemd service
-
-  # .env produksi:
-  #   DB_CONNECTION=pgsql  DB_HOST=127.0.0.1  DB_PORT=5432
-  #   DB_DATABASE=$SQL_DB  DB_USERNAME=$SQL_USER  DB_PASSWORD=<password di atas>  DB_SSLMODE=disable
-
-Lalu ikuti docs/deploy-gcp.md (§2 install deps, §3 deploy, §5 migrate, §6-9 nginx/worker/cron).
+Langkah deploy (SSH ke VM):
+  sudo git clone <repo-url> /var/www/flik && cd /var/www/flik
+  sudo -u www-data composer install --no-dev --optimize-autoloader
+  sudo -u www-data bash -c 'npm ci && npm run build'
+  # .env:  DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432
+  #        DB_DATABASE=$SQL_DB DB_USERNAME=$SQL_USER DB_PASSWORD=<password di atas> DB_SSLMODE=disable
+  sudo -u www-data php artisan key:generate
+  sudo -u www-data php artisan storage:link
+  sudo -u www-data php artisan migrate --force
+  sudo systemctl start flik-worker
+  # konfig nginx → docs/deploy-gcp.md §6-7
 EOF
