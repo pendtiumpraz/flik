@@ -20,6 +20,7 @@ rm -f composer.lock
 W composer install --no-dev --optimize-autoloader
 
 [ -f .env ] || { echo "❌ .env belum ada di $APP_DIR — buat dulu, lalu ulangi."; exit 1; }
+grep -q '^APP_KEY=' .env || echo 'APP_KEY=' >> .env       # key:generate butuh baris ini ada
 grep -q '^APP_KEY=base64' .env || W php artisan key:generate
 
 echo "▶️  storage:link + migrate + seed"

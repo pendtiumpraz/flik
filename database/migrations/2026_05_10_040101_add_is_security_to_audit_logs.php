@@ -35,18 +35,15 @@ return new class extends Migration
         // Compound index for the dominant access pattern:
         //   "list latest security events" + filtered date range.
         // We add it separately so MySQL can pick the most selective key.
-        Schema::table('audit_logs', function (Blueprint $table): void {
-            $indexName = 'audit_logs_is_security_created_at_index';
-
-            // Avoid duplicate-index errors on rerun.
-            $existing = collect(
-                \DB::select('SHOW INDEX FROM audit_logs')
-            )->pluck('Key_name')->all();
-
-            if (! in_array($indexName, $existing, true)) {
-                $table->index(['is_security', 'created_at'], $indexName);
-            }
-        });
+        // Compound index — idempotent + portable (MySQL `SHOW INDEX` is not
+        // valid on Postgres; a try/catch covers the duplicate-on-rerun case).
+        try {
+            Schema::table('audit_logs', function (Blueprint $table): void {
+                $table->index(['is_security', 'created_at'], 'audit_logs_is_security_created_at_index');
+            });
+        } catch (\Throwable) {
+            // index already exists — ignore
+        }
     }
 
     public function down(): void
