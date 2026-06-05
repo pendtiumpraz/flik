@@ -21,8 +21,11 @@ KEEP="${FLIK_BACKUP_KEEP:-10}"
 
 # Ambil nilai dari .env (strip quotes/spasi).
 envval() {
-  grep -E "^$1=" "$APP_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- \
-    | sed -e 's/^[[:space:]"'\'']*//' -e 's/[[:space:]"'\'']*$//'
+  # `|| true`: kalau var tak ada di .env, grep gagal — di bawah `set -o pipefail`
+  # itu bikin fungsi return non-zero → `set -e` di pemanggil abort. Kembalikan
+  # string kosong + exit 0 supaya var opsional (mis. AWS_BUCKET) aman.
+  { grep -E "^$1=" "$APP_DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- \
+    | sed -e 's/^[[:space:]"'\'']*//' -e 's/[[:space:]"'\'']*$//'; } || true
 }
 
 DRIVER="$(envval DB_CONNECTION)"

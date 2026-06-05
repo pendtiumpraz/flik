@@ -33,7 +33,7 @@ run_www php artisan optimize
 run_www php artisan event:cache || true
 
 echo "▶️  restart worker + reload php-fpm"
-run_www php artisan queue:restart           # worker mengambil kode baru setelah job berjalan selesai
+run_www php artisan queue:restart || true   # non-kritis: sinyal restart worker; jangan gagalkan deploy
 systemctl reload php8.2-fpm || true
 
 echo "✅ Deploy selesai @ $(date -u)"
