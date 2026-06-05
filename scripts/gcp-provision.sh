@@ -39,6 +39,7 @@ SQL_PASS="${SQL_PASS:-}"                        # digenerate kalau kosong
 
 DOMAIN="${FLIK_DOMAIN:-}"                        # mis. flik.example.com — kosong = HTTP saja
 LE_EMAIL="${FLIK_LE_EMAIL:-}"                    # email Let's Encrypt (opsional)
+GCS_BUCKET="${FLIK_GCS_BUCKET:-}"                # bucket GCS untuk offsite DB backup (= AWS_BUCKET app)
 
 # Cloud SQL connection name = project:region:instance (deterministik).
 CONN="${PROJECT}:${REGION}:${SQL_NAME}"
@@ -73,6 +74,7 @@ echo " VM        : $VM_NAME ($VM_MACHINE)"
 echo " Cloud SQL : $SQL_NAME ($PG_VERSION, ${SQL_CPU}vCPU/${SQL_MEM}, HA=$SQL_HA)"
 echo " DB / user : $SQL_DB / $SQL_USER"
 echo " Domain    : ${DOMAIN:-(none → HTTP saja)}"
+echo " GCS backup: ${GCS_BUCKET:-(none → offsite backup nonaktif)}"
 echo " Mode      : $([ "$DRY" = 1 ] && echo 'DRY-RUN (preview)' || echo 'EXECUTE')"
 echo "──────────────────────────────────────────────"
 
@@ -129,6 +131,18 @@ fi
 run gcloud projects add-iam-policy-binding "$PROJECT" \
   --member="serviceAccount:$SA" \
   --role="roles/cloudsql.client"
+
+# Akses tulis ke bucket GCS untuk offsite DB backup (gsutil dari VM) — bucket-scoped.
+if [ -n "$GCS_BUCKET" ]; then
+  if [ "$DRY" = 1 ]; then
+    echo "+ (dry-run) grant roles/storage.objectAdmin pada gs://$GCS_BUCKET ke $SA"
+  else
+    echo "+ grant roles/storage.objectAdmin pada gs://$GCS_BUCKET ke $SA"
+    gcloud storage buckets add-iam-policy-binding "gs://$GCS_BUCKET" \
+      --member="serviceAccount:$SA" --role="roles/storage.objectAdmin" \
+      || echo "⚠️  Gagal grant storage IAM — pastikan bucket '$GCS_BUCKET' sudah ada, atau set manual."
+  fi
+fi
 
 # ─────────────────────── Ringkasan ────────────────────────────
 echo

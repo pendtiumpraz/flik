@@ -272,7 +272,17 @@ workflow otomatis `git reset` balik ke commit sebelumnya + rebuild + restart, la
 **Backup DB sebelum migrate:** `deploy.sh` menjalankan `scripts/db-backup.sh` tepat sebelum
 `migrate` — snapshot driver-aware (`pg_dump -Fc` / `mysqldump|gzip`) ke `/var/backups/flik`
 (rotasi: 10 terbaru). Kalau backup **gagal**, deploy dibatalkan (tak jadi migrate) → rollback
-otomatis. Restore cepat:
+otomatis.
+
+Dump juga di-**upload offsite ke GCS** (`gs://<bucket>/db-backups/<host>/`) — best-effort
+(gagalnya tak menggagalkan deploy, karena dump lokal sudah jadi safety-net). Aktif bila VM punya
+`gsutil` (dipasang `vm-startup.sh`) + bucket diset. Saat provisioning, beri **`FLIK_GCS_BUCKET`**
+(= `AWS_BUCKET` app) supaya service account VM diberi `roles/storage.objectAdmin` pada bucket itu:
+```bash
+FLIK_GCS_BUCKET=<bucket-gcs-kamu> ... bash scripts/gcp-provision.sh
+```
+
+Restore cepat:
 
 ```bash
 # Postgres

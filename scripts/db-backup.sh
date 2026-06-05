@@ -64,3 +64,20 @@ echo "✅ Backup OK: $OUT ($(du -h "$OUT" | cut -f1))"
 # Rotasi: simpan KEEP terbaru, hapus sisanya.
 ls -1t "$BACKUP_DIR"/${DB}-* 2>/dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f
 echo "🧹 Rotasi: simpan $KEEP backup terbaru di $BACKUP_DIR."
+
+# ── Offsite ke GCS (best-effort) ──────────────────────────────
+# Dump lokal SUDAH jadi safety-net migrate; upload offsite hanya untuk DR, jadi
+# kegagalannya TIDAK menggagalkan deploy. gsutil pakai service account VM (ADC).
+BUCKET="${FLIK_BACKUP_BUCKET:-$(envval AWS_BUCKET)}"
+if [ -n "$BUCKET" ] && command -v gsutil >/dev/null 2>&1; then
+  REMOTE="gs://$BUCKET/db-backups/$(hostname -s)/$(basename "$OUT")"
+  echo "▶️  upload offsite → $REMOTE"
+  if gsutil -q cp "$OUT" "$REMOTE"; then
+    echo "✅ Offsite backup OK."
+  else
+    echo "⚠️  Upload GCS gagal — dump lokal tetap ada di $OUT (cek IAM SA / bucket)."
+  fi
+else
+  command -v gsutil >/dev/null 2>&1 || echo "ℹ️  gsutil tak ada — skip offsite (install google-cloud-cli)."
+  [ -n "$BUCKET" ] || echo "ℹ️  Backup bucket tak diset (FLIK_BACKUP_BUCKET / AWS_BUCKET) — skip offsite."
+fi
