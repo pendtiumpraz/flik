@@ -31,6 +31,19 @@ jobs:
     # Secret (VM_HOST/VM_USER/VM_SSH_KEY/DISCORD_WEBHOOK) di-scope PER-ENVIRONMENT.
     environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
     steps:
+      - name: Prepare SSH key
+        env:
+          KEY: ${{ secrets.VM_SSH_KEY }}
+        run: |
+          # VM_SSH_KEY boleh raw (ada 'BEGIN') ATAU base64 (anti newline-mangle).
+          if printf '%s' "$KEY" | grep -q 'BEGIN'; then
+            printf '%s\n' "$KEY" > /tmp/deploy_key
+          else
+            printf '%s' "$KEY" | base64 -d > /tmp/deploy_key
+          fi
+          chmod 600 /tmp/deploy_key
+          ssh-keygen -y -f /tmp/deploy_key >/dev/null && echo "✅ SSH key valid"
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
@@ -38,7 +51,7 @@ jobs:
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
+          key_path: /tmp/deploy_key
           envs: TARGET_REF             # teruskan nama branch ke remote
           script_stop: false           # error ditangani manual (rollback) di bawah
           command_timeout: 30m         # build + migrate bisa beberapa menit
