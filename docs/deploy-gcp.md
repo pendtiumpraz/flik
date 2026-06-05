@@ -1,7 +1,8 @@
 # Deploy ke Google Cloud (GCP) + Database
 
-Panduan langkah deploy FLiK ke GCP, dengan database **MySQL (dev/shared hosting)** atau
-**PostgreSQL/Neon (produksi)** — satu codebase yang sama, beda `.env`.
+Panduan langkah deploy FLiK ke GCP. **Database produksi: Cloud SQL for PostgreSQL** (rekomendasi) —
+satu codebase yang sama dengan dev (MySQL), beda `.env`. Postgres dipilih agar siap `pgvector`
+untuk AI semantic search nanti **tanpa pindah DB** (lihat §4b).
 
 > Untuk cara dapat & isi API key tiap layanan (Midtrans, GCS, OAuth, dll), lihat
 > **[integration-setup.md](integration-setup.md)** atau menu admin **System → Panduan Koneksi**.
@@ -13,7 +14,7 @@ Panduan langkah deploy FLiK ke GCP, dengan database **MySQL (dev/shared hosting)
 | Komponen | Pilihan | Rekomendasi |
 |---|---|---|
 | **Compute** | Compute Engine (VM) / Cloud Run / App Engine | **Compute Engine VM** — bisa jalankan worker + `ffmpeg` (transcoding). Cloud Run/App Engine = ephemeral, tak cocok untuk worker & ffmpeg. |
-| **Database** | Cloud SQL (MySQL/PG) / Neon (PG) | **Cloud SQL di region yang sama** — latency rendah. Neon = serverless PG tapi beda cloud (latency lintas-cloud). |
+| **Database** | **Cloud SQL for PostgreSQL** (rekomendasi) / Neon | **Cloud SQL Postgres** region sama — latency rendah + siap `pgvector` (AI semantic search) tanpa pindah DB. Neon = alternatif serverless (beda cloud → latency lintas-cloud). |
 | **Storage** | GCS (sudah disiapkan) | GCS via S3-compat (lihat integration-setup §9). |
 | **Queue** | sync / database / redis | VM → `database` atau `redis` + worker. |
 
@@ -68,23 +69,20 @@ APP_ENV=production
 APP_DEBUG=false
 APP_URL=https://domain-kamu.com
 
-# ── Database: PostgreSQL (Neon) ──────────────────────────────
+# ── Database: Cloud SQL for PostgreSQL (REKOMENDASI) ────────
+# Koneksi via Cloud SQL Auth Proxy (lihat §4b) → host 127.0.0.1.
 DB_CONNECTION=pgsql
-DB_HOST=<project>-pooler.<region>.aws.neon.tech   # WAJIB endpoint POOLED (PgBouncer)
+DB_HOST=127.0.0.1
 DB_PORT=5432
-DB_DATABASE=<db>
-DB_USERNAME=<user>
+DB_DATABASE=velflix
+DB_USERNAME=velflix
 DB_PASSWORD=<pass>
-DB_SSLMODE=require                                 # Neon wajib SSL
-# (Alternatif Neon: DATABASE_URL=postgres://user:pass@host/db?sslmode=require)
+DB_SSLMODE=disable                                 # Auth Proxy sudah enkripsi; pakai 'require' bila koneksi langsung tanpa proxy
 
-# ── ATAU Database: Cloud SQL MySQL (rekомendasi GCP) ─────────
-# DB_CONNECTION=mysql
-# DB_HOST=<cloud-sql-private-ip>   # atau 127.0.0.1 via Cloud SQL Auth Proxy
-# DB_PORT=3306
-# DB_DATABASE=velflix
-# DB_USERNAME=...
-# DB_PASSWORD=...
+# ── Alternatif: Neon Postgres (serverless) ──────────────────
+# DB_HOST=<project>-pooler.<region>.aws.neon.tech  # WAJIB endpoint POOLED (PgBouncer)
+# DB_SSLMODE=require
+# (atau DATABASE_URL=postgres://user:pass@host/db?sslmode=require)
 
 # ── Queue (VM punya worker) ──────────────────────────────────
 QUEUE_CONNECTION=database          # atau redis
@@ -105,14 +103,54 @@ Lalu:
 php artisan config:clear
 ```
 
+## 4b. Cloud SQL for PostgreSQL (+ pgvector opsional)
+
+**Provision instance** (region sama dengan VM):
+```bash
+gcloud sql instances create flik-pg \
+  --database-version=POSTGRES_16 \
+  --cpu=2 --memory=8GB \
+  --region=asia-southeast2 --storage-auto-increase
+gcloud sql databases create velflix --instance=flik-pg
+gcloud sql users create velflix --instance=flik-pg --password=<pass>
+```
+
+**Sizing (patokan, 1k–100k user):**
+| User | Instance | Catatan |
+|---|---|---|
+| 1k–10k | `--cpu=1 --memory=3840MB` | cukup |
+| 10k–50k | `--cpu=2 --memory=8GB` | + automated backups |
+| 50k–100k | `--cpu=4 --memory=16GB` + **read replica** | + HA regional (`--availability-type=REGIONAL`) |
+
+> Bottleneck di skala 100k streaming **bukan DB** tapi bandwidth (CDN) + transcoding (CPU worker).
+
+**Koneksi via Cloud SQL Auth Proxy** (aman, tanpa expose IP publik) — jalankan di VM:
+```bash
+curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.11.0/cloud-sql-proxy.linux.amd64
+chmod +x cloud-sql-proxy && sudo mv cloud-sql-proxy /usr/local/bin/
+# Jalankan (idealnya sebagai systemd service) → listen 127.0.0.1:5432
+cloud-sql-proxy --port 5432 <project>:asia-southeast2:flik-pg
+```
+Lalu `.env` cukup `DB_HOST=127.0.0.1 DB_PORT=5432` (lihat §4).
+
+### pgvector — OPSIONAL, hanya saat butuh AI semantic search
+**Belum perlu sekarang.** RAG film saat ini berbasis keyword/ILIKE dan sudah jalan. Saat nanti
+mau upgrade ke semantic search (embedding), tinggal aktifkan extension — **tanpa migrasi / pindah DB**:
+```sql
+-- Cloud SQL Postgres & Neon dua-duanya mendukung:
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+lalu tambah kolom `embedding vector(1536)` saat Phase 2 diimplementasikan. Memilih Postgres
+sekarang = pintu pgvector terbuka tanpa biaya migrasi di kemudian hari.
+
 ## 5. Database: migrate + seed
 
 ```bash
 php artisan migrate --force           # bangun semua tabel (portable MySQL/PG)
 php artisan db:seed --force           # admin user, plans, settings (kalau perlu)
 ```
-> Jalankan sekali di Postgres untuk memastikan 51 migrasi lolos. Data dev (MySQL) **tidak**
-> ikut pindah otomatis — prod mulai fresh + seed, atau migrasikan data terpisah.
+> Jalankan dulu `bash scripts/check-pg-migrations.sh` untuk memastikan semua migrasi (121) lolos
+> di Postgres. Data dev (MySQL) **tidak** ikut pindah otomatis — prod mulai fresh + seed.
 
 ## 6. Web server (nginx + PHP-FPM)
 
