@@ -154,6 +154,11 @@ php artisan db:seed --force           # admin user, plans, settings (kalau perlu
 
 ## 6. Web server (nginx + PHP-FPM)
 
+> **Otomatis** bila pakai `scripts/vm-startup.sh`: nginx site + HTTPS (certbot, auto-renew) sudah
+> dipasang saat boot — cukup set metadata `flik-domain` (+ `flik-letsencrypt-email`) lewat env
+> `FLIK_DOMAIN`/`FLIK_LE_EMAIL` di `gcp-provision.sh`, dan arahkan DNS A domain → IP VM.
+> Bagian manual di bawah hanya referensi.
+
 `/etc/nginx/sites-available/flik`:
 ```nginx
 server {

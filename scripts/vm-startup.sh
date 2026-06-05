@@ -107,5 +107,58 @@ cat > /etc/cron.d/flik-scheduler <<CRON
 CRON
 chmod 0644 /etc/cron.d/flik-scheduler
 
+# ── 5. nginx site + HTTPS (Let's Encrypt) ─────────────────────
+DOMAIN="$(curl -s -H 'Metadata-Flavor: Google' "$META/flik-domain" || true)"
+LE_EMAIL="$(curl -s -H 'Metadata-Flavor: Google' "$META/flik-letsencrypt-email" || true)"
+SERVER_NAME="${DOMAIN:-_}"
+
+# Quoted heredoc supaya $uri / $fastcgi_* TIDAK di-expand bash; server_name disisipkan via sed.
+cat > /etc/nginx/sites-available/flik <<'NGINX'
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __SERVER_NAME__;
+    root /var/www/flik/public;
+    index index.php index.html;
+
+    client_max_body_size 5G;          # samakan dgn public/.user.ini (upload besar)
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* { deny all; }
+}
+NGINX
+sed -i "s/__SERVER_NAME__/${SERVER_NAME}/" /etc/nginx/sites-available/flik
+
+ln -sf /etc/nginx/sites-available/flik /etc/nginx/sites-enabled/flik
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl reload nginx || echo "⚠️  nginx config error — cek 'nginx -t'"
+
+# HTTPS otomatis bila domain diset + DNS sudah mengarah ke IP VM ini.
+if [ -n "$DOMAIN" ]; then
+  apt-get install -y certbot python3-certbot-nginx || echo "⚠️  gagal install certbot"
+  if [ -n "$LE_EMAIL" ]; then
+    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$LE_EMAIL" --redirect \
+      || echo "⚠️  certbot gagal (DNS '$DOMAIN' belum mengarah ke VM?). Coba lagi nanti: sudo certbot --nginx -d $DOMAIN"
+  else
+    certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect \
+      || echo "⚠️  certbot gagal. Coba lagi nanti: sudo certbot --nginx -d $DOMAIN"
+  fi
+  # certbot memasang systemd timer 'certbot.timer' untuk auto-renew.
+else
+  echo "ℹ️  flik-domain metadata kosong → HTTP saja. Set domain (DNS A → IP VM) lalu: sudo certbot --nginx -d <domain>"
+fi
+
 touch /etc/flik/.provisioned
 echo "=== ✅ FLiK VM siap. Deploy kode ke ${APP_DIR}, isi .env, lalu: systemctl start flik-worker ==="

@@ -37,8 +37,16 @@ SQL_HA="${SQL_HA:-ZONAL}"                       # REGIONAL untuk HA produksi
 PG_VERSION="${PG_VERSION:-POSTGRES_16}"
 SQL_PASS="${SQL_PASS:-}"                        # digenerate kalau kosong
 
+DOMAIN="${FLIK_DOMAIN:-}"                        # mis. flik.example.com — kosong = HTTP saja
+LE_EMAIL="${FLIK_LE_EMAIL:-}"                    # email Let's Encrypt (opsional)
+
 # Cloud SQL connection name = project:region:instance (deterministik).
 CONN="${PROJECT}:${REGION}:${SQL_NAME}"
+
+# Metadata yang dibaca vm-startup.sh (connection name + domain/HTTPS).
+METADATA="flik-sql-connection=$CONN"
+if [ -n "$DOMAIN" ]; then METADATA="$METADATA,flik-domain=$DOMAIN"; fi
+if [ -n "$LE_EMAIL" ]; then METADATA="$METADATA,flik-letsencrypt-email=$LE_EMAIL"; fi
 
 DRY=0; YES=0
 for a in "$@"; do
@@ -64,6 +72,7 @@ echo " Region/Zone: $REGION / $ZONE"
 echo " VM        : $VM_NAME ($VM_MACHINE)"
 echo " Cloud SQL : $SQL_NAME ($PG_VERSION, ${SQL_CPU}vCPU/${SQL_MEM}, HA=$SQL_HA)"
 echo " DB / user : $SQL_DB / $SQL_USER"
+echo " Domain    : ${DOMAIN:-(none → HTTP saja)}"
 echo " Mode      : $([ "$DRY" = 1 ] && echo 'DRY-RUN (preview)' || echo 'EXECUTE')"
 echo "──────────────────────────────────────────────"
 
@@ -98,7 +107,7 @@ run gcloud compute instances create "$VM_NAME" \
   --image-family=debian-12 --image-project=debian-cloud \
   --scopes=cloud-platform \
   --tags=http-server,https-server \
-  --metadata=flik-sql-connection="$CONN" \
+  --metadata="$METADATA" \
   --metadata-from-file=startup-script="$SCRIPT_DIR/vm-startup.sh"
 
 # ──────────────── 4. Firewall HTTP/HTTPS ──────────────────────
@@ -142,6 +151,7 @@ Yang otomatis terpasang:
   ✓ systemd 'cloud-sql-proxy'  (auto-start → 127.0.0.1:5432)
   ✓ systemd 'flik-worker'      (enabled; di-start setelah kode + .env siap)
   ✓ cron scheduler             (schedule:run tiap menit)
+  ✓ nginx site + HTTPS         (certbot, jika flik-domain diset & DNS sudah mengarah ke VM)
 
 Langkah deploy (SSH ke VM):
   sudo git clone <repo-url> /var/www/flik && cd /var/www/flik
@@ -153,5 +163,7 @@ Langkah deploy (SSH ke VM):
   sudo -u www-data php artisan storage:link
   sudo -u www-data php artisan migrate --force
   sudo systemctl start flik-worker
-  # konfig nginx → docs/deploy-gcp.md §6-7
+
+  # HTTPS: pastikan DNS A <domain> → $VM_IP, lalu (kalau certbot belum jalan):
+  #   sudo certbot --nginx -d <domain>
 EOF
