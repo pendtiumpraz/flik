@@ -82,6 +82,13 @@ return [
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => (bool) env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            // GCS (and other S3-compatible backends) reject the default
+            // flexible-checksum headers (CRC32) the AWS SDK started sending —
+            // PutObject fails with "InvalidArgument". Force the SDK to only
+            // add checksums when the operation strictly requires it. Reads the
+            // env override when present so AWS-proper deployments can opt back.
+            'request_checksum_calculation' => env('AWS_REQUEST_CHECKSUM_CALCULATION', 'when_required'),
+            'response_checksum_validation' => env('AWS_RESPONSE_CHECKSUM_VALIDATION', 'when_required'),
             'throw' => false,
         ],
 
