@@ -52,6 +52,18 @@ final class MediaDisk
             return $path;
         }
 
-        return self::disk()->url(ltrim($path, '/'));
+        $path = ltrim($path, '/');
+
+        // Build from the disk's configured public base URL directly. The native
+        // GCS Flysystem adapter doesn't implement Laravel's url() resolution, so
+        // Storage::disk()->url() throws "does not support retrieving URLs" — but
+        // every media disk we use (public/s3/gcs) sets a 'url'. Only fall back to
+        // the driver when no base URL is configured.
+        $base = (string) config('filesystems.disks.'.self::name().'.url', '');
+        if ($base !== '') {
+            return rtrim($base, '/').'/'.$path;
+        }
+
+        return self::disk()->url($path);
     }
 }
