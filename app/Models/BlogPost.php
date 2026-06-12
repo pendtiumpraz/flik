@@ -45,16 +45,19 @@ class BlogPost extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'published_at'   => 'datetime',
-        'scheduled_for'  => 'datetime',
-        'is_featured'    => 'boolean',
-        'views_count'    => 'integer',
-        'reading_minutes'=> 'integer',
+        'published_at' => 'datetime',
+        'scheduled_for' => 'datetime',
+        'is_featured' => 'boolean',
+        'views_count' => 'integer',
+        'reading_minutes' => 'integer',
     ];
 
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_SCHEDULED = 'scheduled';
+
     public const STATUS_PUBLISHED = 'published';
+
     public const STATUS_ARCHIVED = 'archived';
 
     public const STATUSES = [
@@ -83,7 +86,7 @@ class BlogPost extends Model
                     ->where('id', '!=', $post->id ?? 0)
                     ->exists()
                 ) {
-                    $slug = $base . '-' . (++$i);
+                    $slug = $base.'-'.(++$i);
                 }
                 $post->slug = $slug;
             }
@@ -163,6 +166,16 @@ class BlogPost extends Model
         return route('blog.show', $this->slug);
     }
 
+    /**
+     * Resolved cover-image URL via the shared media disk (local public →
+     * /storage/…, GCS in production). Absolute URLs pass through untouched;
+     * null when the post has no cover — callers supply their own placeholder.
+     */
+    public function getCoverUrlAttribute(): ?string
+    {
+        return \App\Support\MediaDisk::url($this->cover_image);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────
 
     public function isPublished(): bool
@@ -206,7 +219,7 @@ class BlogPost extends Model
         } catch (\Throwable $e) {
             Log::warning('BlogPost::renderMarkdown failed', ['error' => $e->getMessage()]);
 
-            return '<pre>' . e($md) . '</pre>';
+            return '<pre>'.e($md).'</pre>';
         }
     }
 

@@ -154,8 +154,8 @@
             <div class="sidebar-card">
                 <h4>Cover Image</h4>
                 <input type="text" name="cover_image" value="{{ old('cover_image', $post->cover_image) }}" class="form-input" placeholder="URL atau storage path">
-                @if($post->cover_image)
-                    <img src="{{ str_starts_with($post->cover_image, 'http') ? $post->cover_image : asset('storage/'.$post->cover_image) }}"
+                @if($post->cover_url)
+                    <img src="{{ $post->cover_url }}"
                          alt="Cover" style="width:100%;margin-top:10px;border-radius:6px;border:1px solid #2a2a2a">
                 @endif
             </div>

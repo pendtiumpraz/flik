@@ -51,6 +51,26 @@
                 <input type="text" name="original_title" class="form-input" value="{{ old('original_title', $movie?->original_title) }}" placeholder="Leave empty if same as title">
             </div>
 
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div class="form-group">
+                    <label>Type</label>
+                    <select name="content_type" class="form-input">
+                        @php $ct = old('content_type', $movie?->content_type ?? 'movie'); @endphp
+                        <option value="movie" {{ $ct === 'movie' ? 'selected' : '' }}>Movie</option>
+                        <option value="series" {{ $ct === 'series' ? 'selected' : '' }}>Series</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Runtime (minutes)</label>
+                    <input type="number" name="runtime_minutes" class="form-input" min="0" max="2000" value="{{ old('runtime_minutes', $movie?->runtime_minutes) }}" placeholder="e.g. 148">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Tagline</label>
+                <input type="text" name="tagline" class="form-input" value="{{ old('tagline', $movie?->tagline) }}" placeholder="One-line hook, e.g. “Long live the fighters.”">
+            </div>
+
             <div class="form-group">
                 <label>Overview *</label>
                 <textarea name="overview" class="form-input" required placeholder="Movie synopsis...">{{ old('overview', $movie?->overview) }}</textarea>
@@ -68,18 +88,31 @@
             </div>
 
             <div class="form-group">
-                <label>Poster URL</label>
-                <input type="text" name="poster_path" class="form-input" value="{{ old('poster_path', $movie?->poster_path) }}" placeholder="https://image.tmdb.org/...">
-                @if($movie && $movie->poster_url)
-                    <div style="margin-top:8px">
-                        <img src="{{ $movie->poster_url }}" style="height:80px;border-radius:6px;background:#333" onerror="this.style.display='none'">
+                <label>Poster</label>
+                <div style="display:flex;gap:12px;align-items:flex-start">
+                    @if($movie && $movie->poster_url)
+                        <img src="{{ $movie->poster_url }}" style="height:96px;border-radius:6px;background:#333;flex-shrink:0" onerror="this.style.display='none'">
+                    @endif
+                    <div style="flex:1;min-width:0">
+                        <input type="file" name="poster_file" accept="image/jpeg,image/png,image/webp" class="form-input" style="padding:8px">
+                        <div style="font-size:11px;color:#777;margin:4px 0 8px">Upload JPG/PNG/WebP (maks 5 MB) — atau tempel URL di bawah.</div>
+                        <input type="text" name="poster_path" class="form-input" value="{{ old('poster_path', $movie?->poster_path) }}" placeholder="https://image.tmdb.org/...">
                     </div>
-                @endif
+                </div>
             </div>
 
             <div class="form-group">
-                <label>Backdrop URL</label>
-                <input type="text" name="backdrop_path" class="form-input" value="{{ old('backdrop_path', $movie?->backdrop_path) }}" placeholder="https://image.tmdb.org/...">
+                <label>Backdrop</label>
+                <div style="display:flex;gap:12px;align-items:flex-start">
+                    @if($movie && $movie->backdrop_path)
+                        <img src="{{ $movie->backdrop_url }}" style="height:72px;border-radius:6px;background:#333;flex-shrink:0" onerror="this.style.display='none'">
+                    @endif
+                    <div style="flex:1;min-width:0">
+                        <input type="file" name="backdrop_file" accept="image/jpeg,image/png,image/webp" class="form-input" style="padding:8px">
+                        <div style="font-size:11px;color:#777;margin:4px 0 8px">Upload JPG/PNG/WebP (maks 5 MB) — atau tempel URL di bawah.</div>
+                        <input type="text" name="backdrop_path" class="form-input" value="{{ old('backdrop_path', $movie?->backdrop_path) }}" placeholder="https://image.tmdb.org/...">
+                    </div>
+                </div>
             </div>
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">

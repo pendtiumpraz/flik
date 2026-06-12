@@ -10,7 +10,6 @@ use App\Services\Audit\AuditLogger;
 use App\Services\Security\FileUploadValidator;
 use App\Services\Security\LoginThrottle;
 use App\Services\Security\VirusScanner;
-use App\Support\SafeFilename;
 use App\Support\SecurityEvents;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -87,8 +86,13 @@ class AdminController extends Controller
             'title' => 'required|string|max:255',
             'original_title' => 'nullable|string|max:255',
             'overview' => 'required|string',
+            'tagline' => 'nullable|string|max:500',
+            'content_type' => 'nullable|in:movie,series',
+            'runtime_minutes' => 'nullable|integer|min:0|max:2000',
             'poster_path' => 'nullable|string|max:500',
+            'poster_file' => 'nullable|image|max:5120',
             'backdrop_path' => 'nullable|string|max:500',
+            'backdrop_file' => 'nullable|image|max:5120',
             'release_date' => 'nullable|date',
             'vote_average' => 'nullable|numeric|min:0|max:10',
             'popularity' => 'nullable|numeric|min:0',
@@ -111,9 +115,19 @@ class AdminController extends Controller
                 ->withInput($request->except('video_file'));
         }
 
-        $movieData = collect($validated)->except('genres')->toArray();
+        $movieData = collect($validated)->except(['genres', 'poster_file', 'backdrop_file'])->toArray();
         $movieData['is_popular'] = $request->boolean('is_popular');
         $movieData['is_trending'] = $request->boolean('is_trending');
+
+        // An uploaded poster/backdrop wins over a URL typed into the same form.
+        // Stored on the public disk as a relative path; Movie::resolveAssetUrl()
+        // serves it via /storage/... (see updateMovie for the same handling).
+        if ($request->hasFile('poster_file')) {
+            $movieData['poster_path'] = $this->storeMovieImage($request->file('poster_file'), 'posters', 'poster_file', $uploads);
+        }
+        if ($request->hasFile('backdrop_file')) {
+            $movieData['backdrop_path'] = $this->storeMovieImage($request->file('backdrop_file'), 'backdrops', 'backdrop_file', $uploads);
+        }
 
         $movie = Movie::create($movieData);
 
@@ -151,8 +165,13 @@ class AdminController extends Controller
             'title' => 'required|string|max:255',
             'original_title' => 'nullable|string|max:255',
             'overview' => 'required|string',
+            'tagline' => 'nullable|string|max:500',
+            'content_type' => 'nullable|in:movie,series',
+            'runtime_minutes' => 'nullable|integer|min:0|max:2000',
             'poster_path' => 'nullable|string|max:500',
+            'poster_file' => 'nullable|image|max:5120',
             'backdrop_path' => 'nullable|string|max:500',
+            'backdrop_file' => 'nullable|image|max:5120',
             'release_date' => 'nullable|date',
             'vote_average' => 'nullable|numeric|min:0|max:10',
             'popularity' => 'nullable|numeric|min:0',
@@ -171,9 +190,18 @@ class AdminController extends Controller
                 ->withInput($request->except('video_file'));
         }
 
-        $movieData = collect($validated)->except('genres')->toArray();
+        $movieData = collect($validated)->except(['genres', 'poster_file', 'backdrop_file'])->toArray();
         $movieData['is_popular'] = $request->boolean('is_popular');
         $movieData['is_trending'] = $request->boolean('is_trending');
+
+        // Uploaded image replaces the existing poster/backdrop; a blank file
+        // input leaves the current value (or the typed URL) untouched.
+        if ($request->hasFile('poster_file')) {
+            $movieData['poster_path'] = $this->storeMovieImage($request->file('poster_file'), 'posters', 'poster_file', $uploads);
+        }
+        if ($request->hasFile('backdrop_file')) {
+            $movieData['backdrop_path'] = $this->storeMovieImage($request->file('backdrop_file'), 'backdrops', 'backdrop_file', $uploads);
+        }
 
         $movie->update($movieData);
 
@@ -183,6 +211,44 @@ class AdminController extends Controller
 
         return redirect()->route('admin.movies.index')
             ->with('success', "Film \"{$movie->title}\" berhasil diupdate!");
+    }
+
+    /**
+     * Validate + persist an uploaded poster/backdrop and return the stored
+     * relative path (e.g. "posters/ab12….jpg").
+     *
+     * Routes the file through FileUploadValidator (magic-byte sniff, MIME/ext
+     * consistency, GD/Imagick re-encode that strips EXIF) and persists the
+     * cleaned `safe_path`, never the raw upload. Stored on the `public` disk
+     * so Movie::resolveAssetUrl() serves it via /storage/… — same convention
+     * as avatar uploads in ProfileController.
+     *
+     * On any validation failure a ValidationException is thrown against the
+     * given form field so the admin sees the reason inline.
+     */
+    private function storeMovieImage(\Illuminate\Http\UploadedFile $file, string $folder, string $field, FileUploadValidator $uploads): string
+    {
+        $result = $uploads->validateImage($file);
+
+        if (! ($result['ok'] ?? false)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                $field => $result['errors'] ?: ['Gambar tidak valid.'],
+            ]);
+        }
+
+        $ext = $result['extension'] ?? 'jpg';
+        $name = $folder.'/'.\Illuminate\Support\Str::random(24).'.'.$ext;
+
+        $contents = @file_get_contents((string) ($result['safe_path'] ?? $file->getRealPath()));
+        if ($contents === false) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                $field => ['Gagal membaca file gambar yang diunggah.'],
+            ]);
+        }
+
+        Storage::disk(\App\Support\MediaDisk::name())->put($name, $contents);
+
+        return $name;
     }
 
     public function destroyMovie(Movie $movie)
@@ -294,11 +360,11 @@ class AdminController extends Controller
         $user->username = $data['username'] ?? null;
         $user->email = $data['email'];
         $user->password = $data['password']; // User::setPasswordAttribute auto-bcrypts
-        if (!empty($data['email_verified'])) {
+        if (! empty($data['email_verified'])) {
             $user->email_verified_at = now();
         }
         $user->save();
-        if (!empty($data['is_admin'])) {
+        if (! empty($data['is_admin'])) {
             $user->forceFill(['is_admin' => true])->save();
         }
 
@@ -327,18 +393,18 @@ class AdminController extends Controller
         $user->name = $data['name'];
         $user->username = $data['username'] ?? null;
         $user->email = $data['email'];
-        if (!empty($data['password'])) {
+        if (! empty($data['password'])) {
             $user->password = $data['password'];
         }
         if (array_key_exists('email_verified', $data)) {
-            $user->email_verified_at = !empty($data['email_verified']) ? now() : null;
+            $user->email_verified_at = ! empty($data['email_verified']) ? now() : null;
         }
         $user->save();
         // is_admin is $guarded — set via forceFill, only if request provided it
         // AND it's not the actor revoking their own admin (mirror toggleAdmin guard)
         if ($request->has('is_admin')) {
             $newAdmin = (bool) $data['is_admin'];
-            if ($user->id === auth()->id() && $user->is_admin && !$newAdmin) {
+            if ($user->id === auth()->id() && $user->is_admin && ! $newAdmin) {
                 return redirect()->route('admin.users.edit', $user)
                     ->with('error', 'Tidak bisa cabut admin status milik sendiri.');
             }

@@ -17,6 +17,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Public Media Disk
+    |--------------------------------------------------------------------------
+    |
+    | Disk used for ALL user-uploaded public media (posters, backdrops, cast
+    | photos, avatars, cover banners, mirrored TMDB art). Read + written via
+    | App\Support\MediaDisk so the upload side and URL side always agree.
+    |
+    | Local dev: leave as "public". Production: set MEDIA_DISK=s3 to push every
+    | upload to Google Cloud Storage (the s3 disk below targets the GCS
+    | interoperability endpoint). No code changes needed to switch.
+    |
+    */
+
+    'media' => env('MEDIA_DISK', 'public'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |

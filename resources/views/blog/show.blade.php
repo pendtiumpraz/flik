@@ -1,9 +1,7 @@
 @php
     /** @var \App\Models\BlogPost $post */
     /** @var \Illuminate\Support\Collection $related */
-    $cover = $post->cover_image
-        ? (str_starts_with($post->cover_image, 'http') ? $post->cover_image : asset('storage/' . $post->cover_image))
-        : null;
+    $cover = $post->cover_url;
 
     $seoTitle = $post->seo_title ?: $post->title;
     $seoDescription = $post->seo_description ?: ($post->excerpt ?: \Illuminate\Support\Str::limit(strip_tags($post->body_html ?? ''), 160));

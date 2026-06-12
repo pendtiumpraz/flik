@@ -106,7 +106,8 @@ class Episode extends Model
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
             return $path;
         }
-        return asset('storage/' . $path);
+
+        return \App\Support\MediaDisk::url($path);
     }
 
     /**
@@ -153,6 +154,7 @@ class Episode extends Model
     public function getCodeAttribute(): string
     {
         $season = $this->season?->season_number ?? 0;
+
         return sprintf('S%dE%d', $season, $this->episode_number);
     }
 }

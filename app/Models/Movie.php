@@ -258,10 +258,10 @@ class Movie extends Model
             );
         }
 
-        // Legacy: anything else is on the public disk (`storage/app/public`
-        // → symlinked into `public/storage`). Backwards-compatible with
-        // every row that pre-dates the private-disk migration.
-        return asset('storage/'.$path);
+        // Anything else is a relative path on the configured media disk
+        // (`public` locally → /storage/…; `s3`/GCS in production → CDN URL).
+        // Backwards-compatible with every row that pre-dates the change.
+        return \App\Support\MediaDisk::url($path);
     }
 
     // ── Additional Relations ──────────────────────────────────
@@ -421,6 +421,7 @@ class Movie extends Model
         try {
             /** @var \App\Services\Ai\Tasks\TextTranslator $translator */
             $translator = app(\App\Services\Ai\Tasks\TextTranslator::class);
+
             return $translator->translate($source, $locale, $sourceLocale);
         } catch (\Throwable) {
             // Container resolution / missing provider — degrade silently.

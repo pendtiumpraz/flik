@@ -10,9 +10,7 @@
     <generator>FLiK Editorial</generator>
 @foreach($posts->take(20) as $post)
 @php
-    $cover = $post->cover_image
-        ? (str_starts_with($post->cover_image, 'http') ? $post->cover_image : asset('storage/' . $post->cover_image))
-        : null;
+    $cover = $post->cover_url;
     $authorName = $post->author?->name ?? 'Tim FLiK';
     $categoryName = $post->category?->name;
     $description = $post->excerpt ?: \Illuminate\Support\Str::limit(strip_tags($post->body_html ?? ''), 280);

@@ -47,8 +47,8 @@ class Cast extends Model
     ];
 
     protected $casts = [
-        'tmdb_id'          => 'integer',
-        'birth_date'       => 'date',
+        'tmdb_id' => 'integer',
+        'birth_date' => 'date',
         'bio_generated_at' => 'datetime',
     ];
 
@@ -80,8 +80,8 @@ class Cast extends Model
             ->withPivot('character', 'order')
             ->where(function (Builder $q) {
                 $q->whereNull('cast_movie.character')
-                  ->orWhere('cast_movie.character', 'LIKE', '%irector%')
-                  ->orWhere('cast_movie.character', 'LIKE', '%utradara%');
+                    ->orWhere('cast_movie.character', 'LIKE', '%irector%')
+                    ->orWhere('cast_movie.character', 'LIKE', '%utradara%');
             });
     }
 
@@ -127,8 +127,8 @@ class Cast extends Model
                     ->whereColumn('cast_movie.cast_id', 'casts.id')
                     ->where(function ($w) {
                         $w->whereNull('cast_movie.character')
-                          ->orWhere('cast_movie.character', 'LIKE', '%irector%')
-                          ->orWhere('cast_movie.character', 'LIKE', '%utradara%');
+                            ->orWhere('cast_movie.character', 'LIKE', '%irector%')
+                            ->orWhere('cast_movie.character', 'LIKE', '%utradara%');
                     });
             });
         }
@@ -162,6 +162,7 @@ class Cast extends Model
                     return 'director';
                 }
             }
+
             return 'actor';
         }
 
@@ -169,8 +170,8 @@ class Cast extends Model
             ->where('cast_id', $this->id)
             ->where(function ($q) {
                 $q->whereNull('character')
-                  ->orWhere('character', 'LIKE', '%irector%')
-                  ->orWhere('character', 'LIKE', '%utradara%');
+                    ->orWhere('character', 'LIKE', '%irector%')
+                    ->orWhere('character', 'LIKE', '%utradara%');
             })
             ->exists();
 
@@ -195,10 +196,10 @@ class Cast extends Model
         }
 
         if (str_starts_with($path, '/') && preg_match('~^/[A-Za-z0-9_.-]+\.(jpg|jpeg|png|webp)$~i', $path)) {
-            return 'https://image.tmdb.org/t/p/w500' . $path;
+            return 'https://image.tmdb.org/t/p/w500'.$path;
         }
 
-        return asset('storage/' . ltrim($path, '/'));
+        return \App\Support\MediaDisk::url($path);
     }
 
     /**
@@ -238,6 +239,7 @@ class Cast extends Model
             return true;
         }
         $lower = strtolower($character);
+
         return str_contains($lower, 'director') || str_contains($lower, 'sutradara');
     }
 }

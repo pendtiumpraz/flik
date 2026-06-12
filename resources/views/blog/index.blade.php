@@ -13,9 +13,7 @@
             {{-- Featured spotlight --}}
             @if($featured)
                 @php
-                    $cover = $featured->cover_image
-                        ? (str_starts_with($featured->cover_image, 'http') ? $featured->cover_image : asset('storage/' . $featured->cover_image))
-                        : null;
+                    $cover = $featured->cover_url;
                 @endphp
                 <a href="{{ $featured->url }}"
                    class="block mb-10 group relative overflow-hidden rounded-2xl border border-[#C5A55A]/30 bg-gradient-to-br from-[#141414] to-[#0a0a0a]"

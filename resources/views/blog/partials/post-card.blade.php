@@ -1,9 +1,7 @@
 {{-- Reusable blog post card. Expects: $post (BlogPost with category eager-loaded). --}}
 @php
     /** @var \App\Models\BlogPost $post */
-    $cover = $post->cover_image
-        ? (str_starts_with($post->cover_image, 'http') ? $post->cover_image : asset('storage/' . $post->cover_image))
-        : null;
+    $cover = $post->cover_url;
 @endphp
 <a href="{{ $post->url }}"
    class="group block rounded-xl overflow-hidden bg-[#141414] border border-gray-800 hover:border-[#C5A55A]/60 transition-colors">

@@ -46,7 +46,9 @@ class MovieImporter
      * downscaling-on-the-fly.
      */
     private const POSTER_SIZE = 'w500';
+
     private const BACKDROP_SIZE = 'w1280';
+
     private const PROFILE_SIZE = 'w185';
 
     public function __construct(
@@ -54,8 +56,7 @@ class MovieImporter
         private readonly ?TextTranslator $translator = null,
         private readonly ?AuditLogger $audit = null,
         private readonly ?SafeHttp $safeHttp = null,
-    ) {
-    }
+    ) {}
 
     /**
      * Read-only normalisation pass. Returns the wizard envelope:
@@ -176,6 +177,7 @@ class MovieImporter
      *   - import_episodes    bool  (default false)  TV only — fetch per-episode details from TMDB.
      *
      * @param  array<string, mixed>  $options
+     *
      * @throws \RuntimeException if TMDB lookup fails or required fields are blank.
      */
     public function import(int $tmdbId, string $type = 'movie', array $options = []): Movie
@@ -222,8 +224,8 @@ class MovieImporter
         $posterPath = $preview['poster_url'];
         $backdropPath = $preview['backdrop_url'];
         if ($options['download_images']) {
-            $posterPath = $this->mirrorImage($preview['poster_url'], "tmdb/posters", "movie_{$tmdbId}_poster") ?? $posterPath;
-            $backdropPath = $this->mirrorImage($preview['backdrop_url'], "tmdb/backdrops", "movie_{$tmdbId}_backdrop") ?? $backdropPath;
+            $posterPath = $this->mirrorImage($preview['poster_url'], 'tmdb/posters', "movie_{$tmdbId}_poster") ?? $posterPath;
+            $backdropPath = $this->mirrorImage($preview['backdrop_url'], 'tmdb/backdrops', "movie_{$tmdbId}_backdrop") ?? $backdropPath;
         }
 
         return DB::transaction(function () use ($preview, $options, $contentType, $overview, $posterPath, $backdropPath, $type) {
@@ -395,6 +397,7 @@ class MovieImporter
 
         return array_values(array_map(function (array $g) use ($existing) {
             $name = (string) ($g['name'] ?? '');
+
             return [
                 'tmdb_id' => (int) ($g['id'] ?? 0),
                 'name' => $name,
@@ -427,6 +430,7 @@ class MovieImporter
             $tmdbId = (int) ($c['id'] ?? 0);
             $name = (string) ($c['name'] ?? '');
             $existingId = $byTmdb[$tmdbId] ?? $byName[$name] ?? null;
+
             return [
                 'tmdb_id' => $tmdbId,
                 'name' => $name,
@@ -452,6 +456,7 @@ class MovieImporter
             $crew,
             fn ($c) => is_array($c) && ($c['job'] ?? '') === 'Director',
         ));
+
         return array_values(array_map(function (array $d) {
             return [
                 'tmdb_id' => (int) ($d['id'] ?? 0),
@@ -499,6 +504,7 @@ class MovieImporter
                 return (string) $v['key'];
             }
         }
+
         return null;
     }
 
@@ -514,6 +520,7 @@ class MovieImporter
     {
         $posters = array_slice($images['posters'] ?? [], 0, 6);
         $backdrops = array_slice($images['backdrops'] ?? [], 0, 3);
+
         return [
             'posters' => array_values(array_filter(array_map(
                 fn ($p) => is_array($p) && ! empty($p['file_path'])
@@ -544,6 +551,7 @@ class MovieImporter
         if (! is_string($candidate) || $candidate === '') {
             return null;
         }
+
         // IMDB ids are `tt` + digits. Reject anything else as junk.
         return preg_match('/^tt\d+$/', $candidate) === 1 ? $candidate : null;
     }
@@ -567,6 +575,7 @@ class MovieImporter
                     $cast->profile_path = $profileUrl;
                     $cast->save();
                 }
+
                 return $cast;
             }
         }
@@ -579,6 +588,7 @@ class MovieImporter
             $cast->tmdb_id = $tmdbId;
         }
         $cast->save();
+
         return $cast;
     }
 
@@ -655,13 +665,15 @@ class MovieImporter
             $filename = $basename.'.'.$ext;
             $relative = $folder.'/'.$filename;
 
-            Storage::disk('public')->put($relative, $body);
+            Storage::disk(\App\Support\MediaDisk::name())->put($relative, $body);
+
             return $relative;
         } catch (Throwable $e) {
             Log::warning('TMDB import: image mirror failed, falling back to TMDB CDN URL', [
                 'url' => $url,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }

@@ -64,14 +64,13 @@ class XrayController extends Controller
         // polling for nothing. Cache per-movie so we only compute once an
         // hour even with the 5s poll cadence.
         if ($presences->isEmpty()) {
-            $needsFallback = !MovieSceneActor::where('movie_id', $movie->id)->exists();
+            $needsFallback = ! MovieSceneActor::where('movie_id', $movie->id)->exists();
 
             if ($needsFallback) {
                 $generated = $this->loadFallbackPresences($movie, $extractor);
 
                 $presences = $generated->filter(
-                    fn (MovieSceneActor $row) =>
-                        (float) $row->start_seconds <= $second
+                    fn (MovieSceneActor $row) => (float) $row->start_seconds <= $second
                         && (float) $row->end_seconds >= $second
                 )->values();
 
@@ -100,13 +99,13 @@ class XrayController extends Controller
                 $cast = $p->cast;
 
                 return [
-                    'id'           => $cast->id,
-                    'name'         => $cast->name,
-                    'character'    => $characterByCastId[$cast->id] ?? null,
-                    'bio_excerpt'  => $this->excerpt($cast->bio),
-                    'photo_url'    => $this->photoUrl($cast->profile_path),
-                    'screen_x'     => $p->screen_x !== null ? (float) $p->screen_x : null,
-                    'screen_y'     => $p->screen_y !== null ? (float) $p->screen_y : null,
+                    'id' => $cast->id,
+                    'name' => $cast->name,
+                    'character' => $characterByCastId[$cast->id] ?? null,
+                    'bio_excerpt' => $this->excerpt($cast->bio),
+                    'photo_url' => $this->photoUrl($cast->profile_path),
+                    'screen_x' => $p->screen_x !== null ? (float) $p->screen_x : null,
+                    'screen_y' => $p->screen_y !== null ? (float) $p->screen_y : null,
                 ];
             })
             ->values();
@@ -121,10 +120,14 @@ class XrayController extends Controller
      */
     protected function excerpt(?string $bio): ?string
     {
-        if ($bio === null) return null;
+        if ($bio === null) {
+            return null;
+        }
 
         $bio = trim($bio);
-        if ($bio === '') return null;
+        if ($bio === '') {
+            return null;
+        }
 
         if (mb_strlen($bio) <= 180) {
             return $bio;
@@ -133,7 +136,7 @@ class XrayController extends Controller
         $cut = mb_substr($bio, 0, 180);
         $lastSpace = mb_strrpos($cut, ' ');
 
-        return ($lastSpace !== false ? mb_substr($cut, 0, $lastSpace) : $cut) . '…';
+        return ($lastSpace !== false ? mb_substr($cut, 0, $lastSpace) : $cut).'…';
     }
 
     /**
@@ -141,11 +144,14 @@ class XrayController extends Controller
      */
     protected function photoUrl(?string $path): ?string
     {
-        if ($path === null || $path === '') return null;
+        if ($path === null || $path === '') {
+            return null;
+        }
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
             return $path;
         }
-        return asset('storage/' . ltrim($path, '/'));
+
+        return \App\Support\MediaDisk::url($path);
     }
 
     /**
@@ -159,7 +165,7 @@ class XrayController extends Controller
      */
     protected function loadFallbackPresences(Movie $movie, SceneActorExtractor $extractor): \Illuminate\Support\Collection
     {
-        $cacheKey = 'xray:fallback:' . $movie->id;
+        $cacheKey = 'xray:fallback:'.$movie->id;
 
         $tuples = Cache::remember(
             $cacheKey,
@@ -168,10 +174,10 @@ class XrayController extends Controller
                 $generated = $extractor->generateHeuristicInMemory($movie);
 
                 return $generated->map(fn (MovieSceneActor $row): array => [
-                    'cast_id'       => (int) $row->cast_id,
+                    'cast_id' => (int) $row->cast_id,
                     'start_seconds' => (float) $row->start_seconds,
-                    'end_seconds'   => (float) $row->end_seconds,
-                    'confidence'    => (float) $row->confidence,
+                    'end_seconds' => (float) $row->end_seconds,
+                    'confidence' => (float) $row->confidence,
                 ])->all();
             }
         );
@@ -179,12 +185,13 @@ class XrayController extends Controller
         // Re-hydrate to unsaved Eloquent instances so the same code path
         // works on both the persisted and the fallback branch.
         return collect($tuples)->map(function (array $t) use ($movie): MovieSceneActor {
-            $row = new MovieSceneActor();
-            $row->movie_id      = $movie->id;
-            $row->cast_id       = $t['cast_id'];
+            $row = new MovieSceneActor;
+            $row->movie_id = $movie->id;
+            $row->cast_id = $t['cast_id'];
             $row->start_seconds = (string) $t['start_seconds'];
-            $row->end_seconds   = (string) $t['end_seconds'];
-            $row->confidence    = (string) $t['confidence'];
+            $row->end_seconds = (string) $t['end_seconds'];
+            $row->confidence = (string) $t['confidence'];
+
             return $row;
         });
     }

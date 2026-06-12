@@ -15,7 +15,6 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -124,6 +123,7 @@ class User extends Authenticatable implements MustVerifyEmail
                 'user_id' => $this->id,
                 'message' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -222,6 +222,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         if ($value === null || $value === '' || $value === []) {
             $this->attributes['two_factor_recovery_codes'] = null;
+
             return;
         }
         $json = is_string($value) ? $value : json_encode($value);
@@ -809,7 +810,7 @@ class User extends Authenticatable implements MustVerifyEmail
             return $path;
         }
 
-        return Storage::disk('public')->url($path);
+        return \App\Support\MediaDisk::disk()->url($path);
     }
 
     /**
@@ -826,7 +827,7 @@ class User extends Authenticatable implements MustVerifyEmail
             return $path;
         }
 
-        return Storage::disk('public')->url($path);
+        return \App\Support\MediaDisk::disk()->url($path);
     }
 
     /**

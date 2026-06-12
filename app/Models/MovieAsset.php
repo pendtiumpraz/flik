@@ -10,7 +10,9 @@ class MovieAsset extends Model
     use HasFactory;
 
     public const TYPE_SLIDER = 'slider';     // Cinematic ~2.4:1 (1920×800)
+
     public const TYPE_POSTER = 'poster';     // Portrait 2:3 (500×750)
+
     public const TYPE_BACKDROP = 'backdrop'; // Landscape 16:9 (1920×1080)
 
     public const TYPES = [
@@ -49,8 +51,13 @@ class MovieAsset extends Model
      */
     public function getUrlAttribute(): string
     {
-        if (!$this->path) return '';
-        if (str_starts_with($this->path, 'http')) return $this->path;
-        return asset('storage/' . $this->path);
+        if (! $this->path) {
+            return '';
+        }
+        if (str_starts_with($this->path, 'http')) {
+            return $this->path;
+        }
+
+        return (string) \App\Support\MediaDisk::url($this->path);
     }
 }

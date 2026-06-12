@@ -295,7 +295,7 @@ class ProfileController extends Controller
                 if ($contents === false) {
                     return null;
                 }
-                Storage::disk('public')->put($name, $contents);
+                Storage::disk(\App\Support\MediaDisk::name())->put($name, $contents);
 
                 $this->maybeForgetOldPath($oldPath);
 
@@ -312,7 +312,7 @@ class ProfileController extends Controller
 
         // Fallback: vanilla Laravel storage with the validation we already ran.
         $name = $folder.'/'.auth()->id().'-'.Str::random(16).'.'.$file->getClientOriginalExtension();
-        $stored = $file->storeAs(dirname($name), basename($name), ['disk' => 'public']);
+        $stored = $file->storeAs(dirname($name), basename($name), ['disk' => \App\Support\MediaDisk::name()]);
 
         $this->maybeForgetOldPath($oldPath);
 
@@ -333,7 +333,7 @@ class ProfileController extends Controller
             return; // never delete an external URL
         }
         try {
-            Storage::disk('public')->delete($oldPath);
+            Storage::disk(\App\Support\MediaDisk::name())->delete($oldPath);
         } catch (\Throwable $e) {
             // Intentional: orphaned files are an ops problem, not a user
             // problem. The profile update succeeds either way.

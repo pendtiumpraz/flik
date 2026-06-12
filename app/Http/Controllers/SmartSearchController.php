@@ -35,8 +35,7 @@ class SmartSearchController extends Controller
         protected DecadeStyleSearchService $decadeService,
         protected DirectorActorSearchService $personService,
         protected FilmKnowledgeService $knowledge,
-    ) {
-    }
+    ) {}
 
     /**
      * Smart search results page.
@@ -48,7 +47,7 @@ class SmartSearchController extends Controller
     public function search(Request $request): View|Factory
     {
         $data = $request->validate([
-            'q'      => ['required', 'string', 'min:2', 'max:300'],
+            'q' => ['required', 'string', 'min:2', 'max:300'],
             'intent' => ['nullable', 'string', 'in:title,actor,director,vibe,year,genre,auto'],
         ]);
 
@@ -58,14 +57,14 @@ class SmartSearchController extends Controller
         // Light per-user rate limiting — 30/min.
         if ($error = $this->rateLimit('smart-search')) {
             return view('search.smart', [
-                'query'      => $query,
-                'intent'     => 'title',
+                'query' => $query,
+                'intent' => 'title',
                 'confidence' => 0.0,
                 'normalized' => $query,
-                'groups'     => [],
+                'groups' => [],
                 'totalCount' => 0,
-                'genres'     => $this->genreMap(),
-                'error'      => $error,
+                'genres' => $this->genreMap(),
+                'error' => $error,
             ]);
         }
 
@@ -86,14 +85,14 @@ class SmartSearchController extends Controller
         $totalCount = array_sum(array_map(fn ($g) => $g['movies']->count(), $groups));
 
         return view('search.smart', [
-            'query'      => $query,
-            'intent'     => $intent,
+            'query' => $query,
+            'intent' => $intent,
             'confidence' => $classification['confidence'],
             'normalized' => $normalized,
-            'groups'     => $groups,
+            'groups' => $groups,
             'totalCount' => $totalCount,
-            'genres'     => $this->genreMap(),
-            'error'      => null,
+            'genres' => $this->genreMap(),
+            'error' => null,
         ]);
     }
 
@@ -113,24 +112,24 @@ class SmartSearchController extends Controller
         ]);
 
         $needle = trim($data['q']);
-        $like = '%' . $needle . '%';
+        $like = '%'.$needle.'%';
 
         $movies = Movie::query()
             ->where(function ($q) use ($like) {
                 $q->whereLike('title', $like)
-                  ->orWhereLike('original_title', $like);
+                    ->orWhereLike('original_title', $like);
             })
             ->orderByDesc('popularity')
             ->limit(10)
             ->get(['id', 'slug', 'title', 'poster_path', 'release_date'])
             ->map(function (Movie $m) {
                 return [
-                    'id'         => $m->id,
-                    'slug'       => $m->slug,
-                    'title'      => $m->title,
-                    'year'       => $m->release_date ? $m->release_date->format('Y') : null,
+                    'id' => $m->id,
+                    'slug' => $m->slug,
+                    'title' => $m->title,
+                    'year' => $m->release_date ? $m->release_date->format('Y') : null,
                     'poster_url' => $m->poster_url,
-                    'url'        => $m->slug ? route('movies.show', $m->slug) : null,
+                    'url' => $m->slug ? route('movies.show', $m->slug) : null,
                 ];
             })
             ->values();
@@ -142,20 +141,16 @@ class SmartSearchController extends Controller
             ->get(['id', 'name', 'profile_path'])
             ->map(function (Cast $c) {
                 return [
-                    'id'          => $c->id,
-                    'name'        => $c->name,
-                    'profile_url' => $c->profile_path
-                        ? (str_starts_with($c->profile_path, 'http')
-                            ? $c->profile_path
-                            : asset('storage/' . $c->profile_path))
-                        : null,
-                    'search_url'  => route('search.smart') . '?q=' . urlencode($c->name) . '&intent=actor',
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'profile_url' => \App\Support\MediaDisk::url($c->profile_path),
+                    'search_url' => route('search.smart').'?q='.urlencode($c->name).'&intent=actor',
                 ];
             })
             ->values();
 
         return response()->json([
-            'query'  => $needle,
+            'query' => $needle,
             'movies' => $movies,
             'people' => $people,
         ]);
@@ -186,8 +181,8 @@ class SmartSearchController extends Controller
 
                 if ($actorMatches->isNotEmpty()) {
                     $groups[] = [
-                        'key'    => 'actor',
-                        'label'  => 'Sebagai aktor / aktris',
+                        'key' => 'actor',
+                        'label' => 'Sebagai aktor / aktris',
                         'movies' => $actorMatches->map(fn (Movie $m) => $this->mapMovie($m, [
                             '_match_type' => 'actor',
                         ])),
@@ -195,10 +190,10 @@ class SmartSearchController extends Controller
                 }
                 if ($directorMatches->isNotEmpty()) {
                     $groups[] = [
-                        'key'    => 'director',
-                        'label'  => 'Sebagai sutradara',
+                        'key' => 'director',
+                        'label' => 'Sebagai sutradara',
                         'movies' => $directorMatches->map(fn (Movie $m) => $this->mapMovie($m, [
-                            '_match_type'     => 'director',
+                            '_match_type' => 'director',
                             '_ai_guess_title' => $m->getAttribute('_ai_guess_title'),
                         ])),
                     ];
@@ -209,8 +204,8 @@ class SmartSearchController extends Controller
                 $vibe = $this->decadeService->searchByVibe(vibe: $normalized, era: null, count: 18);
                 if ($vibe->isNotEmpty()) {
                     $groups[] = [
-                        'key'    => 'vibe',
-                        'label'  => 'Curated berdasarkan vibe',
+                        'key' => 'vibe',
+                        'label' => 'Curated berdasarkan vibe',
                         'movies' => $vibe->map(fn (Movie $m) => $this->mapMovie($m)),
                     ];
                 }
@@ -232,8 +227,8 @@ class SmartSearchController extends Controller
                             ? "Tahun {$year}s"
                             : "Rilis {$year}";
                         $groups[] = [
-                            'key'    => 'year',
-                            'label'  => $label,
+                            'key' => 'year',
+                            'label' => $label,
                             'movies' => $movies->map(fn (Movie $m) => $this->mapMovie($m)),
                         ];
                     }
@@ -251,8 +246,8 @@ class SmartSearchController extends Controller
 
                     if ($movies->isNotEmpty()) {
                         $groups[] = [
-                            'key'    => 'genre',
-                            'label'  => 'Genre: ' . $genreMatches->pluck('name')->join(', '),
+                            'key' => 'genre',
+                            'label' => 'Genre: '.$genreMatches->pluck('name')->join(', '),
                             'movies' => $movies->map(fn (Movie $m) => $this->mapMovie($m)),
                         ];
                     }
@@ -264,8 +259,8 @@ class SmartSearchController extends Controller
                 $titles = $this->knowledge->searchRelevant($normalized, 18);
                 if ($titles->isNotEmpty()) {
                     $groups[] = [
-                        'key'    => 'title',
-                        'label'  => 'Hasil pencarian judul',
+                        'key' => 'title',
+                        'label' => 'Hasil pencarian judul',
                         'movies' => $titles->map(fn (Movie $m) => $this->mapMovie($m)),
                     ];
                 }
@@ -278,8 +273,8 @@ class SmartSearchController extends Controller
             $fallback = $this->knowledge->searchRelevant($normalized !== '' ? $normalized : $original, 12);
             if ($fallback->isNotEmpty()) {
                 $groups[] = [
-                    'key'    => 'fallback',
-                    'label'  => 'Mungkin kamu mencari…',
+                    'key' => 'fallback',
+                    'label' => 'Mungkin kamu mencari…',
                     'movies' => $fallback->map(fn (Movie $m) => $this->mapMovie($m)),
                 ];
             }
@@ -295,14 +290,16 @@ class SmartSearchController extends Controller
     {
         $needle = mb_strtolower($query);
         if (preg_match('/(19|20)(\d{2})/', $needle, $m)) {
-            return (int) ($m[1] . $m[2]);
+            return (int) ($m[1].$m[2]);
         }
         // "90an", "70s" → 1990, 1970
         if (preg_match('/(\d0)\s*-?(?:an|s|en)?\b/u', $needle, $m)) {
             $tens = (int) $m[1];
             $century = $tens >= 30 ? 19 : 20;
+
             return $century * 100 + $tens;
         }
+
         return null;
     }
 
@@ -320,6 +317,7 @@ class SmartSearchController extends Controller
             // Ambiguous — treat as decade if user wrote "1990s" / "1990an".
             return preg_match('/(an|s|en)\b/u', $needle) === 1;
         }
+
         return false;
     }
 
@@ -334,6 +332,7 @@ class SmartSearchController extends Controller
         $genres = Genre::all();
         $matches = $genres->filter(function (Genre $g) use ($needle) {
             $name = mb_strtolower($g->name);
+
             return str_contains($needle, $name) || str_contains($name, $needle);
         })->values();
 
@@ -342,7 +341,8 @@ class SmartSearchController extends Controller
         }
 
         // Fall back: best LIKE match
-        $like = Genre::where('name', 'LIKE', '%' . $needle . '%')->get();
+        $like = Genre::where('name', 'LIKE', '%'.$needle.'%')->get();
+
         return $like;
     }
 
@@ -351,11 +351,12 @@ class SmartSearchController extends Controller
      */
     protected function rateLimit(string $bucket): ?string
     {
-        $key = $bucket . ':' . (auth()->id() ?? request()->ip());
+        $key = $bucket.':'.(auth()->id() ?? request()->ip());
         if (RateLimiter::tooManyAttempts($key, 30)) {
             return 'Terlalu banyak pencarian. Tunggu sebentar ya.';
         }
         RateLimiter::hit($key, 60);
+
         return null;
     }
 
@@ -376,16 +377,16 @@ class SmartSearchController extends Controller
     protected function mapMovie(Movie $movie, array $extra = []): array
     {
         return array_merge([
-            'id'             => $movie->id,
-            'slug'           => $movie->slug,
-            'title'          => $movie->title,
+            'id' => $movie->id,
+            'slug' => $movie->slug,
+            'title' => $movie->title,
             'original_title' => $movie->original_title,
-            'overview'       => $movie->overview,
-            'release_date'   => $movie->release_date ? $movie->release_date->format('Y-m-d') : null,
-            'poster_path'    => $movie->poster_url,
-            'vote_average'   => (float) $movie->vote_average,
-            'vote_count'     => $movie->vote_count,
-            'genre_ids'      => $movie->relationLoaded('genres')
+            'overview' => $movie->overview,
+            'release_date' => $movie->release_date ? $movie->release_date->format('Y-m-d') : null,
+            'poster_path' => $movie->poster_url,
+            'vote_average' => (float) $movie->vote_average,
+            'vote_count' => $movie->vote_count,
+            'genre_ids' => $movie->relationLoaded('genres')
                 ? $movie->genres->pluck('id')->toArray()
                 : [],
         ], array_filter($extra, fn ($v) => $v !== null));
