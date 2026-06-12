@@ -92,6 +92,22 @@ return [
             'throw' => false,
         ],
 
+        // Google Cloud Storage NATIVE disk (driver registered in
+        // AppServiceProvider::boot). Keyless via Application Default Credentials
+        // — the GCE VM's service account. Use this (MEDIA_DISK=gcs) instead of
+        // the s3 disk when the bucket enforces uniform bucket-level access, since
+        // the S3-interop adapter always sends ACLs which UBLA rejects.
+        // Reuses AWS_BUCKET / AWS_URL so no extra env is required.
+        'gcs' => [
+            'driver' => 'gcs',
+            'project_id' => env('GOOGLE_CLOUD_PROJECT', env('GOOGLE_CLOUD_PROJECT_ID')),
+            'bucket' => env('GCS_BUCKET', env('AWS_BUCKET')),
+            'root' => env('GCS_ROOT', ''),
+            'url' => env('GCS_URL', env('AWS_URL')),
+            'visibility' => 'public',
+            'throw' => false,
+        ],
+
     ],
 
     /*

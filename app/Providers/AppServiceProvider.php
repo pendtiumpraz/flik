@@ -17,11 +17,17 @@ use App\Services\Features\FeatureManager;
 use App\Services\Security\HtmlSanitizer;
 use App\Services\Storage\BunnyStorageService;
 use App\Services\Storage\S3StorageService;
+use Google\Cloud\Storage\StorageClient;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
+use League\Flysystem\Filesystem;
+use League\Flysystem\GoogleCloudStorage\GoogleCloudStorageAdapter;
+use League\Flysystem\GoogleCloudStorage\UniformBucketLevelAccessVisibility;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -38,11 +44,11 @@ class AppServiceProvider extends ServiceProvider
         // Named singleton bindings so callers can `app('storage.bunny')`
         // / `app('storage.s3')` regardless of which one is the default.
         $this->app->singleton('storage.bunny', function () {
-            return new BunnyStorageService();
+            return new BunnyStorageService;
         });
 
         $this->app->singleton('storage.s3', function () {
-            return new S3StorageService();
+            return new S3StorageService;
         });
 
         // Default CDN storage binding. Prefer Bunny when BUNNY_STORAGE_KEY
@@ -69,12 +75,12 @@ class AppServiceProvider extends ServiceProvider
         // rich-text fields). Singleton because the instance is stateless
         // and we want to avoid re-allocating DOMDocument-adjacent state
         // per call.
-        $this->app->singleton(HtmlSanitizer::class, fn () => new HtmlSanitizer());
+        $this->app->singleton(HtmlSanitizer::class, fn () => new HtmlSanitizer);
 
         // FeatureManager — wraps FeatureFlag::evaluate behind a
         // single injectable service so controllers can DI it and
         // tests can swap with a fake. Stateless ⇒ singleton.
-        $this->app->singleton(FeatureManager::class, fn () => new FeatureManager());
+        $this->app->singleton(FeatureManager::class, fn () => new FeatureManager);
     }
 
     /**
@@ -84,6 +90,35 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
+        // Google Cloud Storage NATIVE driver ("gcs" disk). Keyless: authenticates
+        // via Application Default Credentials — on a GCE VM that's the attached
+        // service account through the metadata server, so no HMAC/JSON key is
+        // needed (works even when org policy blocks SA-key + HMAC creation).
+        //
+        // Critically it uses the UniformBucketLevelAccess visibility handler, so
+        // it never sends per-object ACLs — UBLA-enforced buckets reject ACLs with
+        // "InvalidArgument", which is exactly why the S3-interop adapter can't be
+        // used against this bucket. Object visibility is governed by the bucket's
+        // IAM (allUsers:objectViewer) instead.
+        Storage::extend('gcs', function ($app, array $config) {
+            $client = new StorageClient(array_filter([
+                'projectId' => $config['project_id'] ?? null,
+                'keyFilePath' => $config['key_file'] ?? null, // null ⇒ ADC
+            ]));
+
+            $adapter = new GoogleCloudStorageAdapter(
+                $client->bucket($config['bucket']),
+                (string) ($config['root'] ?? ''),
+                new UniformBucketLevelAccessVisibility,
+            );
+
+            return new FilesystemAdapter(
+                new Filesystem($adapter, $config),
+                $adapter,
+                $config,
+            );
+        });
+
         // Force every generated URL onto HTTPS in production so route() /
         // url() / asset() never emit http:// links that would trigger mixed-
         // content blocks or break OAuth redirect URI matching. We deliberately
@@ -124,7 +159,7 @@ class AppServiceProvider extends ServiceProvider
         // Truthy when an authenticated user holds ANY of the listed roles.
         // Variadic so views can write `@role('admin', 'finance')` directly.
         Blade::if('role', function (...$roles) {
-            if (!auth()->check()) {
+            if (! auth()->check()) {
                 return false;
             }
             $flat = [];
@@ -135,6 +170,7 @@ class AppServiceProvider extends ServiceProvider
                     $flat[] = (string) $r;
                 }
             }
+
             return auth()->user()->hasRole($flat);
         });
 
@@ -144,13 +180,14 @@ class AppServiceProvider extends ServiceProvider
         // the User::hasPermission helper when the gate is not registered
         // (e.g. permissions table not yet seeded on a fresh install).
         Blade::if('hasperm', function (string $name) {
-            if (!auth()->check()) {
+            if (! auth()->check()) {
                 return false;
             }
             $user = auth()->user();
             if (Gate::has($name)) {
                 return Gate::allows($name);
             }
+
             return $user->hasPermission($name);
         });
 
@@ -176,7 +213,7 @@ class AppServiceProvider extends ServiceProvider
         // a template, and (2) the form `@feature('x', $user)` for a
         // non-current user is just as readable as the manual @if.
         Blade::if('feature', function (string $key, $user = null): bool {
-            return feature($key, $user instanceof \App\Models\User ? $user : auth()->user());
+            return feature($key, $user instanceof User ? $user : auth()->user());
         });
 
         // @setting('site.name') — echo a setting value with htmlspecial
