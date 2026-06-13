@@ -14,6 +14,7 @@ use App\Services\Storage\S3StorageService;
 use App\Support\SafeFilename;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -76,7 +77,7 @@ class MovieUploadController extends Controller
         ]);
 
         $file = $request->file('file');
-        $disk = (string) ($movie->master_file_disk ?: config('filesystems.default', 'local'));
+        $disk = (string) ($movie->master_file_disk ?: config('filesystems.master', 'local'));
 
         // Chunked path: we accumulate into a temporary upload-id file, then
         // promote it to the canonical master path on the last chunk. Using
@@ -414,7 +415,7 @@ class MovieUploadController extends Controller
         // Wrap the assembled tmp file in an UploadedFile so we can pass
         // it through the same validator the single-shot path uses.
         if ($uploads !== null) {
-            $assembledUpload = new \Illuminate\Http\UploadedFile(
+            $assembledUpload = new UploadedFile(
                 $assemblyPath,
                 $originalName,
                 null, // let finfo sniff
@@ -441,7 +442,7 @@ class MovieUploadController extends Controller
             }
         }
 
-        $disk = (string) ($movie->master_file_disk ?: config('filesystems.default', 'local'));
+        $disk = (string) ($movie->master_file_disk ?: config('filesystems.master', 'local'));
         $safeName = SafeFilename::generate($originalName, 'master');
         $filename = sprintf('movies/%d/%s', $movie->id, $safeName);
 

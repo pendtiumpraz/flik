@@ -34,6 +34,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Master Video Disk
+    |--------------------------------------------------------------------------
+    |
+    | Where raw uploaded master videos (the transcode source) are stored.
+    | These are large + sensitive (DRM source) and must NOT be public, and at
+    | catalog scale (tens of TB) cannot live on the VM. Point at a PRIVATE GCS
+    | disk (e.g. gcs_master → flik-masters bucket). The transcoding pipeline
+    | streams the master from this disk into a local work area for ffmpeg, so
+    | the VM only needs scratch space for in-flight jobs — not the whole library.
+    |
+    | Local dev: leave as "local". Production: set MASTER_DISK=gcs_master.
+    |
+    */
+
+    'master' => env('MASTER_DISK', 'local'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |
@@ -105,6 +123,19 @@ return [
             'root' => env('GCS_ROOT', ''),
             'url' => env('GCS_URL', env('AWS_URL')),
             'visibility' => 'public',
+            'throw' => false,
+        ],
+
+        // PRIVATE GCS disk for master videos (transcode sources). Same native
+        // 'gcs' driver (keyless ADC) but a separate, private bucket — NO 'url'
+        // since masters are never served directly (HLS output goes to Bunny CDN).
+        // Use a cheap storage class (Coldline/Archive) on the bucket for scale.
+        'gcs_master' => [
+            'driver' => 'gcs',
+            'project_id' => env('GOOGLE_CLOUD_PROJECT', env('GOOGLE_CLOUD_PROJECT_ID')),
+            'bucket' => env('GCS_MASTER_BUCKET', 'flik-masters'),
+            'root' => env('GCS_MASTER_ROOT', ''),
+            'visibility' => 'private',
             'throw' => false,
         ],
 
