@@ -177,26 +177,24 @@
             </div>
 
             <!-- Flags -->
-            <div style="display:flex;gap:24px;margin-top:12px;margin-bottom:24px">
-                <label class="toggle" style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                    <div style="position:relative;width:44px;height:24px">
+            <div style="display:flex;gap:28px;margin-top:12px;margin-bottom:24px">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                    <span class="toggle">
                         <input type="hidden" name="is_popular" value="0">
                         <input type="checkbox" name="is_popular" value="1"
-                            {{ old('is_popular', $movie?->is_popular) ? 'checked' : '' }}
-                            style="opacity:0;width:0;height:0;position:absolute">
+                            {{ old('is_popular', $movie?->is_popular) ? 'checked' : '' }}>
                         <span class="slider"></span>
-                    </div>
+                    </span>
                     <span style="font-size:13px">Popular</span>
                 </label>
 
-                <label class="toggle" style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                    <div style="position:relative;width:44px;height:24px">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                    <span class="toggle">
                         <input type="hidden" name="is_trending" value="0">
                         <input type="checkbox" name="is_trending" value="1"
-                            {{ old('is_trending', $movie?->is_trending) ? 'checked' : '' }}
-                            style="opacity:0;width:0;height:0;position:absolute">
+                            {{ old('is_trending', $movie?->is_trending) ? 'checked' : '' }}>
                         <span class="slider"></span>
-                    </div>
+                    </span>
                     <span style="font-size:13px">Trending</span>
                 </label>
             </div>

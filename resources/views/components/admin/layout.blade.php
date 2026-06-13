@@ -77,11 +77,32 @@
         .form-input {
             width: 100%; padding: 10px 14px; background: #1a1a1a; border: 1px solid #2a2a2a;
             border-radius: 8px; color: #e5e5e5; font-size: 14px; font-family: 'Inter';
-            transition: border-color 0.2s;
+            transition: border-color 0.2s; color-scheme: dark;
         }
         .form-input:focus { outline: none; border-color: #C5A55A; }
         .form-input::placeholder { color: #555; }
         textarea.form-input { min-height: 100px; resize: vertical; }
+
+        /* Native select: kill the browser chrome, draw our own gold-on-dark chevron */
+        select.form-input {
+            -webkit-appearance: none; -moz-appearance: none; appearance: none;
+            padding-right: 38px; cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 14px center;
+        }
+        select.form-input option { background: #1a1a1a; color: #e5e5e5; }
+
+        /* File input: style the picker button to match the dark/gold theme */
+        input[type="file"].form-input { padding: 8px 12px; cursor: pointer; line-height: 1.6; }
+        .form-input::file-selector-button {
+            margin-right: 12px; padding: 6px 14px; border: none; border-radius: 6px;
+            background: #2a2a2a; color: #e5e5e5; font-size: 13px; font-weight: 500;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .form-input::file-selector-button:hover { background: #C5A55A; color: #000; }
+
+        /* Date/number picker glyphs visible on dark */
+        .form-input::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
 
         /* Badge */
         .badge { display: inline-flex; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
@@ -96,7 +117,7 @@
         .flash-success { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); color: #22c55e; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
 
         /* Checkbox toggle */
-        .toggle { position: relative; width: 44px; height: 24px; }
+        .toggle { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
         .toggle input { opacity: 0; width: 0; height: 0; }
         .toggle .slider {
             position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
