@@ -39,28 +39,33 @@
                 </div>
             </template>
 
-            {{-- Drop zone --}}
+            {{-- Drop zone — border is static (only the COLOR changes on drag) so
+                 there is no layout shift, and the inner content is pointer-events:none
+                 so dragover/dragleave fire only on the zone itself (no flicker) and
+                 the whole area is uniformly clickable. --}}
             <div
                 @dragover.prevent="dragActive = true"
+                @dragenter.prevent="dragActive = true"
                 @dragleave.prevent="dragActive = false"
                 @drop.prevent="onDrop($event)"
                 :style="dragActive
-                    ? 'border:2px dashed #C5A55A;background:rgba(197,165,90,0.06)'
-                    : 'border:2px dashed #333;background:#151515'"
-                style="padding:48px 24px;border-radius:12px;text-align:center;transition:all 0.2s;cursor:pointer"
+                    ? 'border-color:#C5A55A;background:rgba(197,165,90,0.06)'
+                    : 'border-color:#333;background:#151515'"
+                style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:188px;padding:32px 24px;border:2px dashed #333;border-radius:12px;text-align:center;transition:border-color 0.2s, background 0.2s;cursor:pointer"
                 @click="$refs.fileInput.click()">
 
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#C5A55A" stroke-width="1.5"
-                     style="margin:0 auto 12px;display:block">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                          d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
-                </svg>
-
-                <div style="font-size:15px;font-weight:500;color:#fff;margin-bottom:6px">
-                    Drag &amp; drop your master file here
-                </div>
-                <div style="font-size:12px;color:#777">
-                    or click to browse — MP4 / MOV / MKV / WebM
+                <div style="pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:6px">
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#C5A55A" stroke-width="1.5"
+                         style="margin-bottom:6px">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+                    </svg>
+                    <div style="font-size:15px;font-weight:500;color:#fff">
+                        Drag &amp; drop your master file here
+                    </div>
+                    <div style="font-size:12px;color:#777">
+                        or click to browse — MP4 / MOV / MKV / WebM
+                    </div>
                 </div>
 
                 <input type="file" x-ref="fileInput" @change="onFileSelected($event)"
