@@ -79,7 +79,12 @@ class MovieUploadController extends Controller
         ]);
 
         $file = $request->file('file');
-        $disk = (string) ($movie->master_file_disk ?: config('filesystems.master', 'local'));
+        // A new upload always targets the currently-configured master disk —
+        // NOT $movie->master_file_disk. Honouring the old row value made a movie
+        // whose first upload landed on a wrong/broken disk impossible to fix by
+        // re-uploading (it kept resolving to the stale disk). The row is updated
+        // to this disk once the upload succeeds.
+        $disk = (string) config('filesystems.master', 'local');
 
         // Chunked path: we accumulate into a temporary upload-id file, then
         // promote it to the canonical master path on the last chunk. Using
@@ -444,7 +449,12 @@ class MovieUploadController extends Controller
             }
         }
 
-        $disk = (string) ($movie->master_file_disk ?: config('filesystems.master', 'local'));
+        // A new upload always targets the currently-configured master disk —
+        // NOT $movie->master_file_disk. Honouring the old row value made a movie
+        // whose first upload landed on a wrong/broken disk impossible to fix by
+        // re-uploading (it kept resolving to the stale disk). The row is updated
+        // to this disk once the upload succeeds.
+        $disk = (string) config('filesystems.master', 'local');
         $safeName = SafeFilename::generate($originalName, 'master');
         $filename = sprintf('movies/%d/%s', $movie->id, $safeName);
 
