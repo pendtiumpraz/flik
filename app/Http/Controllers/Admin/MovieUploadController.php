@@ -50,10 +50,12 @@ class MovieUploadController extends Controller
     {
         return view('admin.movies.upload', [
             'movie' => $movie,
-            // When GCS / S3 is configured, the front-end uploads the master
-            // directly to the bucket via a presigned PUT (bypassing PHP).
-            // Otherwise it falls back to the server-proxied chunked upload.
-            'directUpload' => S3StorageService::enabled(),
+            // Direct presigned PUT only works against the S3 disk. Master videos
+            // now live on the native-GCS 'gcs_master' disk (UBLA bucket, no S3
+            // ACL/presign compatibility), so we force the server-proxied chunked
+            // path which streams to config('filesystems.master'). Gate on an env
+            // flag so an S3-proper deployment can re-enable direct uploads.
+            'directUpload' => env('MASTER_DIRECT_UPLOAD', false) && S3StorageService::enabled(),
         ]);
     }
 
